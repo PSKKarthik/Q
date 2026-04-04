@@ -41,15 +41,15 @@ const roleColor = (r: string) => r === 'teacher' ? 'var(--warn)' : r === 'admin'
 const roleBadge = (r: string) => r === 'teacher' ? 'T' : r === 'admin' ? 'A' : 'S'
 
 function getAttachmentIcon(type?: string) {
-  if (!type) return '📎'
-  if (type.includes('pdf')) return '📄'
-  if (type.includes('image') || type.includes('jpg') || type.includes('png') || type.includes('gif') || type.includes('jpeg')) return '🖼️'
-  if (type.includes('video') || type.includes('mp4')) return '🎬'
-  if (type.includes('zip') || type.includes('archive')) return '📦'
-  if (type.includes('doc') || type.includes('word')) return '📝'
-  if (type.includes('ppt') || type.includes('presentation')) return '📊'
-  if (type.includes('xls') || type.includes('sheet')) return '📈'
-  return '📎'
+  if (!type) return '▸'
+  if (type.includes('pdf')) return '▪'
+  if (type.includes('image') || type.includes('jpg') || type.includes('png') || type.includes('gif') || type.includes('jpeg')) return '▪'
+  if (type.includes('video') || type.includes('mp4')) return '▪'
+  if (type.includes('zip') || type.includes('archive')) return '▪'
+  if (type.includes('doc') || type.includes('word')) return '▪'
+  if (type.includes('ppt') || type.includes('presentation')) return '▪'
+  if (type.includes('xls') || type.includes('sheet')) return '▪'
+  return '▸'
 }
 
 function isImage(type?: string, name?: string) {
@@ -271,7 +271,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
         setPosts(prev => [data as ForumPost, ...prev])
         // Award +5 XP for creating a new post
         supabase.rpc('atomic_xp_update', { p_user_id: profile.id, p_xp_delta: 5, p_best_score: 0, p_ghost_win_increment: 0 })
-        toast('📝 +5 XP — New forum post!', 'success')
+        toast('▪ +5 XP — New forum post!', 'success')
       }
     }
     setPostModal(false)
@@ -398,7 +398,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
         setPosts(prev => prev.map(p => p.id === activePost.id ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p))
         // Award +3 XP for commenting
         supabase.rpc('atomic_xp_update', { p_user_id: profile.id, p_xp_delta: 3, p_best_score: 0, p_ghost_win_increment: 0 })
-        toast('💬 +3 XP — Forum comment!', 'success')
+        toast('◇ +3 XP — Forum comment!', 'success')
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to add comment', 'error')
@@ -493,7 +493,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
     const canMarkBest = activePost?.author_id === profile.id && activePost?.flair === 'question' && !c.parent_id
     return (
       <div key={c.id} className={`fm-comment ${depth > 0 ? 'fm-comment-nested' : ''} ${isBest ? 'fm-best-answer' : ''}`} style={{ marginLeft: Math.min(depth * 24, 72) }}>
-        {isBest && <div className="fm-best-badge">✅ Best Answer</div>}
+        {isBest && <div className="fm-best-badge">✓ Best Answer</div>}
         <div className="fm-comment-inner">
           <div className="fm-comment-left">
             <div className="fm-thread-line" />
@@ -508,7 +508,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
               </button>
               {canMarkBest && (
                 <button className={`fm-action-btn ${isBest ? 'fm-action-best-active' : ''}`} onClick={() => markBestAnswer(c.id)}>
-                  {isBest ? '✅ Unmark' : '☑️ Best Answer'}
+                  {isBest ? '✓ Unmark' : '✓ Best Answer'}
                 </button>
               )}
               {c.author_id === profile.id && (
@@ -612,12 +612,12 @@ export function ForumModule({ profile }: ForumModuleProps) {
           <div className="fm-sort-bar">
             {(['hot', 'new', 'top'] as SortMode[]).map(s => (
               <button key={s} className={`fm-sort-btn ${sort === s && !showBookmarks ? 'fm-sort-active' : ''}`} onClick={() => { setSort(s); setShowBookmarks(false); setPage(0) }}>
-                {s === 'hot' ? '🔥' : s === 'new' ? '✨' : '⭐'} {s.charAt(0).toUpperCase() + s.slice(1)}
+                {s === 'hot' ? '◆' : s === 'new' ? '◇' : '★'} {s.charAt(0).toUpperCase() + s.slice(1)}
               </button>
             ))}
             <button className={`fm-sort-btn ${showBookmarks ? 'fm-sort-active' : ''}`}
               onClick={() => { setShowBookmarks(!showBookmarks); setPage(0) }}>
-              🔖 Saved
+              ◈ Saved
             </button>
           </div>
           <div className="fm-search-bar">
@@ -643,7 +643,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
         {/* ── Feed ── */}
         {sortedPosts.length === 0 && (
           <div className="fm-empty fade-up">
-            <div style={{ fontSize: 32, marginBottom: 8 }}>{showBookmarks ? '🔖' : '💬'}</div>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>{showBookmarks ? '◈' : '◇'}</div>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>
               {showBookmarks ? 'No saved posts yet.' : searchQ || filterFlair ? 'No posts match your filters.' : 'No posts yet. Start the conversation!'}
             </div>
@@ -666,10 +666,10 @@ export function ForumModule({ profile }: ForumModuleProps) {
                 </div>
 
                 <div className="fm-post-header">
-                  {post.pinned && <span className="fm-pinned">📌</span>}
+                  {post.pinned && <span className="fm-pinned">●</span>}
                   <FlairBadge flair={post.flair} />
                   <span className="fm-post-title">{post.title}</span>
-                  {post.best_answer_id && post.flair === 'question' && <span className="fm-solved-badge">✅ Solved</span>}
+                  {post.best_answer_id && post.flair === 'question' && <span className="fm-solved-badge">✓ Solved</span>}
                 </div>
 
                 <div className="fm-post-preview">{post.body?.slice(0, 200)}{(post.body?.length || 0) > 200 ? '...' : ''}</div>
@@ -690,10 +690,10 @@ export function ForumModule({ profile }: ForumModuleProps) {
 
                 <div className="fm-post-stats">
                   <span className="fm-stat"><Icon name="chat" size={11} /> {post.comment_count || 0} comment{(post.comment_count || 0) !== 1 ? 's' : ''}</span>
-                  <span className="fm-stat">👁 {post.view_count || 0}</span>
+                  <span className="fm-stat">◎ {post.view_count || 0}</span>
                   <button className={`fm-action-btn ${bookmarked ? 'fm-bookmarked' : ''}`}
                     onClick={e => { e.stopPropagation(); toggleBookmark(post) }}>
-                    {bookmarked ? '🔖' : '🏷️'} {bookmarked ? 'Saved' : 'Save'}
+                    {bookmarked ? '◈' : '◇'} {bookmarked ? 'Saved' : 'Save'}
                   </button>
                   {post.author_id === profile.id && (
                     <>
@@ -732,13 +732,13 @@ export function ForumModule({ profile }: ForumModuleProps) {
         <div className="fm-post-content" style={{ flex: 1 }}>
           <div className="fm-post-meta">
             <AuthorBadge name={activePost.author_name} role={activePost.author_role} date={activePost.created_at} edited={activePost.edited_at} />
-            <span className="fm-stat" style={{ marginLeft: 'auto' }}>👁 {activePost.view_count || 0} views</span>
+            <span className="fm-stat" style={{ marginLeft: 'auto' }}>◎ {activePost.view_count || 0} views</span>
           </div>
 
           <div className="fm-detail-header">
-            {activePost.pinned && <span className="fm-pinned">📌 PINNED</span>}
+            {activePost.pinned && <span className="fm-pinned">● PINNED</span>}
             <FlairBadge flair={activePost.flair} />
-            {activePost.best_answer_id && activePost.flair === 'question' && <span className="fm-solved-badge">✅ Solved</span>}
+            {activePost.best_answer_id && activePost.flair === 'question' && <span className="fm-solved-badge">✓ Solved</span>}
           </div>
           <h2 className="fm-detail-title">{activePost.title}</h2>
 
@@ -752,7 +752,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
                 <img src={activePost.attachment_url} alt={activePost.attachment_name || 'Image'} loading="lazy" />
               </a>
               <div className="fm-img-caption">
-                🖼️ {activePost.attachment_name}
+                ▪ {activePost.attachment_name}
                 <a href={activePost.attachment_url} target="_blank" rel="noopener noreferrer" className="fm-attachment-dl">Open full size ↗</a>
               </div>
             </div>
@@ -768,7 +768,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
           <div className="fm-post-stats" style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
             <span className="fm-stat"><Icon name="chat" size={11} /> {activePost.comment_count || 0} comments</span>
             <button className={`fm-action-btn ${bookmarked ? 'fm-bookmarked' : ''}`} onClick={() => toggleBookmark(activePost)}>
-              {bookmarked ? '🔖 Saved' : '🏷️ Save'}
+              {bookmarked ? '◈ Saved' : '◇ Save'}
             </button>
             {activePost.author_id === profile.id && (
               <>
@@ -808,7 +808,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
           {(['oldest', 'newest', 'top'] as CommentSort[]).map(s => (
             <button key={s} className={`fm-sort-btn ${commentSort === s ? 'fm-sort-active' : ''}`}
               onClick={() => setCommentSort(s)}>
-              {s === 'oldest' ? '📜' : s === 'newest' ? '✨' : '⭐'} {s.charAt(0).toUpperCase() + s.slice(1)}
+              {s === 'oldest' ? '◇' : s === 'newest' ? '◇' : '★'} {s.charAt(0).toUpperCase() + s.slice(1)}
             </button>
           ))}
         </div>

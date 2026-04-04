@@ -117,16 +117,16 @@ export default function ParentDashboard() {
       const absentDays = recentAtt.filter(a => a.status === 'absent').length
       const totalDays = recentAtt.length
       if (totalDays > 0 && (absentDays / totalDays) > 0.2) {
-        newAlerts.push({ type: 'danger', message: `⚠️ ${student.name} has missed ${absentDays} out of ${totalDays} days (${Math.round(absentDays/totalDays*100)}% absent)` })
+        newAlerts.push({ type: 'danger', message: `△ ${student.name} has missed ${absentDays} out of ${totalDays} days (${Math.round(absentDays/totalDays*100)}% absent)` })
       }
       const recentAttempts = (att.data || []) as Attempt[]
       const lowScores = recentAttempts.filter(a => (a.percent || 0) < 50)
       if (lowScores.length > 0) {
-        newAlerts.push({ type: 'warn', message: `📉 ${student.name} scored below 50% on ${lowScores.length} test(s)` })
+        newAlerts.push({ type: 'warn', message: `▪ ${student.name} scored below 50% on ${lowScores.length} test(s)` })
       }
       const upcomingAssignments = (a.data || []).filter((asg: any) => asg.status === 'active' && asg.due_date && new Date(asg.due_date) > new Date() && new Date(asg.due_date) < new Date(Date.now() + 3 * 86400000))
       if (upcomingAssignments.length > 0) {
-        newAlerts.push({ type: 'info', message: `📅 ${upcomingAssignments.length} assignment(s) due in the next 3 days` })
+        newAlerts.push({ type: 'info', message: `▫ ${upcomingAssignments.length} assignment(s) due in the next 3 days` })
       }
       setAlerts(newAlerts)
 

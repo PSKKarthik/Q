@@ -117,11 +117,11 @@ export async function POST(req: Request) {
 
   let ghostMsg = '', ghostBonus = 0
   if (ghostScore > 0) {
-    if (percent > ghostScore) { ghostMsg = '🏆 You beat your ghost!'; ghostBonus = 50; xpEarned += 50 }
-    else if (percent === ghostScore) ghostMsg = '🤝 Tied your ghost'
-    else ghostMsg = '👻 Ghost wins this time'
+    if (percent > ghostScore) { ghostMsg = '★ You beat your ghost!'; ghostBonus = 50; xpEarned += 50 }
+    else if (percent === ghostScore) ghostMsg = '◇ Tied your ghost'
+    else ghostMsg = '◇ Ghost wins this time'
   } else {
-    ghostMsg = '🎯 First attempt — this becomes your ghost score!'
+    ghostMsg = '◉ First attempt — this becomes your ghost score!'
   }
 
   // Write attempt (insert, not upsert — allows multiple attempts)
@@ -160,7 +160,7 @@ export async function POST(req: Request) {
   // Notifications & activity log (non-critical, don't block response)
   supabase.from('notifications').insert({
     user_id: userId,
-    message: `✅ Test "${test.title}" submitted — ${percent}%`,
+    message: `✓ Test "${test.title}" submitted — ${percent}%`,
     type: 'attempt',
     read: false,
   }).then(() => {})

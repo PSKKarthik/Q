@@ -13,9 +13,10 @@ interface Props {
   assignments: (Assignment & { submissions?: Submission[] })[]
   courses: Course[]
   enrolledIds: string[]
+  tests?: { id: string; subject?: string; title?: string }[]
 }
 
-export function StudentAnalyticsModule({ profile, attempts, assignments, courses, enrolledIds }: Props) {
+export function StudentAnalyticsModule({ profile, attempts, assignments, courses, enrolledIds, tests = [] }: Props) {
   const [period, setPeriod] = useState<'all' | '30d' | '7d'>('all')
 
   const filtered = useMemo(() => {
@@ -44,18 +45,23 @@ export function StudentAnalyticsModule({ profile, attempts, assignments, courses
     })
   }, [sorted])
 
-  // Subject breakdown
+  // Subject breakdown — map test_id to subject via tests prop
+  const testSubjectMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    tests.forEach(t => { map[t.id] = t.subject || 'General' })
+    return map
+  }, [tests])
+
   const bySubject = useMemo(() => {
     const map: Record<string, { scores: number[]; count: number }> = {}
     sorted.forEach(a => {
-      // Infer subject from test_id — in real app we'd join tests table
-      const key = 'tests'
+      const key = testSubjectMap[a.test_id] || 'General'
       if (!map[key]) map[key] = { scores: [], count: 0 }
       map[key].scores.push(a.percent || 0)
       map[key].count++
     })
     return map
-  }, [sorted])
+  }, [sorted, testSubjectMap])
 
   // Assignment scores
   const mySubs = useMemo(() =>
@@ -100,7 +106,7 @@ export function StudentAnalyticsModule({ profile, attempts, assignments, courses
         { label: 'Avg Score', value: `${avgScore}%` },
         { label: 'Best Score', value: `${bestScore}%` },
         { label: 'Tests Taken', value: sorted.length },
-        { label: 'Pass Streak', value: `${streak} 🔥` },
+        { label: 'Pass Streak', value: `${streak} ◆` },
       ]} columns={4} />
 
       {/* Score Trend Chart */}
@@ -166,6 +172,31 @@ export function StudentAnalyticsModule({ profile, attempts, assignments, courses
       </div>
 
       {/* Assignments Overview */}
+      <div className="card fade-up-4" style={{ marginBottom: 20 }}>
+        <SectionLabel>Subject Breakdown</SectionLabel>
+        {Object.keys(bySubject).length > 0 ? Object.entries(bySubject)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([subject, data]) => {
+            const avg = Math.round(data.scores.reduce((s, v) => s + v, 0) / data.scores.length)
+            const best = Math.max(...data.scores)
+            const color = avg >= 70 ? 'var(--success)' : avg >= 40 ? 'var(--warn)' : 'var(--danger)'
+            return (
+              <div key={subject} style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 600 }}>{subject}</span>
+                  <span style={{ color: 'var(--fg-dim)' }}>Avg: {avg}% | Best: {best}% | {data.count} test{data.count !== 1 ? 's' : ''}</span>
+                </div>
+                <div style={{ height: 6, background: 'var(--border)', borderRadius: 2 }}>
+                  <div style={{ height: '100%', width: `${avg}%`, background: color, borderRadius: 2, transition: 'width 0.8s ease' }} />
+                </div>
+              </div>
+            )
+          }) : (
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>Take tests to see subject performance.</div>
+        )}
+      </div>
+
+      {/* Assignment Performance */}
       <div className="card fade-up-4" style={{ marginBottom: 20 }}>
         <SectionLabel>Assignment Performance</SectionLabel>
         <div style={{ display: 'flex', gap: 24, marginBottom: 12 }}>

@@ -166,12 +166,12 @@ export default function StudentDashboard() {
     <DashboardLayout profile={profile} navItems={navItems} activeTab={tab} onTabChange={t => { setTab(t) }}>
       {isOffline && (
         <div style={{ background:'var(--danger)', color:'#fff', textAlign:'center', padding:'8px', fontFamily:'var(--mono)', fontSize:11, letterSpacing:'0.1em' }}>
-          ⚠ You are offline — some features may not work
+          △ You are offline — some features may not work
         </div>
       )}
       {doubleXP.active && (!doubleXP.ends_at || Date.now() < doubleXP.ends_at) && (
         <div style={{ background:'var(--warn)', color:'#000', textAlign:'center', padding:'8px', fontFamily:'var(--mono)', fontSize:11, letterSpacing:'0.1em' }}>
-          ⚡ DOUBLE XP HOUR ACTIVE — Earn 2× XP on all tests!
+          ◈ DOUBLE XP HOUR ACTIVE — Earn 2× XP on all tests!
         </div>
       )}
 
@@ -312,6 +312,7 @@ export default function StudentDashboard() {
             assignments={assignments}
             courses={allCourses}
             enrolledIds={enrolledIds}
+            tests={tests}
           />
         )}
 

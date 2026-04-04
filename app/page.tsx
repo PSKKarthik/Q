@@ -41,32 +41,66 @@ function AnimatedCounter({ end, label, suffix = '' }: { end: number; label: stri
   )
 }
 
+// ─── SVG Icon component ───
+function FeatureIcon({ d, size = 28 }: { d: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--fg)', opacity: 0.7 }}>
+      <path d={d} />
+    </svg>
+  )
+}
+
+const ICON_PATHS = {
+  assessments: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5h6M9 14l2 2 4-4',
+  ai: 'M12 2a4 4 0 0 1 4 4v2h1a3 3 0 0 1 3 3v2a3 3 0 0 1-3 3h-1v2a4 4 0 0 1-8 0v-2H7a3 3 0 0 1-3-3v-2a3 3 0 0 1 3-3h1V6a4 4 0 0 1 4-4zM9 10h0M15 10h0M9 15c.83.5 1.5.5 3 .5s2.17 0 3-.5',
+  courses: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z',
+  xp: 'M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M6 9v5a6 6 0 0 0 12 0V9M6 9h12M12 19v3M8 22h8',
+  analytics: 'M18 20V10M12 20V4M6 20v-6',
+  forums: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  timetable: 'M3 4h18v18H3zM16 2v4M8 2v4M3 10h18M8 14h2v2H8z',
+  live: 'M23 7l-7 5 7 5zM14 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z',
+  assignments: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4',
+  parent: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  certificate: 'M12 15l-2 5 2-1.5L14 20l-2-5zM20 7.5a2.5 2.5 0 0 0-5 0 2.5 2.5 0 0 0-6 0C9 4 11 2 12 2s3 2 3 5.5zM7 7.5A5 5 0 0 0 12 15a5 5 0 0 0 5-7.5',
+}
+
 const FEATURES = [
-  { icon: '📝', title: 'Smart Assessments', desc: 'MCQ, MSQ, True/False, Fill-in-the-Blank, Match — with anti-cheat, timers, and ghost scoring.' },
-  { icon: '🤖', title: 'AI Tutor', desc: 'Ask questions, get explanations, and auto-generate test questions powered by LLaMA.' },
-  { icon: '📚', title: 'Course Management', desc: 'Upload materials, organize sections, track student progress and completion rates.' },
-  { icon: '🏆', title: 'XP & Gamification', desc: 'Earn XP from tests, check-ins, and quests. Level up from Rookie to Immortal.' },
-  { icon: '📊', title: 'Analytics Dashboard', desc: 'Performance trends, score distributions, moving averages, and CSV exports.' },
-  { icon: '💬', title: 'Forums & Messaging', desc: 'Discussion boards with flairs, best answers, bookmarks, and real-time DMs.' },
-  { icon: '📅', title: 'Timetable & Calendar', desc: 'Weekly schedules, event tracking, month/week views, and XP check-ins.' },
-  { icon: '🎥', title: 'Live Classes', desc: 'Video conferencing with Jitsi integration — no accounts needed for students.' },
-  { icon: '📋', title: 'Assignments', desc: 'Create, submit, grade with priority levels, late detection, and file uploads.' },
-  { icon: '🛡️', title: 'Anti-Cheat Engine', desc: 'Tab-switch detection, copy-paste blocking, fullscreen mode, and randomization.' },
-  { icon: '👨‍👩‍👧', title: 'Parent Portal', desc: 'Monitor linked students — view grades, attendance, and timetables in real time.' },
-  { icon: '🏅', title: 'Certificates', desc: 'Auto-generated canvas certificates for course completion, downloadable and shareable.' },
+  { icon: 'assessments', title: 'Smart Assessments', desc: 'MCQ, MSQ, True/False, Fill-in-the-Blank, Match — with anti-cheat, timers, and ghost scoring.' },
+  { icon: 'ai', title: 'AI Tutor', desc: 'Ask questions, get explanations, and auto-generate test questions powered by LLaMA.' },
+  { icon: 'courses', title: 'Course Management', desc: 'Upload materials, organize sections, track student progress and completion rates.' },
+  { icon: 'xp', title: 'XP & Gamification', desc: 'Earn XP from tests, check-ins, and quests. Level up from Rookie to Immortal.' },
+  { icon: 'analytics', title: 'Analytics Dashboard', desc: 'Performance trends, score distributions, moving averages, and CSV exports.' },
+  { icon: 'forums', title: 'Forums & Messaging', desc: 'Discussion boards with flairs, best answers, bookmarks, and real-time DMs.' },
+  { icon: 'timetable', title: 'Timetable & Calendar', desc: 'Weekly schedules, event tracking, month/week views, and XP check-ins.' },
+  { icon: 'live', title: 'Live Classes', desc: 'Video conferencing with Jitsi integration — no accounts needed for students.' },
+  { icon: 'assignments', title: 'Assignments', desc: 'Create, submit, grade with priority levels, late detection, and file uploads.' },
+  { icon: 'shield', title: 'Anti-Cheat Engine', desc: 'Tab-switch detection, copy-paste blocking, fullscreen mode, and randomization.' },
+  { icon: 'parent', title: 'Parent Portal', desc: 'Monitor linked students — view grades, attendance, and timetables in real time.' },
+  { icon: 'certificate', title: 'Certificates', desc: 'Auto-generated canvas certificates for course completion, downloadable and shareable.' },
 ]
 
+const ROLE_ICONS = {
+  student: 'M22 10v6M2 10l10-5 10 5-10 5zM6 12v5c0 2 3 3 6 3s6-1 6-3v-5',
+  teacher: 'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z',
+  admin: 'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  parent: 'M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+}
+
 const ROLES = [
-  { role: 'student', label: 'S T U D E N T', sub: 'Learn & Attempt', icon: '🎓', features: ['Take tests & quizzes', 'Track XP & leaderboard', 'Join courses & forums', 'AI-powered tutoring'] },
-  { role: 'teacher', label: 'T E A C H E R', sub: 'Create & Manage', icon: '📖', features: ['Create assessments', 'Manage courses', 'Grade assignments', 'Live classes & analytics'] },
-  { role: 'admin',   label: 'A D M I N',   sub: 'Oversee & Control', icon: '⚙️', features: ['User management', 'Platform settings', 'Activity monitoring', 'Batch operations'] },
-  { role: 'parent',  label: 'P A R E N T',  sub: 'Monitor & Support', icon: '👁️', features: ['Link to students', 'View grades & attendance', 'Track progress', 'Stay informed'] },
+  { role: 'student', label: 'S T U D E N T', sub: 'Learn & Attempt', icon: 'student', features: ['Take tests & quizzes', 'Track XP & leaderboard', 'Join courses & forums', 'AI-powered tutoring'] },
+  { role: 'teacher', label: 'T E A C H E R', sub: 'Create & Manage', icon: 'teacher', features: ['Create assessments', 'Manage courses', 'Grade assignments', 'Live classes & analytics'] },
+  { role: 'admin',   label: 'A D M I N',   sub: 'Oversee & Control', icon: 'admin', features: ['User management', 'Platform settings', 'Activity monitoring', 'Batch operations'] },
+  { role: 'parent',  label: 'P A R E N T',  sub: 'Monitor & Support', icon: 'parent', features: ['Link to students', 'View grades & attendance', 'Track progress', 'Stay informed'] },
 ]
 
 export default function Home() {
   const [hover, setHover] = useState<string | null>(null)
   const [visible, setVisible] = useState<Set<string>>(new Set())
+  const [mounted, setMounted] = useState(false)
   const { theme, toggleTheme } = useTheme()
+
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     const obs = new IntersectionObserver((entries) => {
@@ -99,7 +133,7 @@ export default function Home() {
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             style={{ background: 'none', border: '1px solid var(--border)', padding: '5px 10px', cursor: 'pointer', color: 'var(--fg)', fontSize: 16, lineHeight: 1, transition: 'border-color 0.2s' }}
           >
-            {theme === 'dark' ? '☀️' : '🌙'}
+            {mounted ? (theme === 'dark' ? '○' : '◐') : '○'}
           </button>
           <Link href="/login" className="btn btn-sm">Login</Link>
           <Link href="/register" className="btn btn-primary btn-sm">Register</Link>
@@ -159,7 +193,7 @@ export default function Home() {
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.background = 'var(--card-hover)' }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--card)' }}
             >
-              <div style={{ fontSize: 28, marginBottom: 12 }}>{f.icon}</div>
+              <div style={{ marginBottom: 12 }}><FeatureIcon d={ICON_PATHS[f.icon as keyof typeof ICON_PATHS]} /></div>
               <div style={{ fontFamily: 'var(--display)', fontSize: 20, letterSpacing: '0.06em', marginBottom: 8 }}>{f.title}</div>
               <div style={{ fontFamily: 'var(--sans)', fontSize: 13, color: 'var(--fg-dim)', lineHeight: 1.6 }}>{f.desc}</div>
             </div>
@@ -189,7 +223,7 @@ export default function Home() {
                 transform: isVisible('roles') ? 'translateY(0)' : 'translateY(20px)',
               }}
             >
-              <div style={{ fontSize: 32 }}>{r.icon}</div>
+              <div style={{ marginBottom: 4 }}><FeatureIcon d={ROLE_ICONS[r.icon as keyof typeof ROLE_ICONS]} size={32} /></div>
               <div>
                 <div style={{ fontFamily: 'var(--display)', fontSize: 22, letterSpacing: '0.12em', marginBottom: 4 }}>{r.label}</div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', letterSpacing: '0.08em' }}>{r.sub}</div>

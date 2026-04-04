@@ -125,8 +125,8 @@ describe('getLevel', () => {
 
   it('uses custom levels when provided', () => {
     const custom = [
-      { level: 1, name: 'NOOB', xp: 0, icon: '🐣', color: '#aaa' },
-      { level: 2, name: 'PRO', xp: 100, icon: '🏆', color: '#fff' },
+      { level: 1, name: 'NOOB', xp: 0, icon: '◇', color: '#aaa' },
+      { level: 2, name: 'PRO', xp: 100, icon: '★', color: '#fff' },
     ]
     expect(getLevel(50, custom).name).toBe('NOOB')
     expect(getLevel(100, custom).name).toBe('PRO')
@@ -170,16 +170,16 @@ describe('formatSize', () => {
 // ─── getFileIcon ───
 describe('getFileIcon', () => {
   it('returns correct icons for file types', () => {
-    expect(getFileIcon('application/pdf')).toBe('📕')
-    expect(getFileIcon('video/mp4')).toBe('🎬')
-    expect(getFileIcon('image/png')).toBe('🖼️')
-    expect(getFileIcon('application/zip')).toBe('🗜️')
-    expect(getFileIcon('text/plain')).toBe('📄')
+    expect(getFileIcon('application/pdf')).toBe('▪')
+    expect(getFileIcon('video/mp4')).toBe('▸')
+    expect(getFileIcon('image/png')).toBe('◇')
+    expect(getFileIcon('application/zip')).toBe('◈')
+    expect(getFileIcon('text/plain')).toBe('▪')
   })
 
   it('returns default icon for unknown type', () => {
-    expect(getFileIcon('')).toBe('📄')
-    expect(getFileIcon('application/octet-stream')).toBe('📄')
+    expect(getFileIcon('')).toBe('▪')
+    expect(getFileIcon('application/octet-stream')).toBe('▪')
   })
 })
 

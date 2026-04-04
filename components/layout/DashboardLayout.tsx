@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { useToast } from '@/lib/toast'
 import type { Profile } from '@/types'
 import { Icon } from '@/components/ui/Icon'
 import { NotificationBell } from '@/components/layout/NotificationBell'
@@ -22,6 +23,7 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ profile, navItems, activeTab, onTabChange, children }: DashboardLayoutProps) {
   const router = useRouter()
   const { theme, toggleTheme } = useTheme()
+  const { toast } = useToast()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const roleColor: Record<string, string> = {
@@ -31,10 +33,10 @@ export default function DashboardLayout({ profile, navItems, activeTab, onTabCha
   const handleLogout = async () => {
     try {
       const { error } = await supabase.auth.signOut()
-      if (error) { console.error('Logout failed:', error); alert('Logout failed. Please try again.'); return }
+      if (error) { console.error('Logout failed:', error); toast('Logout failed. Please try again.', 'error'); return }
       router.push('/login')
     } catch {
-      alert('Logout failed. Please try again.')
+      toast('Logout failed. Please try again.', 'error')
     }
   }
 

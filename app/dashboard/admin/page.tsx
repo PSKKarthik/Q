@@ -6,7 +6,7 @@ import { useToast } from '@/lib/toast'
 import { pushNotificationBatch, logActivity } from '@/lib/actions'
 import { PAGE_SIZE, DEBOUNCE_MS, DOUBLE_XP_DURATION_MS } from '@/lib/constants'
 import { exportCSV, DEFAULT_XP_LEVELS, type XPLevel } from '@/lib/utils'
-import type { Profile, Announcement, Attempt, Test, ActivityLog, Course, Assignment, Submission, AttendanceRecord } from '@/types'
+import type { Profile, Announcement, Attempt, Test, ActivityLog, Course, Assignment, Submission, AttendanceRecord, Quest } from '@/types'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Icon } from '@/components/ui/Icon'
 import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
@@ -41,6 +41,9 @@ export default function AdminDashboard() {
   const [courses, setCourses] = useState<Course[]>([])
   const [assignments, setAssignments] = useState<(Assignment & { submissions?: Submission[] })[]>([])
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
+  const [adminQuests, setAdminQuests] = useState<Quest[]>([])
+  const [questModal, setQuestModal] = useState(false)
+  const [editQuest, setEditQuest] = useState<Partial<Quest>>({ title: '', description: '', type: 'daily', target_type: 'test', target_count: 1, xp_reward: 50, active: true })
   const [userPage, setUserPage] = useState(0)
   const [logPage, setLogPage] = useState(0)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -96,6 +99,7 @@ export default function AdminDashboard() {
         supabase.from('courses').select('*').order('created_at', { ascending: false }),
         supabase.from('assignments').select('*, submissions(*)').order('created_at', { ascending: false }),
         supabase.from('attendance').select('*').order('date', { ascending: false }),
+        supabase.from('quests').select('*').order('created_at', { ascending: false }),
       ])
       if (results[0].status === 'fulfilled' && results[0].value.data) setUsers(results[0].value.data as Profile[])
       if (results[1].status === 'fulfilled' && results[1].value.data) setTests(results[1].value.data)
@@ -105,6 +109,7 @@ export default function AdminDashboard() {
       if (results[5].status === 'fulfilled' && results[5].value.data) setCourses(results[5].value.data as Course[])
       if (results[6].status === 'fulfilled' && results[6].value.data) setAssignments(results[6].value.data)
       if (results[7].status === 'fulfilled' && results[7].value.data) setAttendance(results[7].value.data as AttendanceRecord[])
+      if (results[8].status === 'fulfilled' && results[8].value.data) setAdminQuests(results[8].value.data as Quest[])
       // Load all platform settings
       const { data: psData } = await supabase.from('platform_settings').select('*')
       if (psData) {
@@ -140,7 +145,7 @@ export default function AdminDashboard() {
         if (newAnnounce.target === 'teachers') return u.role === 'teacher'
         return true // 'all'
       }).map(u => u.id)
-      const { error: batchErr, failedCount } = await pushNotificationBatch(targetIds, `📢 Admin announcement: ${newAnnounce.title}`, 'announcement')
+      const { error: batchErr, failedCount } = await pushNotificationBatch(targetIds, `◆ Admin announcement: ${newAnnounce.title}`, 'announcement')
       if (batchErr) { /* batch notification failed — non-critical */ }
       await logActivity(`Admin posted announcement: ${newAnnounce.title}`, 'announcement')
       setNewAnnounce({ title: '', body: '', target: 'all', pinned: false })
@@ -200,7 +205,7 @@ export default function AdminDashboard() {
       await supabase.from('platform_settings').update({ value: val }).eq('key', 'double_xp')
       setDoubleXP(val)
       const studentIds = users.filter(u => u.role === 'student').map(u => u.id)
-      await pushNotificationBatch(studentIds, '⚡ Double XP Hour is now active! Earn 2x XP on tests!', 'double_xp')
+      await pushNotificationBatch(studentIds, '◈ Double XP Hour is now active! Earn 2x XP on tests!', 'double_xp')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to activate Double XP', 'error')
     }
@@ -239,6 +244,7 @@ export default function AdminDashboard() {
     { id: 'attendance',   label: 'Attendance',        icon: 'check'  },
     { id: 'grades',       label: 'Grades',            icon: 'star'   },
     { id: 'analytics',   label: 'Analytics',       icon: 'chart'  },
+    { id: 'quests',      label: 'Quests',           icon: 'star'   },
     { id: 'calendar',    label: 'Calendar',        icon: 'calendar' },
     { id: 'batch',       label: 'Batch Operations', icon: 'users'  },
     { id: 'notifications', label: 'Notifications', icon: 'bell'  },
@@ -319,14 +325,14 @@ export default function AdminDashboard() {
 
             {/* Double XP Panel */}
             <div className="fade-up-3" style={{ marginBottom: 24, border: '1px solid var(--border)', padding: 20 }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fg-dim)', marginBottom: 12 }}>⚡ Double XP Control</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fg-dim)', marginBottom: 12 }}>◈ Double XP Control</div>
               {doubleXP.active ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <span style={{ fontFamily: 'var(--display)', fontSize: 28, color: 'var(--warn)' }}>⚡ ACTIVE — {xpTimer}</span>
+                  <span style={{ fontFamily: 'var(--display)', fontSize: 28, color: 'var(--warn)' }}>◈ ACTIVE — {xpTimer}</span>
                   <button className="btn btn-sm btn-danger" onClick={deactivateDoubleXP}>Deactivate</button>
                 </div>
               ) : (
-                <button className="btn btn-primary btn-sm" onClick={activateDoubleXP}>⚡ Activate Double XP Hour</button>
+                <button className="btn btn-primary btn-sm" onClick={activateDoubleXP}>◈ Activate Double XP Hour</button>
               )}
             </div>
 
@@ -448,19 +454,22 @@ export default function AdminDashboard() {
                         <div style={{ display: 'flex', gap: 4 }}>
                           {c.status === 'draft' && (
                             <button className="btn btn-xs" onClick={async () => {
-                              await supabase.from('courses').update({ status: 'published' }).eq('id', c.id)
+                              const { error } = await supabase.from('courses').update({ status: 'published' }).eq('id', c.id)
+                              if (error) { toast(error.message, 'error'); return }
                               setCourses(prev => prev.map(x => x.id === c.id ? { ...x, status: 'published' } : x))
                             }} title="Publish"><Icon name="check" size={10} /></button>
                           )}
                           {c.status === 'published' && (
                           <button className="btn btn-xs" onClick={async () => {
-                              await supabase.from('courses').update({ status: 'draft' }).eq('id', c.id)
+                              const { error } = await supabase.from('courses').update({ status: 'draft' }).eq('id', c.id)
+                              if (error) { toast(error.message, 'error'); return }
                               setCourses(prev => prev.map(x => x.id === c.id ? { ...x, status: 'draft' } : x))
                             }} title="Unpublish"><Icon name="eye-off" size={10} /></button>
                           )}
                           <button className="btn btn-xs btn-danger" onClick={async () => {
                             if (!confirm(`Delete course "${c.title}"?`)) return
-                            await supabase.from('courses').delete().eq('id', c.id)
+                            const { error } = await supabase.from('courses').delete().eq('id', c.id)
+                            if (error) { toast(error.message, 'error'); return }
                             setCourses(prev => prev.filter(x => x.id !== c.id))
                           }}><Icon name="trash" size={10} /></button>
                         </div>
@@ -513,13 +522,15 @@ export default function AdminDashboard() {
                         <div style={{ display: 'flex', gap: 4 }}>
                           {a.status === 'active' && (
                             <button className="btn btn-xs" onClick={async () => {
-                              await supabase.from('assignments').update({ status: 'closed' }).eq('id', a.id)
+                              const { error } = await supabase.from('assignments').update({ status: 'closed' }).eq('id', a.id)
+                              if (error) { toast(error.message, 'error'); return }
                               setAssignments(prev => prev.map(x => x.id === a.id ? { ...x, status: 'closed' } : x))
                             }} title="Close"><Icon name="check" size={10} /></button>
                           )}
                           <button className="btn btn-xs btn-danger" onClick={async () => {
                             if (!confirm(`Delete assignment "${a.title}"?`)) return
-                            await supabase.from('assignments').delete().eq('id', a.id)
+                            const { error } = await supabase.from('assignments').delete().eq('id', a.id)
+                            if (error) { toast(error.message, 'error'); return }
                             setAssignments(prev => prev.filter(x => x.id !== a.id))
                           }}><Icon name="trash" size={10} /></button>
                         </div>
@@ -737,6 +748,145 @@ export default function AdminDashboard() {
         {/* PROFILE */}
         {tab === 'notifications' && <NotificationsModule userId={profile.id} />}
 
+        {/* QUESTS MANAGEMENT */}
+        {tab === 'quests' && (() => {
+          const saveQuest = async () => {
+            if (!editQuest.title?.trim()) { toast('Title is required', 'error'); return }
+            try {
+              if (editQuest.id) {
+                const { error } = await supabase.from('quests').update({
+                  title: editQuest.title, description: editQuest.description || '',
+                  type: editQuest.type, target_type: editQuest.target_type,
+                  target_count: editQuest.target_count, xp_reward: editQuest.xp_reward, active: editQuest.active,
+                }).eq('id', editQuest.id)
+                if (error) throw error
+                setAdminQuests(prev => prev.map(q => q.id === editQuest.id ? { ...q, ...editQuest } as Quest : q))
+                toast('Quest updated', 'success')
+              } else {
+                const { data, error } = await supabase.from('quests').insert({
+                  title: editQuest.title, description: editQuest.description || '',
+                  type: editQuest.type || 'daily', target_type: editQuest.target_type || 'test',
+                  target_count: editQuest.target_count || 1, xp_reward: editQuest.xp_reward || 50, active: editQuest.active ?? true,
+                }).select().single()
+                if (error) throw error
+                if (data) setAdminQuests(prev => [data as Quest, ...prev])
+                toast('Quest created', 'success')
+              }
+              setQuestModal(false)
+              setEditQuest({ title: '', description: '', type: 'daily', target_type: 'test', target_count: 1, xp_reward: 50, active: true })
+            } catch (err: any) { console.error('Quest save error:', err); toast(err?.message || JSON.stringify(err) || 'Failed to save quest', 'error') }
+          }
+          const deleteQuest = async (id: string) => {
+            const { error } = await supabase.from('quests').delete().eq('id', id)
+            if (error) { toast(error.message, 'error'); return }
+            setAdminQuests(prev => prev.filter(q => q.id !== id))
+            toast('Quest deleted', 'success')
+          }
+          const toggleActive = async (q: Quest) => {
+            const { error } = await supabase.from('quests').update({ active: !q.active }).eq('id', q.id)
+            if (error) { toast(error.message, 'error'); return }
+            setAdminQuests(prev => prev.map(x => x.id === q.id ? { ...x, active: !x.active } : x))
+          }
+          return (
+            <>
+              <PageHeader title="QUEST MANAGEMENT" subtitle="Create and manage student quests" />
+              <StatGrid items={[
+                { label: 'Total Quests', value: adminQuests.length },
+                { label: 'Active', value: adminQuests.filter(q => q.active).length },
+                { label: 'Daily', value: adminQuests.filter(q => q.type === 'daily').length },
+                { label: 'Weekly', value: adminQuests.filter(q => q.type === 'weekly').length },
+              ]} columns={4} />
+              <div style={{ marginBottom: 16 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => {
+                  setEditQuest({ title: '', description: '', type: 'daily', target_type: 'test', target_count: 1, xp_reward: 50, active: true })
+                  setQuestModal(true)
+                }}>+ New Quest</button>
+              </div>
+              {['daily', 'weekly', 'special'].map(type => {
+                const group = adminQuests.filter(q => q.type === type)
+                if (!group.length) return null
+                return (
+                  <div key={type}>
+                    <SectionLabel>{type.charAt(0).toUpperCase() + type.slice(1)} Quests</SectionLabel>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12, marginBottom: 24 }}>
+                      {group.map(q => (
+                        <div key={q.id} className="card" style={{ padding: 16, opacity: q.active ? 1 : 0.5 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>{q.title}</div>
+                            <span style={{ fontFamily: 'var(--display)', fontSize: 16, color: 'var(--warn)' }}>+{q.xp_reward}</span>
+                          </div>
+                          {q.description && <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', marginBottom: 8 }}>{q.description}</div>}
+                          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginBottom: 12 }}>
+                            Target: {q.target_type} x{q.target_count} | {q.active ? 'Active' : 'Inactive'}
+                          </div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="btn btn-sm" onClick={() => { setEditQuest(q); setQuestModal(true) }}>Edit</button>
+                            <button className="btn btn-sm" onClick={() => toggleActive(q)}>{q.active ? 'Disable' : 'Enable'}</button>
+                            <button className="btn btn-sm" style={{ color: 'var(--danger)' }} onClick={() => deleteQuest(q.id)}>Delete</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+              {adminQuests.length === 0 && (
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', textAlign: 'center', marginTop: 40 }}>
+                  No quests yet. Create one to get started.
+                </div>
+              )}
+              <Modal open={questModal} onClose={() => setQuestModal(false)} title={editQuest.id ? 'Edit Quest' : 'New Quest'}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <label className="label">Title</label>
+                    <input className="input" value={editQuest.title || ''} onChange={e => setEditQuest(p => ({ ...p, title: e.target.value }))} placeholder="Complete 3 tests" />
+                  </div>
+                  <div>
+                    <label className="label">Description</label>
+                    <input className="input" value={editQuest.description || ''} onChange={e => setEditQuest(p => ({ ...p, description: e.target.value }))} placeholder="Optional description" />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label className="label">Type</label>
+                      <select className="input" value={editQuest.type || 'daily'} onChange={e => setEditQuest(p => ({ ...p, type: e.target.value as Quest['type'] }))}>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="special">Special</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Target Type</label>
+                      <select className="input" value={editQuest.target_type || 'test'} onChange={e => setEditQuest(p => ({ ...p, target_type: e.target.value }))}>
+                        <option value="test">Tests</option>
+                        <option value="course">Courses</option>
+                        <option value="streak">Streaks</option>
+                        <option value="social">Social</option>
+                        <option value="xp">XP</option>
+                        <option value="achievement">Achievement</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label className="label">Target Count</label>
+                      <input className="input" type="number" min={1} value={editQuest.target_count || 1} onChange={e => setEditQuest(p => ({ ...p, target_count: parseInt(e.target.value) || 1 }))} />
+                    </div>
+                    <div>
+                      <label className="label">XP Reward</label>
+                      <input className="input" type="number" min={1} value={editQuest.xp_reward || 50} onChange={e => setEditQuest(p => ({ ...p, xp_reward: parseInt(e.target.value) || 50 }))} />
+                    </div>
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--mono)', fontSize: 12, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={editQuest.active ?? true} onChange={e => setEditQuest(p => ({ ...p, active: e.target.checked }))} />
+                    Active
+                  </label>
+                  <button className="btn btn-primary" onClick={saveQuest}>{editQuest.id ? 'Update Quest' : 'Create Quest'}</button>
+                </div>
+              </Modal>
+            </>
+          )
+        })()}
+
         {/* CALENDAR */}
         {tab === 'calendar' && (
           <CalendarModule tests={tests} assignments={assignments} timetable={[]} />
@@ -843,7 +993,7 @@ export default function AdminDashboard() {
                   const addLevel = () => {
                     const maxLvl = levels.length ? Math.max(...levels.map(l => l.level)) : 0
                     const maxXP = levels.length ? Math.max(...levels.map(l => l.xp)) : 0
-                    const updated = [...levels, { level: maxLvl + 1, name: `LEVEL ${maxLvl + 1}`, xp: maxXP + 1000, icon: '⭐', color: '#6b7280' }]
+                    const updated = [...levels, { level: maxLvl + 1, name: `LEVEL ${maxLvl + 1}`, xp: maxXP + 1000, icon: '★', color: '#6b7280' }]
                     setPlatformSettings(prev => ({ ...prev, xp_levels: updated }))
                   }
                   const removeLevel = (idx: number) => {

@@ -70,51 +70,51 @@ const BADGE_COLORS = {
 
 const BADGES: Badge[] = [
   // XP milestones
-  { id: 'xp_100',    name: 'First Steps',      desc: 'Earn 100 XP',            icon: '🌱', tier: 'bronze',   check: s => s.xp >= 100 },
-  { id: 'xp_500',    name: 'Rising Star',       desc: 'Earn 500 XP',            icon: '⭐', tier: 'bronze',   check: s => s.xp >= 500 },
-  { id: 'xp_1000',   name: 'Scholar',           desc: 'Earn 1,000 XP',          icon: '📚', tier: 'silver',   check: s => s.xp >= 1000 },
-  { id: 'xp_2500',   name: 'Knowledge Seeker',  desc: 'Earn 2,500 XP',          icon: '🔮', tier: 'gold',     check: s => s.xp >= 2500 },
-  { id: 'xp_5000',   name: 'XP Master',         desc: 'Earn 5,000 XP',          icon: '💫', tier: 'platinum', check: s => s.xp >= 5000 },
+  { id: 'xp_100',    name: 'First Steps',      desc: 'Earn 100 XP',            icon: '◇', tier: 'bronze',   check: s => s.xp >= 100 },
+  { id: 'xp_500',    name: 'Rising Star',       desc: 'Earn 500 XP',            icon: '★', tier: 'bronze',   check: s => s.xp >= 500 },
+  { id: 'xp_1000',   name: 'Scholar',           desc: 'Earn 1,000 XP',          icon: '▪', tier: 'silver',   check: s => s.xp >= 1000 },
+  { id: 'xp_2500',   name: 'Knowledge Seeker',  desc: 'Earn 2,500 XP',          icon: '◈', tier: 'gold',     check: s => s.xp >= 2500 },
+  { id: 'xp_5000',   name: 'XP Master',         desc: 'Earn 5,000 XP',          icon: '★', tier: 'platinum', check: s => s.xp >= 5000 },
 
   // Test milestones
-  { id: 'test_1',    name: 'First Test',        desc: 'Complete your first test', icon: '📝', tier: 'bronze',   check: s => s.testsCompleted >= 1 },
-  { id: 'test_10',   name: 'Regular',           desc: 'Complete 10 tests',       icon: '📋', tier: 'silver',   check: s => s.testsCompleted >= 10 },
-  { id: 'test_25',   name: 'Dedicated',         desc: 'Complete 25 tests',       icon: '📖', tier: 'gold',     check: s => s.testsCompleted >= 25 },
-  { id: 'test_50',   name: 'Test Machine',      desc: 'Complete 50 tests',       icon: '🤖', tier: 'platinum', check: s => s.testsCompleted >= 50 },
+  { id: 'test_1',    name: 'First Test',        desc: 'Complete your first test', icon: '▫', tier: 'bronze',   check: s => s.testsCompleted >= 1 },
+  { id: 'test_10',   name: 'Regular',           desc: 'Complete 10 tests',       icon: '▫', tier: 'silver',   check: s => s.testsCompleted >= 10 },
+  { id: 'test_25',   name: 'Dedicated',         desc: 'Complete 25 tests',       icon: '▪', tier: 'gold',     check: s => s.testsCompleted >= 25 },
+  { id: 'test_50',   name: 'Test Machine',      desc: 'Complete 50 tests',       icon: '◈', tier: 'platinum', check: s => s.testsCompleted >= 50 },
 
   // Score achievements
-  { id: 'score_80',  name: 'High Scorer',       desc: 'Score 80%+ on a test',   icon: '🎯', tier: 'bronze',   check: s => s.bestScore >= 80 },
-  { id: 'score_90',  name: 'Sharp Mind',        desc: 'Score 90%+ on a test',   icon: '🧠', tier: 'silver',   check: s => s.bestScore >= 90 },
-  { id: 'score_100', name: 'Perfectionist',     desc: 'Score 100% on a test',   icon: '💯', tier: 'gold',     check: s => s.bestScore >= 100 },
-  { id: 'perfect_5', name: 'Flawless',          desc: 'Get 5 perfect scores',   icon: '✨', tier: 'platinum', check: s => s.perfectTests >= 5 },
+  { id: 'score_80',  name: 'High Scorer',       desc: 'Score 80%+ on a test',   icon: '◉', tier: 'bronze',   check: s => s.bestScore >= 80 },
+  { id: 'score_90',  name: 'Sharp Mind',        desc: 'Score 90%+ on a test',   icon: '◈', tier: 'silver',   check: s => s.bestScore >= 90 },
+  { id: 'score_100', name: 'Perfectionist',     desc: 'Score 100% on a test',   icon: '★', tier: 'gold',     check: s => s.bestScore >= 100 },
+  { id: 'perfect_5', name: 'Flawless',          desc: 'Get 5 perfect scores',   icon: '★', tier: 'platinum', check: s => s.perfectTests >= 5 },
 
   // Ghost victories
-  { id: 'ghost_1',   name: 'Ghost Buster',      desc: 'Beat your ghost once',    icon: '👻', tier: 'bronze',   check: s => s.ghostWins >= 1 },
-  { id: 'ghost_5',   name: 'Ghost Hunter',      desc: 'Beat your ghost 5 times', icon: '🏹', tier: 'silver',   check: s => s.ghostWins >= 5 },
-  { id: 'ghost_15',  name: 'Ghost Slayer',      desc: 'Beat your ghost 15 times',icon: '⚔️', tier: 'gold',     check: s => s.ghostWins >= 15 },
+  { id: 'ghost_1',   name: 'Ghost Buster',      desc: 'Beat your ghost once',    icon: '◇', tier: 'bronze',   check: s => s.ghostWins >= 1 },
+  { id: 'ghost_5',   name: 'Ghost Hunter',      desc: 'Beat your ghost 5 times', icon: '◈', tier: 'silver',   check: s => s.ghostWins >= 5 },
+  { id: 'ghost_15',  name: 'Ghost Slayer',      desc: 'Beat your ghost 15 times',icon: '◆', tier: 'gold',     check: s => s.ghostWins >= 15 },
 
   // Streak badges
-  { id: 'streak_3',  name: 'On a Roll',         desc: '3-day streak',            icon: '🔥', tier: 'bronze',   check: s => s.streak >= 3 },
-  { id: 'streak_7',  name: 'Week Warrior',      desc: '7-day streak',            icon: '🗡️', tier: 'silver',   check: s => s.streak >= 7 },
-  { id: 'streak_14', name: 'Unstoppable',       desc: '14-day streak',           icon: '💪', tier: 'gold',     check: s => s.streak >= 14 },
-  { id: 'streak_30', name: 'Legendary Grind',   desc: '30-day streak',           icon: '🏆', tier: 'platinum', check: s => s.streak >= 30 },
+  { id: 'streak_3',  name: 'On a Roll',         desc: '3-day streak',            icon: '◆', tier: 'bronze',   check: s => s.streak >= 3 },
+  { id: 'streak_7',  name: 'Week Warrior',      desc: '7-day streak',            icon: '◈', tier: 'silver',   check: s => s.streak >= 7 },
+  { id: 'streak_14', name: 'Unstoppable',       desc: '14-day streak',           icon: '◆', tier: 'gold',     check: s => s.streak >= 14 },
+  { id: 'streak_30', name: 'Legendary Grind',   desc: '30-day streak',           icon: '★', tier: 'platinum', check: s => s.streak >= 30 },
 
   // Consistency
-  { id: 'avg_80',    name: 'Consistent',        desc: '80%+ average score',      icon: '📊', tier: 'silver',   check: s => s.avgScore >= 80 && s.testsCompleted >= 5 },
-  { id: 'avg_90',    name: 'Elite Student',      desc: '90%+ average score',      icon: '🎓', tier: 'gold',     check: s => s.avgScore >= 90 && s.testsCompleted >= 5 },
+  { id: 'avg_80',    name: 'Consistent',        desc: '80%+ average score',      icon: '▪', tier: 'silver',   check: s => s.avgScore >= 80 && s.testsCompleted >= 5 },
+  { id: 'avg_90',    name: 'Elite Student',      desc: '90%+ average score',      icon: '◇', tier: 'gold',     check: s => s.avgScore >= 90 && s.testsCompleted >= 5 },
 
   // Forum participation
-  { id: 'forum_1',   name: 'Speaker',           desc: 'Create a forum post',     icon: '💬', tier: 'bronze',   check: s => s.forumPosts >= 1 },
-  { id: 'forum_10',  name: 'Contributor',       desc: 'Create 10 forum posts',   icon: '🗣️', tier: 'silver',   check: s => s.forumPosts >= 10 },
-  { id: 'forum_25',  name: 'Community Voice',   desc: 'Create 25 forum posts',   icon: '📢', tier: 'gold',     check: s => s.forumPosts >= 25 },
+  { id: 'forum_1',   name: 'Speaker',           desc: 'Create a forum post',     icon: '◇', tier: 'bronze',   check: s => s.forumPosts >= 1 },
+  { id: 'forum_10',  name: 'Contributor',       desc: 'Create 10 forum posts',   icon: '◈', tier: 'silver',   check: s => s.forumPosts >= 10 },
+  { id: 'forum_25',  name: 'Community Voice',   desc: 'Create 25 forum posts',   icon: '◆', tier: 'gold',     check: s => s.forumPosts >= 25 },
 
   // Study days
-  { id: 'days_7',    name: 'Regular Learner',   desc: 'Study on 7 different days',  icon: '📅', tier: 'bronze',  check: s => s.totalStudyDays >= 7 },
-  { id: 'days_30',   name: 'Month Scholar',     desc: 'Study on 30 different days', icon: '🗓️', tier: 'silver',  check: s => s.totalStudyDays >= 30 },
-  { id: 'days_100',  name: 'Centurion',         desc: 'Study on 100 different days',icon: '💯', tier: 'platinum',check: s => s.totalStudyDays >= 100 },
+  { id: 'days_7',    name: 'Regular Learner',   desc: 'Study on 7 different days',  icon: '▫', tier: 'bronze',  check: s => s.totalStudyDays >= 7 },
+  { id: 'days_30',   name: 'Month Scholar',     desc: 'Study on 30 different days', icon: '▫', tier: 'silver',  check: s => s.totalStudyDays >= 30 },
+  { id: 'days_100',  name: 'Centurion',         desc: 'Study on 100 different days',icon: '★', tier: 'platinum',check: s => s.totalStudyDays >= 100 },
 
   // Combo badges
-  { id: 'combo_all', name: 'Completionist',     desc: 'Earn 20+ badges',         icon: '🌟', tier: 'platinum', check: s => s.xp >= 2500 && s.testsCompleted >= 25 && s.streak >= 7 && s.ghostWins >= 5 },
+  { id: 'combo_all', name: 'Completionist',     desc: 'Earn 20+ badges',         icon: '★', tier: 'platinum', check: s => s.xp >= 2500 && s.testsCompleted >= 25 && s.streak >= 7 && s.ghostWins >= 5 },
 ]
 
 /* ── Daily Quests ── */
@@ -129,13 +129,13 @@ interface Quest {
 
 function getTodayQuests(seed: number): Quest[] {
   const ALL_QUESTS: Quest[] = [
-    { id: 'q_test_any',    name: 'Take a Test',       desc: 'Complete any test today',                 icon: '📝', xpReward: 25,  check: (a) => a.length >= 1 },
-    { id: 'q_score_70',    name: 'Pass with 70%+',    desc: 'Score 70%+ on any test today',            icon: '🎯', xpReward: 35,  check: (a) => a.some(at => at.percent >= 70) },
-    { id: 'q_score_90',    name: 'Ace It',             desc: 'Score 90%+ on any test today',            icon: '🌟', xpReward: 50,  check: (a) => a.some(at => at.percent >= 90) },
-    { id: 'q_test_2',      name: 'Double Down',        desc: 'Complete 2 tests today',                  icon: '✌️', xpReward: 40,  check: (a) => a.length >= 2 },
-    { id: 'q_perfect',     name: 'Perfect Run',        desc: 'Score 100% on any test today',            icon: '💯', xpReward: 75,  check: (a) => a.some(at => at.percent === 100) },
-    { id: 'q_beat_ghost',  name: 'Ghost Buster',       desc: 'Beat your ghost score on any test today', icon: '👻', xpReward: 50,  check: () => false /* tracked server-side */ },
-    { id: 'q_improve',     name: 'Self Improver',      desc: 'Improve a previous test score today',     icon: '📈', xpReward: 30,  check: () => false /* tracked server-side */ },
+    { id: 'q_test_any',    name: 'Take a Test',       desc: 'Complete any test today',                 icon: '▫', xpReward: 25,  check: (a) => a.length >= 1 },
+    { id: 'q_score_70',    name: 'Pass with 70%+',    desc: 'Score 70%+ on any test today',            icon: '◉', xpReward: 35,  check: (a) => a.some(at => at.percent >= 70) },
+    { id: 'q_score_90',    name: 'Ace It',             desc: 'Score 90%+ on any test today',            icon: '★', xpReward: 50,  check: (a) => a.some(at => at.percent >= 90) },
+    { id: 'q_test_2',      name: 'Double Down',        desc: 'Complete 2 tests today',                  icon: '◇', xpReward: 40,  check: (a) => a.length >= 2 },
+    { id: 'q_perfect',     name: 'Perfect Run',        desc: 'Score 100% on any test today',            icon: '★', xpReward: 75,  check: (a) => a.some(at => at.percent === 100) },
+    { id: 'q_beat_ghost',  name: 'Ghost Buster',       desc: 'Beat your ghost score on any test today', icon: '◇', xpReward: 50,  check: () => false /* tracked server-side */ },
+    { id: 'q_improve',     name: 'Self Improver',      desc: 'Improve a previous test score today',     icon: '▪', xpReward: 30,  check: () => false /* tracked server-side */ },
   ]
   // Pick 3 quests deterministically based on date seed
   const shuffled = ALL_QUESTS.map((q, i) => ({ q, s: (seed * (i + 7) * 31) % 100 }))
@@ -365,7 +365,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       setDailyLoginClaimed(true)
       const newXP = (profile.xp || 0) + loginXP
       onProfileUpdate({ ...profile, xp: newXP })
-      toast(`⚡ +${loginXP} XP — Daily login bonus! ${streak.current > 0 ? `(${streak.current}-day streak bonus!)` : ''}`, 'success')
+      toast(`◈ +${loginXP} XP — Daily login bonus! ${streak.current > 0 ? `(${streak.current}-day streak bonus!)` : ''}`, 'success')
     } catch {
       // Fallback: try direct update
       const newXP = (profile.xp || 0) + loginXP
@@ -373,7 +373,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       localStorage.setItem(`qgx-daily-${profile.id}-${todayKey}`, '1')
       setDailyLoginClaimed(true)
       onProfileUpdate({ ...profile, xp: newXP })
-      toast(`⚡ +${loginXP} XP — Daily login bonus!`, 'success')
+      toast(`◈ +${loginXP} XP — Daily login bonus!`, 'success')
     }
     setClaimingLogin(false)
   }
@@ -426,15 +426,15 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
   const copyWrapped = () => {
     const text = `QGX Wrapped ${new Date().getFullYear()} | ${profile.name} | ${profile.qgx_id}
 ━━━━━━━━━━━━━━━━━━━━━━
-🏆 Tier: ${tierData.icon} ${tierData.label}
-⚡ XP: ${profile.xp} | Rank: #${rank}
-📊 Best Score: ${stats.bestScore}% | Avg: ${stats.avgScore}%
-📝 Tests: ${attempts.length}/${tests.length} | Perfect: ${stats.perfectTests}
-👻 Ghost Wins: ${profile.ghost_wins || 0}
-🔥 Streak: ${streak.current} days (Best: ${streak.best})
-🏅 Badges: ${earnedBadges.length}/${BADGES.length}
+★ Tier: ${tierData.icon} ${tierData.label}
+◈ XP: ${profile.xp} | Rank: #${rank}
+▪ Best Score: ${stats.bestScore}% | Avg: ${stats.avgScore}%
+▫ Tests: ${attempts.length}/${tests.length} | Perfect: ${stats.perfectTests}
+◇ Ghost Wins: ${profile.ghost_wins || 0}
+◆ Streak: ${streak.current} days (Best: ${streak.best})
+◆ Badges: ${earnedBadges.length}/${BADGES.length}
 ━━━━━━━━━━━━━━━━━━━━━━`
-    navigator.clipboard.writeText(text).then(() => alert('Copied!'))
+    navigator.clipboard.writeText(text).then(() => toast('Copied!', 'success'))
   }
 
   /* ══════════════════════════════════════
@@ -480,13 +480,13 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       {/* ── Daily Login Reward ── */}
       {!dailyLoginClaimed && (
         <div className="xp-daily-login fade-up">
-          <div className="xp-daily-icon">🎁</div>
+          <div className="xp-daily-icon">◇</div>
           <div className="xp-daily-info">
             <div className="xp-daily-title">Daily Login Bonus</div>
             <div className="xp-daily-desc">+{10 + Math.min(streak.current * 2, 40)} XP {streak.current > 0 ? `(${streak.current}-day streak bonus!)` : ''}</div>
           </div>
           <button className="btn btn-primary btn-sm xp-daily-btn" onClick={claimDailyLogin} disabled={claimingLogin}>
-            {claimingLogin ? 'Claiming...' : '⚡ Claim'}
+            {claimingLogin ? 'Claiming...' : '◈ Claim'}
           </button>
         </div>
       )}
@@ -533,27 +533,27 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       {/* ── Quick Stats ── */}
       <div className="xp-quick-stats fade-up-1">
         <div className="xp-qs">
-          <div className="xp-qs-icon">🔥</div>
+          <div className="xp-qs-icon">◆</div>
           <div className="xp-qs-val">{streak.current}</div>
           <div className="xp-qs-label">Day Streak</div>
         </div>
         <div className="xp-qs">
-          <div className="xp-qs-icon">📝</div>
+          <div className="xp-qs-icon">▫</div>
           <div className="xp-qs-val">{attempts.length}</div>
           <div className="xp-qs-label">Tests Done</div>
         </div>
         <div className="xp-qs">
-          <div className="xp-qs-icon">👻</div>
+          <div className="xp-qs-icon">◇</div>
           <div className="xp-qs-val">{profile.ghost_wins || 0}</div>
           <div className="xp-qs-label">Ghost Wins</div>
         </div>
         <div className="xp-qs">
-          <div className="xp-qs-icon">🏅</div>
+          <div className="xp-qs-icon">◆</div>
           <div className="xp-qs-val">{earnedBadges.length}/{BADGES.length}</div>
           <div className="xp-qs-label">Badges</div>
         </div>
         <div className="xp-qs">
-          <div className="xp-qs-icon">📊</div>
+          <div className="xp-qs-icon">▪</div>
           <div className="xp-qs-val">{stats.avgScore}%</div>
           <div className="xp-qs-label">Avg Score</div>
         </div>
@@ -562,11 +562,11 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       {/* ── Tab Navigation ── */}
       <div className="xp-tabs fade-up-1">
         {([
-          ['overview',     '🎮', 'Overview'],
-          ['badges',       '🏅', 'Badges'],
-          ['leaderboard',  '🏆', 'Leaderboard'],
-          ['quests',       '⚔️', 'Quests'],
-          ['wrapped',      '✨', 'Wrapped'],
+          ['overview',     '◈', 'Overview'],
+          ['badges',       '◆', 'Badges'],
+          ['leaderboard',  '★', 'Leaderboard'],
+          ['quests',       '◆', 'Quests'],
+          ['wrapped',      '★', 'Wrapped'],
         ] as [XPTab, string, string][]).map(([id, icon, label]) => (
           <button key={id} className={`xp-tab ${tab === id ? 'xp-tab-active' : ''}`}
             onClick={() => setTab(id)}>
@@ -603,17 +603,17 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
             <div className="xp-section-title">Streak</div>
             <div className="xp-streak-row">
               <div className="xp-streak-card">
-                <div className="xp-streak-fire">{streak.current > 0 ? '🔥' : '❄️'}</div>
+                <div className="xp-streak-fire">{streak.current > 0 ? '◆' : '◇'}</div>
                 <div className="xp-streak-num">{streak.current}</div>
                 <div className="xp-streak-lbl">Current</div>
               </div>
               <div className="xp-streak-card">
-                <div className="xp-streak-fire">🏆</div>
+                <div className="xp-streak-fire">★</div>
                 <div className="xp-streak-num">{streak.best}</div>
                 <div className="xp-streak-lbl">Best</div>
               </div>
               <div className="xp-streak-card">
-                <div className="xp-streak-fire">📅</div>
+                <div className="xp-streak-fire">▫</div>
                 <div className="xp-streak-num">{streak.activeDays.size}</div>
                 <div className="xp-streak-lbl">Active Days</div>
               </div>
@@ -699,7 +699,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--fg-dim)', marginBottom: 16 }}>{showBadgeDetail.desc}</div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: showBadgeDetail.check(stats) ? 'var(--success)' : 'var(--danger)' }}>
-                  {showBadgeDetail.check(stats) ? '✅ EARNED' : '🔒 LOCKED'}
+                  {showBadgeDetail.check(stats) ? '✓ EARNED' : '■ LOCKED'}
                 </div>
               </div>
             </div>
@@ -740,7 +740,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
                   <div className="xp-badge-name" style={earned ? { color: BADGE_COLORS[b.tier].text } : {}}>{b.name}</div>
                   <div className="xp-badge-desc">{b.desc}</div>
                   <div className="xp-badge-tier-tag" style={earned ? { color: BADGE_COLORS[b.tier].text, borderColor: BADGE_COLORS[b.tier].border } : {}}>
-                    {earned ? '✓' : '🔒'} {b.tier}
+                    {earned ? '✓' : '■'} {b.tier}
                   </div>
                 </div>
               )
@@ -762,7 +762,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
                 return (
                   <div key={s.id} className={`xp-podium-place xp-podium-${pos + 1}`}>
                     <div className="xp-podium-avatar">{s.avatar}</div>
-                    <div className="xp-podium-rank">{['🥇', '🥈', '🥉'][pos]}</div>
+                    <div className="xp-podium-rank">{['①', '②', '③'][pos]}</div>
                     <div className="xp-podium-name">{s.name}</div>
                     <div className="xp-podium-xp" style={{ color: t.color }}>
                       {leaderboardView === 'xp' ? `${s.xp || 0} XP` :
@@ -781,7 +781,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
             {(['xp', 'score', 'ghost'] as const).map(v => (
               <button key={v} className={`xp-bf ${leaderboardView === v ? 'xp-bf-active' : ''}`}
                 onClick={() => setLeaderboardView(v)}>
-                {v === 'xp' ? '⚡ XP' : v === 'score' ? '📊 Score' : '👻 Ghost Wins'}
+                {v === 'xp' ? '◈ XP' : v === 'score' ? '▪ Score' : '◇ Ghost Wins'}
               </button>
             ))}
           </div>
@@ -794,7 +794,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
               return (
                 <div key={s.id} className={`xp-lb-row ${isMe ? 'xp-lb-me' : ''}`}>
                   <div className="xp-lb-rank" style={i < 3 ? { color: ['#ffd700', '#c0c0c0', '#cd7f32'][i] } : {}}>
-                    {i < 3 ? ['🥇', '🥈', '🥉'][i] : `#${i + 1}`}
+                    {i < 3 ? ['①', '②', '③'][i] : `#${i + 1}`}
                   </div>
                   <div className="xp-lb-avatar">{s.avatar}</div>
                   <div className="xp-lb-info">
@@ -837,7 +837,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
                       <div className="xp-quest-desc">{q.desc}</div>
                     </div>
                     <div className={`xp-quest-reward ${done ? 'xp-quest-complete' : ''}`}>
-                      {done ? '✅' : `+${q.xpReward} XP`}
+                      {done ? '✓' : `+${q.xpReward} XP`}
                     </div>
                   </div>
                 )
@@ -850,14 +850,14 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
             <div className="xp-section-title">Milestone Quests</div>
             <div className="xp-quest-list">
               {[
-                { name: 'Reach Scholar Tier', desc: 'Earn 501 XP total', reward: 100, done: (profile.xp || 0) >= 501, icon: '🥈' },
-                { name: 'Reach Achiever Tier', desc: 'Earn 1,001 XP total', reward: 200, done: (profile.xp || 0) >= 1001, icon: '🥇' },
-                { name: 'Reach Elite Tier', desc: 'Earn 2,001 XP total', reward: 300, done: (profile.xp || 0) >= 2001, icon: '💎' },
-                { name: 'Reach Legend Tier', desc: 'Earn 3,501 XP total', reward: 500, done: (profile.xp || 0) >= 3501, icon: '🔥' },
-                { name: 'Complete 10 Tests', desc: 'Take and complete 10 tests', reward: 150, done: attempts.length >= 10, icon: '📝' },
-                { name: '7-Day Streak', desc: 'Maintain a 7-day activity streak', reward: 200, done: streak.current >= 7, icon: '🗡️' },
-                { name: 'Earn 10 Badges', desc: 'Collect 10 different badges', reward: 250, done: earnedBadges.length >= 10, icon: '🏅' },
-                { name: 'Perfect Score', desc: 'Get 100% on any test', reward: 100, done: stats.perfectTests > 0, icon: '💯' },
+                { name: 'Reach Scholar Tier', desc: 'Earn 501 XP total', reward: 100, done: (profile.xp || 0) >= 501, icon: '②' },
+                { name: 'Reach Achiever Tier', desc: 'Earn 1,001 XP total', reward: 200, done: (profile.xp || 0) >= 1001, icon: '①' },
+                { name: 'Reach Elite Tier', desc: 'Earn 2,001 XP total', reward: 300, done: (profile.xp || 0) >= 2001, icon: '◆' },
+                { name: 'Reach Legend Tier', desc: 'Earn 3,501 XP total', reward: 500, done: (profile.xp || 0) >= 3501, icon: '◆' },
+                { name: 'Complete 10 Tests', desc: 'Take and complete 10 tests', reward: 150, done: attempts.length >= 10, icon: '▫' },
+                { name: '7-Day Streak', desc: 'Maintain a 7-day activity streak', reward: 200, done: streak.current >= 7, icon: '◈' },
+                { name: 'Earn 10 Badges', desc: 'Collect 10 different badges', reward: 250, done: earnedBadges.length >= 10, icon: '◆' },
+                { name: 'Perfect Score', desc: 'Get 100% on any test', reward: 100, done: stats.perfectTests > 0, icon: '★' },
               ].map((q, i) => (
                 <div key={i} className={`xp-quest-card ${q.done ? 'xp-quest-done' : ''}`}>
                   <div className="xp-quest-icon">{q.icon}</div>
@@ -866,7 +866,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
                     <div className="xp-quest-desc">{q.desc}</div>
                   </div>
                   <div className={`xp-quest-reward ${q.done ? 'xp-quest-complete' : ''}`}>
-                    {q.done ? '✅' : `+${q.reward} XP`}
+                    {q.done ? '✓' : `+${q.reward} XP`}
                   </div>
                 </div>
               ))}
@@ -927,7 +927,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
               )}
 
               <button className="btn btn-primary" style={{ marginTop: 24 }} onClick={copyWrapped}>
-                📋 Copy Summary
+                ▫ Copy Summary
               </button>
             </div>
           </div>

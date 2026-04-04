@@ -21,18 +21,18 @@ export function AdminBatchModule({ users, onUsersChange }: AdminBatchProps) {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.name.endsWith('.csv')) { alert('Please upload a CSV file'); return }
+    if (!file.name.endsWith('.csv')) { toast('Please upload a CSV file', 'error'); return }
     const reader = new FileReader()
     reader.onload = (ev) => {
       const text = ev.target?.result as string
       if (!text) return
       const lines = text.split(/\r?\n/).filter(l => l.trim())
-      if (lines.length < 2) { alert('CSV must have a header row and at least one data row'); return }
+      if (lines.length < 2) { toast('CSV must have a header row and at least one data row', 'error'); return }
       const header = lines[0].toLowerCase().split(',').map(h => h.trim())
       const nameIdx = header.findIndex(h => h === 'name')
       const emailIdx = header.findIndex(h => h === 'email')
       const roleIdx = header.findIndex(h => h === 'role')
-      if (nameIdx === -1 || emailIdx === -1) { alert('CSV must have "name" and "email" columns'); return }
+      if (nameIdx === -1 || emailIdx === -1) { toast('CSV must have "name" and "email" columns', 'error'); return }
       const rows = lines.slice(1).map(line => {
         const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
         return {
@@ -48,7 +48,7 @@ export function AdminBatchModule({ users, onUsersChange }: AdminBatchProps) {
 
   const importUsers = async () => {
     if (!csvPreview.length) return
-    if (!confirm(`Import ${csvPreview.length} users? This cannot be undone.`)) return
+    if (!window.confirm(`Import ${csvPreview.length} users? This cannot be undone.`)) return
     // Validate emails before starting
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     const invalidEmails = csvPreview.filter(r => !emailRegex.test(r.email))

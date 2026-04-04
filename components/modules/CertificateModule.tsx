@@ -24,150 +24,130 @@ function generateCredentialId(): string {
 }
 
 function drawQRCode(ctx: CanvasRenderingContext2D, data: string, x: number, y: number, size: number) {
-  // QR Code generator (Version 2, 25x25, Level L, Byte mode)
-  // Encodes the credential ID string into a scannable QR code
-  const modules = 25
-  const cellSize = size / modules
-  const grid: boolean[][] = Array.from({ length: modules }, () => Array(modules).fill(false))
-  const reserved: boolean[][] = Array.from({ length: modules }, () => Array(modules).fill(false))
+  // QR Code Version 2, 25x25, Error Correction Level L, Byte mode, Mask 0
+  // Full Reed-Solomon error correction for reliable scanner compatibility
+  const N = 25
+  const quiet = Math.floor(size * 0.08)
+  const qrArea = size - quiet * 2
+  const cell = qrArea / N
+  const grid: boolean[][] = Array.from({ length: N }, () => Array(N).fill(false))
+  const locked: boolean[][] = Array.from({ length: N }, () => Array(N).fill(false))
 
-  // Mark module and reserve area
-  const set = (r: number, c: number, val: boolean, res = true) => {
-    if (r >= 0 && r < modules && c >= 0 && c < modules) {
-      grid[r][c] = val
-      if (res) reserved[r][c] = true
-    }
+  const mark = (r: number, c: number, v: boolean, lock = true) => {
+    if (r >= 0 && r < N && c >= 0 && c < N) { grid[r][c] = v; if (lock) locked[r][c] = true }
   }
 
   // Finder patterns (7x7 at three corners)
-  const drawFinder = (row: number, col: number) => {
-    for (let dr = -1; dr <= 7; dr++) {
-      for (let dc = -1; dc <= 7; dc++) {
-        const r = row + dr, c = col + dc
-        if (r < 0 || r >= modules || c < 0 || c >= modules) continue
-        const outer = dr === -1 || dr === 7 || dc === -1 || dc === 7
-        const ring = dr === 0 || dr === 6 || dc === 0 || dc === 6
-        const inner = dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4
-        set(r, c, !outer && (ring || inner))
+  const finder = (tr: number, tc: number) => {
+    for (let r = -1; r <= 7; r++)
+      for (let c = -1; c <= 7; c++) {
+        const rr = tr + r, cc = tc + c
+        if (rr < 0 || rr >= N || cc < 0 || cc >= N) continue
+        const border = r === -1 || r === 7 || c === -1 || c === 7
+        const ring = r === 0 || r === 6 || c === 0 || c === 6
+        const core = r >= 2 && r <= 4 && c >= 2 && c <= 4
+        mark(rr, cc, !border && (ring || core))
       }
-    }
   }
-  drawFinder(0, 0)
-  drawFinder(0, modules - 7)
-  drawFinder(modules - 7, 0)
+  finder(0, 0); finder(0, N - 7); finder(N - 7, 0)
 
-  // Alignment pattern (Version 2 has one at row 18, col 18)
-  for (let dr = -2; dr <= 2; dr++) {
-    for (let dc = -2; dc <= 2; dc++) {
-      const outer = Math.abs(dr) === 2 || Math.abs(dc) === 2
-      const center = dr === 0 && dc === 0
-      set(18 + dr, 18 + dc, outer || center)
-    }
-  }
+  // Alignment pattern at (18,18) for Version 2
+  for (let r = -2; r <= 2; r++)
+    for (let c = -2; c <= 2; c++)
+      mark(18 + r, 18 + c, Math.abs(r) === 2 || Math.abs(c) === 2 || (r === 0 && c === 0))
 
   // Timing patterns
-  for (let i = 8; i < modules - 8; i++) {
-    set(6, i, i % 2 === 0)
-    set(i, 6, i % 2 === 0)
-  }
+  for (let i = 8; i < N - 8; i++) { mark(6, i, i % 2 === 0); mark(i, 6, i % 2 === 0) }
 
-  // Dark module + format reserved areas
-  set(modules - 8, 8, true)
+  // Dark module
+  mark(N - 8, 8, true)
 
   // Reserve format info areas
-  for (let i = 0; i < 9; i++) {
-    set(8, i, false); set(i, 8, false)
-    set(8, modules - 1 - i, false)
-    if (i < 8) set(modules - 1 - i, 8, false)
-  }
-  // Reserve version info (not needed for V2 but mark timing)
-  for (let i = 0; i < 7; i++) {
-    reserved[8][i] = true; reserved[i][8] = true
-    reserved[8][modules - 1 - i] = true
-    if (i < 7) reserved[modules - 1 - i][8] = true
-  }
-  reserved[8][7] = true; reserved[8][8] = true; reserved[7][8] = true
-  reserved[8][modules - 8] = true; reserved[modules - 7][8] = true
+  for (let i = 0; i <= 8; i++) { locked[8][Math.min(i, N - 1)] = true; locked[Math.min(i, N - 1)][8] = true }
+  for (let i = 0; i < 8; i++) { locked[8][N - 1 - i] = true; locked[N - 1 - i][8] = true }
 
-  // Encode data as byte mode
-  const bytes = new TextEncoder().encode(data)
+  // Encode data (byte mode, V2-L: 34 data codewords, 32 usable bytes)
+  const trimmed = data.slice(0, 32)
+  const bytes = new TextEncoder().encode(trimmed)
   const bits: number[] = []
-  // Mode indicator (0100 = byte)
-  bits.push(0, 1, 0, 0)
-  // Character count (8 bits for V2)
-  for (let i = 7; i >= 0; i--) bits.push((bytes.length >> i) & 1)
-  // Data bytes
-  bytes.forEach(b => { for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1) })
-  // Terminator
-  bits.push(0, 0, 0, 0)
-  // Pad to 8-bit boundary
-  while (bits.length % 8 !== 0) bits.push(0)
-  // Pad codewords to fill capacity (V2-L = 44 data codewords)
-  const capacity = 44 * 8
-  let padToggle = false
-  while (bits.length < capacity) {
-    const pad = padToggle ? 0x11 : 0xEC
-    for (let i = 7; i >= 0; i--) bits.push((pad >> i) & 1)
-    padToggle = !padToggle
+  bits.push(0, 1, 0, 0) // mode indicator: byte
+  for (let i = 7; i >= 0; i--) bits.push((bytes.length >> i) & 1) // character count
+  bytes.forEach(b => { for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1) }) // data
+  for (let i = 0; i < 4 && bits.length < 272; i++) bits.push(0) // terminator
+  while (bits.length % 8 !== 0 && bits.length < 272) bits.push(0) // byte-align
+  let padByte = true
+  while (bits.length < 272) {
+    const p = padByte ? 0xEC : 0x11
+    for (let i = 7; i >= 0; i--) bits.push((p >> i) & 1)
+    padByte = !padByte
   }
 
-  // Place data bits in zigzag pattern
-  let bitIdx = 0
-  for (let right = modules - 1; right >= 1; right -= 2) {
-    if (right === 6) right = 5 // Skip timing column
-    for (let vert = 0; vert < modules; vert++) {
+  // Convert to 34 data codewords
+  const dataCW: number[] = []
+  for (let i = 0; i < 272; i += 8) {
+    let v = 0; for (let j = 0; j < 8; j++) v = (v << 1) | (bits[i + j] || 0)
+    dataCW.push(v)
+  }
+
+  // Reed-Solomon: generate 10 EC codewords in GF(2^8), primitive poly 0x11D
+  const EXP = new Uint8Array(256), LOG = new Uint8Array(256)
+  let val = 1
+  for (let i = 0; i < 255; i++) { EXP[i] = val; LOG[val] = i; val = (val << 1) ^ (val >= 128 ? 0x11D : 0) }
+  EXP[255] = EXP[0]
+  const gfMul = (a: number, b: number): number => a === 0 || b === 0 ? 0 : EXP[(LOG[a] + LOG[b]) % 255]
+
+  // Generator polynomial: prod(x + alpha^i) for i=0..9
+  let gen = [1]
+  for (let i = 0; i < 10; i++) {
+    const next = new Array(gen.length + 1).fill(0)
+    for (let j = 0; j < gen.length; j++) { next[j] ^= gen[j]; next[j + 1] ^= gfMul(gen[j], EXP[i]) }
+    gen = next
+  }
+
+  // Polynomial long division — remainder = EC codewords
+  const div = [...dataCW, ...new Array(10).fill(0)]
+  for (let i = 0; i < 34; i++) {
+    const c = div[i]
+    if (c !== 0) for (let j = 1; j < gen.length; j++) div[i + j] ^= gfMul(gen[j], c)
+  }
+  const ecCW = div.slice(34)
+
+  // Final bit stream: data codewords + EC codewords
+  const allBits: number[] = []
+  ;[...dataCW, ...ecCW].forEach(cw => { for (let i = 7; i >= 0; i--) allBits.push((cw >> i) & 1) })
+
+  // Place bits in zigzag pattern (right-to-left column pairs, alternating up/down)
+  let bi = 0, upward = true
+  for (let right = N - 1; right >= 1; right -= 2) {
+    if (right === 6) right = 5 // skip timing column
+    for (let v = 0; v < N; v++) {
+      const row = upward ? N - 1 - v : v
       for (let j = 0; j < 2; j++) {
         const col = right - j
-        const row = ((Math.floor((modules - 1 - right + (right < 6 ? 1 : 0)) / 2)) % 2 === 0)
-          ? vert : modules - 1 - vert
-        if (!reserved[row]?.[col] && bitIdx < bits.length) {
-          grid[row][col] = bits[bitIdx++] === 1
-        }
+        if (col >= 0 && !locked[row][col] && bi < allBits.length) grid[row][col] = allBits[bi++] === 1
       }
     }
+    upward = !upward
   }
 
-  // Apply mask pattern 0 (checkerboard: (row + col) % 2 === 0)
-  for (let r = 0; r < modules; r++) {
-    for (let c = 0; c < modules; c++) {
-      if (!reserved[r][c] && (r + c) % 2 === 0) {
-        grid[r][c] = !grid[r][c]
-      }
-    }
-  }
+  // Apply mask 0: invert where (row + col) % 2 === 0
+  for (let r = 0; r < N; r++)
+    for (let c = 0; c < N; c++)
+      if (!locked[r][c] && (r + c) % 2 === 0) grid[r][c] = !grid[r][c]
 
-  // Write format info for mask 0, error correction L
-  // Pre-computed: format bits for L + mask 0 = 111011111000100
-  const formatBits = [1,1,1,0,1,1,1,1,1,0,0,0,1,0,0]
-  // Horizontal: around top-left finder
-  for (let i = 0; i < 8; i++) {
-    const c = i < 6 ? i : i + 1
-    grid[8][c] = formatBits[i] === 1
-  }
-  for (let i = 8; i < 15; i++) {
-    grid[8][modules - 15 + i] = formatBits[i] === 1
-  }
-  // Vertical: around top-left finder and bottom-left finder
-  for (let i = 0; i < 7; i++) {
-    const r = i < 6 ? modules - 1 - i : modules - 1 - i
-    grid[r < modules ? r : 0][8] = formatBits[i] === 1
-  }
-  for (let i = 7; i < 15; i++) {
-    const r = 14 - i < 6 ? 14 - i : 15 - i
-    grid[r][8] = formatBits[i] === 1
-  }
+  // Write format info — EC Level L + Mask 0 = 111011111000100 (BCH encoded + XOR masked)
+  const fmt = [1,1,1,0,1,1,1,1,1,0,0,0,1,0,0]
+  const s1: [number,number][] = [[8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],[7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]]
+  const s2: [number,number][] = [[N-1,8],[N-2,8],[N-3,8],[N-4,8],[N-5,8],[N-6,8],[N-7,8],[8,N-8],[8,N-7],[8,N-6],[8,N-5],[8,N-4],[8,N-3],[8,N-2],[8,N-1]]
+  for (let i = 0; i < 15; i++) { grid[s1[i][0]][s1[i][1]] = fmt[i] === 1; grid[s2[i][0]][s2[i][1]] = fmt[i] === 1 }
 
-  // Render to canvas
+  // Render with quiet zone for reliable scanning
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(x, y, size, size)
   ctx.fillStyle = '#000000'
-  for (let r = 0; r < modules; r++) {
-    for (let c = 0; c < modules; c++) {
-      if (grid[r][c]) {
-        ctx.fillRect(x + c * cellSize, y + r * cellSize, cellSize, cellSize)
-      }
-    }
-  }
+  for (let r = 0; r < N; r++)
+    for (let c = 0; c < N; c++)
+      if (grid[r][c]) ctx.fillRect(x + quiet + c * cell, y + quiet + r * cell, Math.ceil(cell), Math.ceil(cell))
 }
 
 export function CertificateModule({ profile, courses, enrolledIds }: Props) {
@@ -369,9 +349,8 @@ export function CertificateModule({ profile, courses, enrolledIds }: Props) {
     ctx.font = '600 14px "Courier New", monospace'
     ctx.fillText(`Credential ID: ${credentialId}`, 600, 548)
 
-    // QR Code (bottom-left)
-    const verifyUrl = `QGX-VERIFY:${credentialId}`
-    drawQRCode(ctx, verifyUrl, 80, 620, 120)
+    // QR Code (bottom-left) — encodes credential ID for verification
+    drawQRCode(ctx, credentialId, 80, 620, 120)
     ctx.fillStyle = '#555'
     ctx.font = '9px "Courier New", monospace'
     ctx.textAlign = 'center'
@@ -437,8 +416,8 @@ export function CertificateModule({ profile, courses, enrolledIds }: Props) {
         {verifyResult && (
           <div style={{ marginTop: 10, fontFamily: 'var(--mono)', fontSize: 12, color: verifyResult.found ? 'var(--success)' : 'var(--danger)' }}>
             {verifyResult.found ? (
-              <>✅ VERIFIED — Issued to <strong>{verifyResult.cert?.student_name}</strong> for <strong>{verifyResult.cert?.course_title}</strong> on {new Date(verifyResult.cert?.issued_at || '').toLocaleDateString()}</>
-            ) : '❌ NOT FOUND — This credential ID does not match any certificate.'}
+              <>✓ VERIFIED — Issued to <strong>{verifyResult.cert?.student_name}</strong> for <strong>{verifyResult.cert?.course_title}</strong> on {new Date(verifyResult.cert?.issued_at || '').toLocaleDateString()}</>
+            ) : '× NOT FOUND — This credential ID does not match any certificate.'}
           </div>
         )}
       </div>
@@ -459,7 +438,7 @@ export function CertificateModule({ profile, courses, enrolledIds }: Props) {
                 </div>
                 {cert.credential_id && (
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--accent)', padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, marginBottom: 10, textAlign: 'center', letterSpacing: '0.05em' }}>
-                    🔑 {cert.credential_id}
+                    ◈ {cert.credential_id}
                   </div>
                 )}
                 <button className="btn btn-sm" onClick={() => redownload(cert)} style={{ width: '100%', justifyContent: 'center' }}>

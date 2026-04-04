@@ -90,7 +90,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
       const { data } = await supabase.from('tests').insert(row).select().single()
       if (data) {
         onTestsChange([{ ...data, questions: [] }, ...tests])
-        await pushNotificationBatch(students.map(s => s.id), `📝 New ${newTest.type}: "${newTest.title}" by ${profile.name}`, 'test_created')
+        await pushNotificationBatch(students.map(s => s.id), `▫ New ${newTest.type}: "${newTest.title}" by ${profile.name}`, 'test_created')
         await logActivity(`Teacher ${profile.name} created ${newTest.type}: ${newTest.title}`, 'test_created')
       }
       setTestModal(false)
@@ -556,7 +556,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                         <span className="mono" style={{ fontSize: 9, color: 'var(--fg-dim)' }}>{t.id}</span>
                         <span className="tag tag-info" style={t.status === 'locked' ? { borderColor: 'var(--danger)', color: 'var(--danger)' } : undefined}>
-                          {t.status === 'locked' ? '🔒 LOCKED' : t.status}
+                          {t.status === 'locked' ? '■ LOCKED' : t.status}
                         </span>
                       </div>
                       <div style={{ fontWeight: 500, fontSize: 15, marginBottom: 4 }}>{t.title}</div>

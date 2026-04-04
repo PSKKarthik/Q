@@ -21,6 +21,8 @@ interface CalendarEvent {
   color: string
 }
 
+const localDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
 export function CalendarModule({ tests, assignments, timetable }: Props) {
   const [viewDate, setViewDate] = useState(new Date())
   const [view, setView] = useState<'month' | 'week'>('month')
@@ -60,12 +62,15 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
       }
     })
 
-    // Map timetable to the current month view
-    const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
-    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+    // Map timetable to the visible calendar range (includes prev/next month overflow)
+    const gridStart = new Date(year, month, 1)
+    const gridStartDay = gridStart.getDay()
+    gridStart.setDate(gridStart.getDate() - (gridStartDay === 0 ? 6 : gridStartDay - 1)) // back to Monday start
+    const gridEnd = new Date(gridStart)
+    gridEnd.setDate(gridEnd.getDate() + 42) // 6-week grid
+    for (let d = new Date(gridStart); d < gridEnd; d.setDate(d.getDate() + 1)) {
       const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()]
-      const dateStr = d.toISOString().slice(0, 10)
+      const dateStr = localDate(d)
       timetable.filter(s => s.day === dayName).forEach(s => {
         evts.push({
           id: `class-${s.id}-${dateStr}`,
@@ -82,28 +87,29 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
     return evts
   }, [tests, assignments, timetable, year, month])
 
-  // Calendar grid
+  // Calendar grid (Monday-first)
   const firstOfMonth = new Date(year, month, 1)
   const startDay = firstOfMonth.getDay() // 0=Sun
+  const adjustedStartDay = startDay === 0 ? 6 : startDay - 1 // 0=Mon
   const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDate(new Date())
 
   const calendarDays: { date: string; day: number; inMonth: boolean }[] = []
   // Fill prev month
-  for (let i = startDay - 1; i >= 0; i--) {
+  for (let i = adjustedStartDay - 1; i >= 0; i--) {
     const d = new Date(year, month, -i)
-    calendarDays.push({ date: d.toISOString().slice(0, 10), day: d.getDate(), inMonth: false })
+    calendarDays.push({ date: localDate(d), day: d.getDate(), inMonth: false })
   }
   // Fill current month
   for (let i = 1; i <= daysInMonth; i++) {
     const d = new Date(year, month, i)
-    calendarDays.push({ date: d.toISOString().slice(0, 10), day: i, inMonth: true })
+    calendarDays.push({ date: localDate(d), day: i, inMonth: true })
   }
   // Fill next month to complete row
   const remaining = 42 - calendarDays.length
   for (let i = 1; i <= remaining; i++) {
     const d = new Date(year, month + 1, i)
-    calendarDays.push({ date: d.toISOString().slice(0, 10), day: i, inMonth: false })
+    calendarDays.push({ date: localDate(d), day: i, inMonth: false })
   }
 
   const navigate = (dir: number) => {
@@ -118,11 +124,12 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
 
   // Week view
   const weekStart = new Date(viewDate)
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1) // Monday
+  const wDay = weekStart.getDay()
+  weekStart.setDate(weekStart.getDate() - (wDay === 0 ? 6 : wDay - 1)) // Monday
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
     d.setDate(d.getDate() + i)
-    return { date: d.toISOString().slice(0, 10), day: d.getDate(), name: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i] }
+    return { date: localDate(d), day: d.getDate(), name: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i] }
   })
 
   const dayEvents = selectedDay ? events.filter(e => e.date === selectedDay) : []
@@ -171,14 +178,14 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
           <button className={`btn btn-sm ${view === 'month' ? 'btn-primary' : ''}`} onClick={() => setView('month')}>Month</button>
           <button className={`btn btn-sm ${view === 'week' ? 'btn-primary' : ''}`} onClick={() => setView('week')}>Week</button>
           <button className="btn btn-sm" onClick={() => { setViewDate(new Date()); setSelectedDay(today) }}>Today</button>
-          <button className="btn btn-sm" onClick={exportICal}>📥 iCal</button>
+          <button className="btn btn-sm" onClick={exportICal}>▸ iCal</button>
         </div>
       </div>
 
       {/* Conflicts warning */}
       {conflicts.length > 0 && (
         <div className="fade-up-1" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', borderRadius: 8, padding: 12, marginBottom: 16 }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--danger)', fontWeight: 600, marginBottom: 4 }}>⚠ {conflicts.length} Schedule Conflict{conflicts.length !== 1 ? 's' : ''} Detected</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--danger)', fontWeight: 600, marginBottom: 4 }}>△ {conflicts.length} Schedule Conflict{conflicts.length !== 1 ? 's' : ''} Detected</div>
           {conflicts.slice(0, 3).map(c => (
             <div key={c.key} style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginBottom: 2 }}>
               {c.events.map(e => e.title).join(' vs ')} — {c.events[0].date} at {c.events[0].time}
@@ -268,7 +275,7 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>{e.title}</div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)' }}>
-                  {e.type === 'test' ? '📝 Test' : e.type === 'assignment' ? '📋 Assignment' : '📚 Class'}
+                  {e.type === 'test' ? '▫ Test' : e.type === 'assignment' ? '▫ Assignment' : '▪ Class'}
                   {e.time && ` · ${e.time}`}
                   {e.subject && ` · ${e.subject}`}
                 </div>

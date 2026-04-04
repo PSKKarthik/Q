@@ -120,15 +120,15 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
   const submitAssignment = async (draft = false) => {
     if (!activeAssign || !profile) return
     if (activeAssign.course_id && !enrolledIds.includes(activeAssign.course_id)) {
-      setSubmitStatus('❌ You must be enrolled in this course to submit.'); return
+      setSubmitStatus('× You must be enrolled in this course to submit.'); return
     }
-    if (submitFile && submitFile.size > MAX_FILE_SIZE) { setSubmitStatus('❌ File too large. Max 50 MB.'); return }
+    if (submitFile && submitFile.size > MAX_FILE_SIZE) { setSubmitStatus('× File too large. Max 50 MB.'); return }
     const ALLOWED_EXTENSIONS = ['.pdf','.doc','.docx','.ppt','.pptx','.jpg','.jpeg','.png','.zip','.txt']
     if (submitFile) {
       const ext = '.' + (submitFile.name.split('.').pop() || '').toLowerCase()
-      if (!ALLOWED_EXTENSIONS.includes(ext)) { setSubmitStatus('❌ File type not allowed.'); return }
+      if (!ALLOWED_EXTENSIONS.includes(ext)) { setSubmitStatus('× File type not allowed.'); return }
     }
-    if (!draft && !submitText && !submitFile) { setSubmitStatus('❌ Please add a response or file.'); return }
+    if (!draft && !submitText && !submitFile) { setSubmitStatus('× Please add a response or file.'); return }
     if (draft) setSavingDraft(true); else setSubmitting(true)
     setSubmitStatus(draft ? 'Saving draft...' : 'Submitting...')
     try {
@@ -158,10 +158,10 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
         if (error) throw error
       }
       if (!draft) {
-        if (activeAssign.teacher_id) await pushNotification(activeAssign.teacher_id, `📋 ${profile.name} submitted: "${activeAssign.title}"`, 'submission')
+        if (activeAssign.teacher_id) await pushNotification(activeAssign.teacher_id, `▫ ${profile.name} submitted: "${activeAssign.title}"`, 'submission')
         await logActivity(`${profile.name} submitted assignment: ${activeAssign.title}`, 'submission')
       }
-      setSubmitStatus(draft ? '💾 Draft saved!' : '✅ Submitted!')
+      setSubmitStatus(draft ? '▪ Draft saved!' : '✓ Submitted!')
       if (!draft) { setSubmitText(''); setSubmitFile(null); if (submitFileRef.current) submitFileRef.current.value = '' }
       // Refresh
       const { data, error: refreshError } = await supabase.from('assignments').select('*, submissions(*)').order('created_at', { ascending: false })
@@ -170,7 +170,7 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
       if (!draft) setTimeout(() => { setSubmitModal(false); setSubmitStatus('') }, 1200)
       else setTimeout(() => setSubmitStatus(''), 2000)
     } catch (e: any) {
-      setSubmitStatus(`❌ Failed: ${e.message || 'Unknown error'}`)
+      setSubmitStatus(`× Failed: ${e.message || 'Unknown error'}`)
       toast(e instanceof Error ? e.message : 'Failed to submit assignment', 'error')
     } finally {
       setSubmitting(false); setSavingDraft(false)
@@ -205,7 +205,7 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
           {sub?.grade && <GradeRing percent={scoreNum} size={34} />}
           {sub?.is_draft && <span className="tag tag-warn" style={{ fontSize: 9 }}>DRAFT</span>}
           {sub?.is_late && <span className="tag" style={{ fontSize: 9, borderColor: 'var(--danger)', color: 'var(--danger)' }}>LATE</span>}
-          {a.attachment_name && <span style={{ fontSize: 10, color: 'var(--fg-dim)' }}>📎</span>}
+          {a.attachment_name && <span style={{ fontSize: 10, color: 'var(--fg-dim)' }}>▸</span>}
           {a.max_points && <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--fg-dim)' }}>{a.max_points}pts</span>}
         </div>
       </div>
@@ -256,7 +256,7 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
                 </div>
                 {sub?.feedback && (
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 6 }}>
-                    💬 {sub.feedback}
+                    ◇ {sub.feedback}
                   </div>
                 )}
               </div>
@@ -274,12 +274,12 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
                   onChange={e => setSubmitFile(e.target.files?.[0] || null)}
                   style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg)' }} />
                 {sub?.file_url && !submitFile && (
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--success)', marginTop: 6 }}>📎 Current: {sub.file_name}</div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--success)', marginTop: 6 }}>▸ Current: {sub.file_name}</div>
                 )}
               </div>
               {submitStatus && (
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 12,
-                  color: submitStatus.startsWith('✅') || submitStatus.startsWith('💾') ? 'var(--success)' : submitStatus.startsWith('❌') ? 'var(--danger)' : 'var(--fg-dim)' }}>
+                  color: submitStatus.startsWith('✓') || submitStatus.startsWith('▪') ? 'var(--success)' : submitStatus.startsWith('×') ? 'var(--danger)' : 'var(--fg-dim)' }}>
                   {submitStatus}
                 </div>
               )}
@@ -289,7 +289,7 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
                 </button>
                 <button className="btn" onClick={() => submitAssignment(true)} disabled={submitting || savingDraft || !submitText}
                   style={{ borderColor: 'var(--warn)', color: 'var(--warn)' }}>
-                  {savingDraft ? <><span className="spinner" /> Saving...</> : '💾 Save Draft'}
+                  {savingDraft ? <><span className="spinner" /> Saving...</> : '▪ Save Draft'}
                 </button>
                 <button className="btn" onClick={() => setSubmitModal(false)}>Cancel</button>
               </div>
@@ -355,21 +355,21 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
         <div className="assign-board fade-up-3">
           <div className="assign-column">
             <div className="assign-column-header" style={{ borderColor: 'var(--warn)' }}>
-              <span>📋 To Do</span><span className="assign-column-count">{todo.length}</span>
+              <span>▫ To Do</span><span className="assign-column-count">{todo.length}</span>
             </div>
             {todo.length === 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--fg-dim)', fontFamily: 'var(--mono)', fontSize: 11, padding: 12 }}><Icon name="check" size={14} /> All caught up!</div>}
             {todo.map(renderCard)}
           </div>
           <div className="assign-column">
             <div className="assign-column-header" style={{ borderColor: '#6366f1' }}>
-              <span>📤 Submitted</span><span className="assign-column-count">{submitted.length}</span>
+              <span>▸ Submitted</span><span className="assign-column-count">{submitted.length}</span>
             </div>
             {submitted.length === 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--fg-dim)', fontFamily: 'var(--mono)', fontSize: 11, padding: 12 }}><Icon name="clock" size={14} /> Nothing pending.</div>}
             {submitted.map(renderCard)}
           </div>
           <div className="assign-column">
             <div className="assign-column-header" style={{ borderColor: 'var(--success)' }}>
-              <span>✅ Graded</span><span className="assign-column-count">{graded.length}</span>
+              <span>✓ Graded</span><span className="assign-column-count">{graded.length}</span>
             </div>
             {graded.length === 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--fg-dim)', fontFamily: 'var(--mono)', fontSize: 11, padding: 12 }}><Icon name="chart" size={14} /> No grades yet.</div>}
             {graded.map(renderCard)}
@@ -490,7 +490,7 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
       if (error) throw error
       if (data) {
         onAssignmentsChange([data, ...assignments])
-        await pushNotificationBatch(students.map(s => s.id), `📋 New assignment: "${newAssign.title}"`, 'assignment')
+        await pushNotificationBatch(students.map(s => s.id), `▫ New assignment: "${newAssign.title}"`, 'assignment')
         await logActivity(`Teacher ${profile.name} created assignment: ${newAssign.title}`, 'assignment')
       }
       setNewAssign({ title: '', description: '', due_date: '', priority: 'medium', max_points: '100' })
@@ -550,7 +550,7 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
       }).eq('id', gradingSubmission.id)
       if (error) throw error
       if (gradingSubmission.student_id)
-        await pushNotification(gradingSubmission.student_id, `📝 "${activeAssign?.title}" graded: ${score}%`, 'grade')
+        await pushNotification(gradingSubmission.student_id, `▫ "${activeAssign?.title}" graded: ${score}%`, 'grade')
       setGradingSubmission(null); setGradeForm({ score: '', feedback: '' })
       if (activeAssign) await refreshAssign(activeAssign.id)
       toast('Grade submitted', 'success')
@@ -746,10 +746,10 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
 
       {/* Quick Stats */}
       <div className="assign-quick-stats fade-up-1">
-        <div>📊 {Math.round((analytics.submitted / Math.max(analytics.total, 1)) * 100)}% submission rate</div>
-        <div>📈 Avg: {analytics.avg}%</div>
-        <div>🏆 High: {analytics.highest}%</div>
-        <div style={{ color: analytics.late > 0 ? 'var(--danger)' : 'var(--fg-dim)' }}>⏰ {analytics.late} late</div>
+        <div>▪ {Math.round((analytics.submitted / Math.max(analytics.total, 1)) * 100)}% submission rate</div>
+        <div>▪ Avg: {analytics.avg}%</div>
+        <div>★ High: {analytics.highest}%</div>
+        <div style={{ color: analytics.late > 0 ? 'var(--danger)' : 'var(--fg-dim)' }}>○ {analytics.late} late</div>
       </div>
 
       {/* Submissions */}
@@ -776,10 +776,10 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
               {sub.file_url && (
                 <a href={sub.file_url} target="_blank" rel="noopener noreferrer"
                   style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--success)', textDecoration: 'none' }}>
-                  📎 {sub.file_name || 'File'}
+                  ▸ {sub.file_name || 'File'}
                 </a>
               )}
-              {sub.feedback && <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginTop: 4 }}>💬 {sub.feedback}</div>}
+              {sub.feedback && <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginTop: 4 }}>◇ {sub.feedback}</div>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, marginLeft: 12 }}>
               {sub.grade
@@ -904,7 +904,7 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: gradedCount === subs.length && subs.length > 0 ? 'var(--success)' : 'var(--fg-dim)' }}>
                   {gradedCount}/{subs.length} graded
                 </span>
-                {a.attachment_name && <span style={{ fontSize: 10 }}>📎</span>}
+                {a.attachment_name && <span style={{ fontSize: 10 }}>▸</span>}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>

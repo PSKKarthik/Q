@@ -180,7 +180,7 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
       {/* Live now */}
       {live.length > 0 && (
         <>
-          <SectionLabel>🔴 Live Now</SectionLabel>
+          <SectionLabel>● Live Now</SectionLabel>
           <div className="fade-up-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12, marginBottom: 24 }}>
             {live.map(cls => (
               <div key={cls.id} className="card" style={{ padding: 20, borderLeft: '4px solid var(--danger)' }}>

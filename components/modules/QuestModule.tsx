@@ -13,7 +13,7 @@ interface Props {
 }
 
 const QUEST_ICONS: Record<string, string> = {
-  test: '📝', course: '📚', streak: '🔥', social: '💬', achievement: '🏆', xp: '⚡',
+  test: '▫', course: '▪', streak: '◆', social: '◇', achievement: '★', xp: '◈',
 }
 
 export function QuestModule({ profile }: Props) {
@@ -45,11 +45,12 @@ export function QuestModule({ profile }: Props) {
   const claimReward = async (quest: Quest, prog: QuestProgress) => {
     if (!prog.completed || prog.claimed) return
     try {
-      await Promise.all([
-        supabase.from('quest_progress').update({ claimed: true }).eq('id', prog.id),
-        supabase.from('profiles').update({ xp: profile.xp + quest.xp_reward }).eq('id', profile.id),
-      ])
+      const { error: claimErr } = await supabase.from('quest_progress').update({ claimed: true }).eq('id', prog.id)
+      if (claimErr) throw claimErr
+      const { error: xpErr } = await supabase.rpc('atomic_xp_update', { p_user_id: profile.id, p_xp_delta: quest.xp_reward, p_best_score: 0, p_ghost_win_increment: 0 })
+      if (xpErr) throw xpErr
       setProgress(prev => prev.map(p => p.id === prog.id ? { ...p, claimed: true } : p))
+      toast(`+${quest.xp_reward} XP claimed!`, 'success')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to claim reward', 'error')
     }
@@ -144,7 +145,7 @@ export function QuestModule({ profile }: Props) {
 
 function QuestCard({ quest, progress, onClaim }: { quest: Quest; progress?: QuestProgress; onClaim: (q: Quest, p: QuestProgress) => void }) {
   const pct = progress ? Math.min(100, Math.round((progress.progress / quest.target_count) * 100)) : 0
-  const icon = QUEST_ICONS[quest.target_type] || '🎯'
+  const icon = QUEST_ICONS[quest.target_type] || '◉'
 
   return (
     <div className="card" style={{ padding: 20, opacity: progress?.claimed ? 0.6 : 1 }}>
@@ -169,7 +170,7 @@ function QuestCard({ quest, progress, onClaim }: { quest: Quest; progress?: Ques
 
       {progress?.completed && !progress.claimed && (
         <button className="btn btn-primary btn-sm" onClick={() => onClaim(quest, progress)} style={{ width: '100%', justifyContent: 'center' }}>
-          🎁 Claim Reward (+{quest.xp_reward} XP)
+          ◇ Claim Reward (+{quest.xp_reward} XP)
         </button>
       )}
       {progress?.claimed && (

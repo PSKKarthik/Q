@@ -125,7 +125,7 @@ export function PlagiarismModule({ profile, assignments }: Props) {
             <input className="input" type="number" min={10} max={90} value={threshold} onChange={e => setThreshold(Number(e.target.value))} />
           </div>
           <button className="btn btn-primary btn-sm" onClick={runScan} disabled={!selectedAssignment || scanning}>
-            {scanning ? 'Scanning...' : '🔍 Scan'}
+            {scanning ? 'Scanning...' : '◎ Scan'}
           </button>
         </div>
       </div>

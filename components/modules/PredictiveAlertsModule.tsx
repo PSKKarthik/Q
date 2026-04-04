@@ -145,10 +145,10 @@ export function PredictiveAlertsModule({ profile }: Props) {
       <div className="fade-up-1" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {(['high', 'medium', 'all'] as const).map(f => (
           <button key={f} className={`btn btn-sm ${filter === f ? 'btn-primary' : ''}`} onClick={() => { setFilter(f); setAlertPage(0) }}>
-            {f === 'high' ? '🔴 High Risk' : f === 'medium' ? '🟡 Medium+' : 'All Flagged'}
+            {f === 'high' ? '● High Risk' : f === 'medium' ? '○ Medium+' : 'All Flagged'}
           </button>
         ))}
-        <button className="btn btn-sm" onClick={analyzeStudents} style={{ marginLeft: 'auto' }}>🔄 Refresh</button>
+        <button className="btn btn-sm" onClick={analyzeStudents} style={{ marginLeft: 'auto' }}>◈ Refresh</button>
       </div>
 
       <div className="fade-up-2" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -196,7 +196,7 @@ export function PredictiveAlertsModule({ profile }: Props) {
         ))}
         {filtered.length === 0 && (
           <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', textAlign: 'center', marginTop: 40 }}>
-            No at-risk students detected at this threshold. 🎉
+            No at-risk students detected at this threshold. ◇
           </div>
         )}
         <Pagination page={alertPage} totalPages={Math.ceil(filtered.length / PAGE_SIZE)} onPageChange={setAlertPage} />

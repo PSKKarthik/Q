@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/Icon'
 import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -24,6 +25,8 @@ const difficultyColor = (marks: number) => marks >= 3 ? 'var(--danger)' : marks 
 
 /* ────────────────────────────────────────────── */
 export function StudentTestModule({ profile, tests, attempts, doubleXP, allStudents, onAttemptDone }: StudentTestModuleProps) {
+  const { toast } = useToast()
+
   /* views */
   const [view, setView] = useState<'list' | 'attempt' | 'result' | 'review'>('list')
   const [filter, setFilter] = useState<'all' | 'available' | 'attempted'>('all')
@@ -116,7 +119,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
     if (!activeTest || testResult) return
     try { localStorage.setItem(`qgx-test-${activeTest.id}`, JSON.stringify(answers)) } catch (e) {
       console.warn('Failed to autosave answers to localStorage:', e)
-      setIsOffline(prev => { if (!prev) alert('⚠ Storage full — your answers may not be saved locally. Submit soon!'); return prev })
+      setIsOffline(prev => { if (!prev) toast('△ Storage full — your answers may not be saved locally. Submit soon!', 'error'); return prev })
     }
   }, [answers, activeTest, testResult])
 
@@ -271,7 +274,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
       if (!testCheck) {
         // Test was deleted mid-exam — save answers locally
         try { localStorage.setItem(`qgx-test-backup-${activeTest.id}`, JSON.stringify(answerMap)) } catch {}
-        alert('This test was removed by the teacher. Your answers have been saved locally as a backup.')
+        toast('This test was removed by the teacher. Your answers have been saved locally as a backup.', 'info')
         setView('list'); setActiveTest(null); submittingRef.current = false; setConfirmSubmit(false)
         return
       }
@@ -289,7 +292,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
       onAttemptDone({ id: '', student_id: profile.id, test_id: activeTest.id, score, total, percent, answer_map: answerMap, submitted_at: new Date().toISOString() }, { newXP })
       setView('result')
     } catch (e: any) {
-      alert(`Submission error: ${e.message}`)
+      toast(`Submission error: ${e.message}`, 'error')
     }
     submittingRef.current = false; setConfirmSubmit(false)
   }
@@ -362,9 +365,9 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
                   <div className="tm-card-badges">
                     <span className={`tag ${t.type === 'quiz' ? 'tag-info' : 'tag-warn'}`}>{t.type.toUpperCase()}</span>
                     {att && <span className="tag tag-success">DONE</span>}
-                    {isLocked && <span className="tag tag-danger" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>🔒 LOCKED</span>}
+                    {isLocked && <span className="tag tag-danger" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>■ LOCKED</span>}
                     {!isLocked && blocked && <span className="tag tag-danger">MAX ATTEMPTS</span>}
-                    {t.anti_cheat?.fullscreen && <span className="tm-shield">🛡️</span>}
+                    {t.anti_cheat?.fullscreen && <span className="tm-shield">◆</span>}
                   </div>
                   <span className="tm-card-id">{t.id}</span>
                 </div>
@@ -376,7 +379,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
                   <div className="tm-meta-item"><Icon name="clock" size={11} /> {t.duration} min</div>
                   <div className="tm-meta-item"><Icon name="test" size={11} /> {qCount} Q&apos;s</div>
                   <div className="tm-meta-item"><Icon name="star" size={11} /> {t.total_marks} marks</div>
-                  {(t.xp_reward > 0) && <div className="tm-meta-item" style={{ color: 'var(--warn)' }}>⚡ {t.xp_reward} XP</div>}
+                  {(t.xp_reward > 0) && <div className="tm-meta-item" style={{ color: 'var(--warn)' }}>◈ {t.xp_reward} XP</div>}
                 </div>
 
                 {acFeatures.length > 0 && (
@@ -457,12 +460,12 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
         {/* Anti-cheat warnings */}
         {tabWarningVisible && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, background: 'var(--danger)', color: '#fff', textAlign: 'center', padding: '12px 16px', fontFamily: 'var(--mono)', fontSize: 12, letterSpacing: '0.1em', zIndex: 9999, animation: 'fadeIn 0.2s' }}>
-            ⚠ TAB SWITCH DETECTED ({tabWarnings}/1) — Next violation will AUTO-SUBMIT your test!
+            △ TAB SWITCH DETECTED ({tabWarnings}/1) — Next violation will AUTO-SUBMIT your test!
           </div>
         )}
         {fsWarningVisible && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, background: 'var(--warn)', color: '#000', textAlign: 'center', padding: '12px 16px', fontFamily: 'var(--mono)', fontSize: 12, letterSpacing: '0.1em', zIndex: 9999 }}>
-            ⚠ FULLSCREEN REQUIRED — Re-entering fullscreen...
+            △ FULLSCREEN REQUIRED — Re-entering fullscreen...
           </div>
         )}
         {/* Confirm submit modal */}
@@ -483,7 +486,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
               </div>
             </div>
             {questions.length - answeredCount > 0 && (
-              <div className="tm-confirm-warn">⚠ You have {questions.length - answeredCount} unanswered question{questions.length - answeredCount > 1 ? 's' : ''}</div>
+              <div className="tm-confirm-warn">△ You have {questions.length - answeredCount} unanswered question{questions.length - answeredCount > 1 ? 's' : ''}</div>
             )}
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
               <button className="btn btn-primary" disabled={submittingRef.current} onClick={handleSubmit}><Icon name="check" size={14} /> Confirm Submit</button>
@@ -493,7 +496,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
         </Modal>
 
         {isOffline && (
-          <div className="tm-offline-bar">⚠ You are offline — answers are saved locally</div>
+          <div className="tm-offline-bar">△ You are offline — answers are saved locally</div>
         )}
 
         {/* Top bar */}
@@ -502,8 +505,8 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
             <div className="tm-test-name">{activeTest.title}</div>
             <div className="tm-test-meta">
               {activeTest.id} · {questions.length} Q&apos;s
-              {ghostScore !== null && ghostScore > 0 && <span className="tm-ghost">👻 Ghost: {ghostScore}%</span>}
-              {doubleXPLocked && <span className="tm-double-xp">⚡ 2× XP</span>}
+              {ghostScore !== null && ghostScore > 0 && <span className="tm-ghost">◇ Ghost: {ghostScore}%</span>}
+              {doubleXPLocked && <span className="tm-double-xp">◈ 2× XP</span>}
             </div>
           </div>
           <div className="tm-topbar-right">
@@ -635,7 +638,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
                 <div className="tm-match-header">
                   <span>Column A</span><span>Your Match</span>
                 </div>
-                {(q.answer as any[]).map((pair: any, i: number) => (
+                {(Array.isArray(q.answer) ? q.answer : []).map((pair: any, i: number) => (
                   <div key={i} className="tm-match-row">
                     <div className="tm-match-left">{pair.left}</div>
                     <input className="input" placeholder="Match..." value={(answers[q.id] || {})[pair.left] || ''}
@@ -695,19 +698,19 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
 
           <div className="tm-result-stats">
             <div className="tm-result-stat">
-              <div className="tm-result-stat-icon">⚡</div>
+              <div className="tm-result-stat-icon">◈</div>
               <div className="tm-result-stat-val" style={{ color: testResult.isDoubleXP ? 'var(--warn)' : 'var(--fg)' }}>+{testResult.xpEarned}</div>
               <div className="tm-result-stat-label">{testResult.isDoubleXP ? '2× XP' : 'XP Earned'}</div>
             </div>
             {testResult.ghostMsg && (
               <div className="tm-result-stat">
-                <div className="tm-result-stat-icon">👻</div>
+                <div className="tm-result-stat-icon">◇</div>
                 <div className="tm-result-stat-val">{testResult.ghostMsg}</div>
                 <div className="tm-result-stat-label">{testResult.ghostBonus > 0 ? `+${testResult.ghostBonus} bonus` : 'Ghost Mode'}</div>
               </div>
             )}
             <div className="tm-result-stat">
-              <div className="tm-result-stat-icon">📅</div>
+              <div className="tm-result-stat-icon">▫</div>
               <div className="tm-result-stat-val">{testResult.date}</div>
               <div className="tm-result-stat-label">Completed</div>
             </div>
@@ -849,7 +852,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
               <div className="tm-match-header">
                 <span>Column A</span><span>Correct</span><span>Yours</span>
               </div>
-              {(q.answer as any[]).map((pair: any, i: number) => {
+              {(Array.isArray(q.answer) ? q.answer : []).map((pair: any, i: number) => {
                 const userVal = (userAnswer as any)?.[pair.left] || '—'
                 const isRight = String(userVal).trim().toLowerCase() === String(pair.right).trim().toLowerCase()
                 return (
@@ -894,7 +897,7 @@ function checkAnswer(q: Question, userAnswer: any): boolean {
     }
     case 'match': {
       if (!userAnswer || typeof userAnswer !== 'object') return false
-      const pairs = q.answer as { left: string; right: string }[]
+      const pairs = Array.isArray(q.answer) ? q.answer as { left: string; right: string }[] : []
       return pairs.every(p => String(userAnswer[p.left] || '').trim().toLowerCase() === p.right.trim().toLowerCase())
     }
     default: return false

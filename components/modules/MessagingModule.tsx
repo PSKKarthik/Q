@@ -20,10 +20,6 @@ type ThreadItem = { type: 'dm'; contact: Profile; lastMsg?: Message; unread: num
 
 export function MessagingModule({ profile, contacts }: Props) {
   const { toast } = useToast()
-  // Deduplicate contacts by id and remove self
-  const uniqueContacts = contacts.filter(
-    (c, idx, arr) => c.id !== profile.id && arr.findIndex(x => x.id === c.id) === idx
-  )
   const [threads, setThreads] = useState<ThreadItem[]>([])
   const [activeContact, setActiveContact] = useState<Profile | null>(null)
   const [activeGroup, setActiveGroup] = useState<MessageGroup | null>(null)
@@ -54,13 +50,13 @@ export function MessagingModule({ profile, contacts }: Props) {
       if (channelRef.current) supabase.removeChannel(channelRef.current)
       if (typingRef.current) supabase.removeChannel(typingRef.current)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (activeContact) loadConversation(activeContact.id)
     else if (activeGroup) loadGroupConversation(activeGroup.id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeContact, activeGroup])
 
   useEffect(() => {
@@ -77,38 +73,38 @@ export function MessagingModule({ profile, contacts }: Props) {
         supabase.from('message_groups').select('*').contains('member_ids', [profile.id]),
       ])
 
-      const allMsgs = (dmRes.data || []) as Message[]
-      const groups = (groupRes.data || []) as MessageGroup[]
+    const allMsgs = (dmRes.data || []) as Message[]
+    const groups = (groupRes.data || []) as MessageGroup[]
 
-      // DM threads
-      const threadMap: Record<string, { lastMsg: Message; unread: number }> = {}
-      allMsgs.filter(m => !m.deleted).forEach((m) => {
-        const otherId = m.sender_id === profile.id ? m.receiver_id : m.sender_id
-        if (!threadMap[otherId]) threadMap[otherId] = { lastMsg: m, unread: 0 }
-        if (!m.read && m.receiver_id === profile.id) threadMap[otherId].unread++
-      })
+    // DM threads
+    const threadMap: Record<string, { lastMsg: Message; unread: number }> = {}
+    allMsgs.filter(m => !m.deleted).forEach((m) => {
+      const otherId = m.sender_id === profile.id ? m.receiver_id : m.sender_id
+      if (!threadMap[otherId]) threadMap[otherId] = { lastMsg: m, unread: 0 }
+      if (!m.read && m.receiver_id === profile.id) threadMap[otherId].unread++
+    })
 
-      const dmThreads: ThreadItem[] = uniqueContacts
-        .filter(c => threadMap[c.id])
-        .map(c => ({ type: 'dm' as const, contact: c, lastMsg: threadMap[c.id].lastMsg, unread: threadMap[c.id].unread }))
-        .sort((a, b) => new Date(b.lastMsg!.created_at).getTime() - new Date(a.lastMsg!.created_at).getTime())
+    const dmThreads: ThreadItem[] = contacts
+      .filter(c => threadMap[c.id])
+      .map(c => ({ type: 'dm' as const, contact: c, lastMsg: threadMap[c.id].lastMsg, unread: threadMap[c.id].unread }))
+      .sort((a, b) => new Date(b.lastMsg!.created_at).getTime() - new Date(a.lastMsg!.created_at).getTime())
 
-      const withoutThread = uniqueContacts.filter(c => !threadMap[c.id])
-      const allDm: ThreadItem[] = [...dmThreads, ...withoutThread.map(c => ({ type: 'dm' as const, contact: c, unread: 0 }))]
+    const withoutThread = contacts.filter(c => !threadMap[c.id] && c.id !== profile.id)
+    const allDm: ThreadItem[] = [...dmThreads, ...withoutThread.map(c => ({ type: 'dm' as const, contact: c, unread: 0 }))]
 
-      // Group threads
-      const groupThreads: ThreadItem[] = []
-      for (const g of groups) {
-        const { data: gMsgs } = await supabase.from('messages').select('*').eq('group_id', g.id)
-          .eq('deleted', false).order('created_at', { ascending: false }).limit(1)
-        const lastMsg = gMsgs?.[0] as Message | undefined
-        const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true })
-          .eq('group_id', g.id).eq('read', false).neq('sender_id', profile.id)
-        groupThreads.push({ type: 'group', group: g, lastMsg, unread: count || 0 })
-      }
+    // Group threads
+    const groupThreads: ThreadItem[] = []
+    for (const g of groups) {
+      const { data: gMsgs } = await supabase.from('messages').select('*').eq('group_id', g.id)
+        .eq('deleted', false).order('created_at', { ascending: false }).limit(1)
+      const lastMsg = gMsgs?.[0] as Message | undefined
+      const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true })
+        .eq('group_id', g.id).eq('read', false).neq('sender_id', profile.id)
+      groupThreads.push({ type: 'group', group: g, lastMsg, unread: count || 0 })
+    }
 
-      setThreads([...groupThreads, ...allDm])
-      setLoading(false)
+    setThreads([...groupThreads, ...allDm])
+    setLoading(false)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to load messages', 'error')
       setLoading(false)
@@ -207,7 +203,7 @@ export function MessagingModule({ profile, contacts }: Props) {
       const msg: any = {
         sender_id: profile.id,
         receiver_id: activeContact?.id || profile.id,
-        body: body || (att ? `📎 ${att.name}` : ''),
+        body: body || (att ? `▸ ${att.name}` : ''),
         ...(att && { attachment_url: att.url, attachment_name: att.name, attachment_type: att.type }),
         ...(activeGroup && { group_id: activeGroup.id }),
       }
@@ -269,7 +265,7 @@ export function MessagingModule({ profile, contacts }: Props) {
           const msg: any = {
             sender_id: profile.id,
             receiver_id: activeContact?.id || profile.id,
-            body: '🎤 Voice note',
+            body: '◈ Voice note',
             attachment_url: urlData.publicUrl,
             attachment_name: file.name,
             attachment_type: 'audio/webm',
@@ -316,7 +312,7 @@ export function MessagingModule({ profile, contacts }: Props) {
     : threads
 
   const totalUnread = threads.reduce((s, t) => s + t.unread, 0)
-  const senderName = (senderId: string) => uniqueContacts.find(c => c.id === senderId)?.name || (senderId === profile.id ? 'You' : 'Unknown')
+  const senderName = (senderId: string) => contacts.find(c => c.id === senderId)?.name || 'Unknown'
 
   return (
     <>
@@ -330,7 +326,7 @@ export function MessagingModule({ profile, contacts }: Props) {
         <div style={{ marginBottom: 14 }}>
           <label className="label">Members</label>
           <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: 8 }}>
-            {uniqueContacts.map(c => (
+            {contacts.filter(c => c.id !== profile.id).map(c => (
               <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: 'pointer', fontSize: 12 }}>
                 <input type="checkbox" checked={groupMembers.includes(c.id)}
                   onChange={e => setGroupMembers(e.target.checked ? [...groupMembers, c.id] : groupMembers.filter(id => id !== c.id))} />
@@ -356,8 +352,8 @@ export function MessagingModule({ profile, contacts }: Props) {
             {loading && <div style={{ padding: 20, textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)' }}>Loading...</div>}
             {filteredThreads.slice(threadPage * PAGE_SIZE, (threadPage + 1) * PAGE_SIZE).map((t, i) => {
               const isActive = t.type === 'dm' ? activeContact?.id === t.contact.id : activeGroup?.id === t.group.id
-              const name = t.type === 'dm' ? t.contact.name : `👥 ${t.group.name}`
-              const avatar = t.type === 'dm' ? t.contact.avatar : '👥'
+              const name = t.type === 'dm' ? t.contact.name : `◇ ${t.group.name}`
+              const avatar = t.type === 'dm' ? t.contact.avatar : '◇'
               const preview = t.lastMsg ? (t.lastMsg.sender_id === profile.id ? 'You: ' : '') + t.lastMsg.body.slice(0, 35) : ''
               return (
                 <div key={t.type === 'dm' ? t.contact.id : t.group.id} className={`messaging-thread ${isActive ? 'active' : ''}`} onClick={() => openThread(t)}>
@@ -383,7 +379,7 @@ export function MessagingModule({ profile, contacts }: Props) {
             <>
               <div className="messaging-chat-header">
                 <button className="btn btn-xs messaging-back-btn" onClick={() => { setActiveContact(null); setActiveGroup(null) }}><Icon name="arrow" size={12} /></button>
-                <div className="avatar" style={{ width: 28, height: 28, fontSize: 10 }}>{activeContact?.avatar || '👥'}</div>
+                <div className="avatar" style={{ width: 28, height: 28, fontSize: 10 }}>{activeContact?.avatar || '◇'}</div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{activeContact?.name || activeGroup?.name}</div>
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--fg-dim)' }}>
@@ -417,7 +413,7 @@ export function MessagingModule({ profile, contacts }: Props) {
                           {m.attachment_url && (
                             <a href={m.attachment_url} target="_blank" rel="noopener noreferrer"
                               style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--accent)', marginTop: 4, textDecoration: 'none' }}>
-                              📎 {m.attachment_name || 'Attachment'}
+                              ▸ {m.attachment_name || 'Attachment'}
                             </a>
                           )}
                         </>
@@ -430,9 +426,9 @@ export function MessagingModule({ profile, contacts }: Props) {
                         {isMine && !editingMsg && (
                           <div style={{ display: 'flex', gap: 2, marginLeft: 'auto' }}>
                             <button onClick={() => { setEditingMsg(m.id); setEditDraft(m.body) }}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--fg-dim)', padding: '0 2px' }} title="Edit">✏️</button>
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--fg-dim)', padding: '0 2px' }} title="Edit">▫</button>
                             <button onClick={() => deleteMessage(m.id)}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--fg-dim)', padding: '0 2px' }} title="Delete">🗑️</button>
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--fg-dim)', padding: '0 2px' }} title="Delete">×</button>
                           </div>
                         )}
                       </div>
@@ -445,10 +441,10 @@ export function MessagingModule({ profile, contacts }: Props) {
                 <input ref={fileRef} type="file" style={{ display: 'none' }}
                   onChange={e => setAttachment(e.target.files?.[0] || null)} />
                 <button className="btn btn-xs" onClick={() => fileRef.current?.click()} title="Attach file" style={{ flexShrink: 0 }}>
-                  📎
+                  ▸
                 </button>
                 <button className={`btn btn-xs ${recording ? 'btn-primary' : ''}`} onClick={toggleRecording} title={recording ? 'Stop recording' : 'Voice note'} style={{ flexShrink: 0 }}>
-                  {recording ? '⏹' : '🎤'}
+                  {recording ? '■' : '◈'}
                 </button>
                 {attachment && (
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--accent)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

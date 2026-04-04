@@ -11,7 +11,7 @@ export function AnnouncementCard({ a, canDelete, onDelete }: {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
           <div className="ac-meta">
-            {a.pinned && '📌 PINNED · '}
+            {a.pinned && '● PINNED · '}
             <span style={{ textTransform: 'uppercase' }}>{a.role}</span> · {a.author_name} · {a.created_at?.slice(0, 10)}
           </div>
           <div className="ac-title">{sanitizeText(a.title)}</div>

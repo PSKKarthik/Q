@@ -223,7 +223,7 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
         teacher_name: profile.name,
         term,
         comment: commentText.trim(),
-        category: conductNote || 'general',
+        conduct: conductNote || null,
       }).select().single()
       if (data) setReport(prev => prev ? { ...prev, comments: [data as ReportComment, ...prev.comments] } : prev)
     } catch (err) {
@@ -235,11 +235,20 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
 
   const handlePrint = () => {
     if (!printRef.current) return
-    const w = window.open('', '_blank')
-    if (!w) return
     const safeName = (report?.student.name || '').replace(/[<>"'&]/g, c =>
       ({ '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '&': '&amp;' } as Record<string,string>)[c] || c)
-    w.document.write(`
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'
+    iframe.style.right = '0'
+    iframe.style.bottom = '0'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = 'none'
+    document.body.appendChild(iframe)
+    const doc = iframe.contentDocument || iframe.contentWindow?.document
+    if (!doc) { document.body.removeChild(iframe); return }
+    doc.open()
+    doc.write(`
       <html><head><title>Report Card — ${safeName}</title>
       <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #111; }
@@ -260,8 +269,10 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
       ${printRef.current.innerHTML}
       </body></html>
     `)
-    w.document.close()
-    w.print()
+    doc.close()
+    iframe.contentWindow?.focus()
+    iframe.contentWindow?.print()
+    setTimeout(() => document.body.removeChild(iframe), 1000)
   }
 
   const now = new Date()
@@ -448,7 +459,7 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
                 <div style={{ fontSize: 13, marginBottom: 4 }}>{c.comment}</div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', display: 'flex', gap: 12 }}>
                   <span>{c.teacher_name}</span>
-                  <span className="tag" style={{ fontSize: 9 }}>{c.category}</span>
+                  {c.conduct && <span className="tag" style={{ fontSize: 9 }}>{c.conduct.replace('_', ' ')}</span>}
                   <span>{new Date(c.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
@@ -465,12 +476,12 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
           <h2 style={{ fontFamily: 'var(--display)', fontSize: 18, letterSpacing: '0.08em', marginBottom: 12 }}>ADD COMMENT</h2>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <select className="input" style={{ width: 150 }} value={conductNote} onChange={e => setConductNote(e.target.value)}>
-              <option value="">Category...</option>
-              <option value="academic">Academic</option>
-              <option value="behavior">Behavior</option>
-              <option value="effort">Effort</option>
-              <option value="improvement">Improvement</option>
-              <option value="general">General</option>
+              <option value="">Conduct...</option>
+              <option value="excellent">Excellent</option>
+              <option value="good">Good</option>
+              <option value="satisfactory">Satisfactory</option>
+              <option value="needs_improvement">Needs Improvement</option>
+              <option value="poor">Poor</option>
             </select>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>

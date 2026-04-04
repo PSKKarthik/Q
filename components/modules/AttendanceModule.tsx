@@ -20,7 +20,7 @@ import { useToast } from '@/lib/toast'
 const STATUS_CFG: Record<AttendanceStatus, { label: string; color: string; icon: string }> = {
   present: { label: 'Present', color: 'var(--success)', icon: '✓' },
   absent:  { label: 'Absent',  color: 'var(--danger)',  icon: '✗' },
-  late:    { label: 'Late',    color: 'var(--warn)',    icon: '⏱' },
+  late:    { label: 'Late',    color: 'var(--warn)',    icon: '○' },
   excused: { label: 'Excused', color: '#8b5cf6',       icon: '✎' },
 }
 const STATUSES: AttendanceStatus[] = ['present', 'absent', 'late', 'excused']
@@ -392,7 +392,7 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
       // Notify absent students
       const absentIds = bulkEntries.filter(e => e.status === 'absent').map(e => e.student_id)
       if (absentIds.length) {
-        await pushNotificationBatch(absentIds, `⚠️ Marked absent in ${markSubject} on ${markDate}`, 'attendance')
+        await pushNotificationBatch(absentIds, `△ Marked absent in ${markSubject} on ${markDate}`, 'attendance')
       }
       await logActivity(`${profile.name} marked attendance for ${markSubject} on ${markDate}`, 'attendance')
       await fetchRecords()
@@ -469,7 +469,7 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
                       <div className="att-quick-subject">{slot.subject}</div>
                       <div className="att-quick-meta">
                         <span><Icon name="clock" size={11} /> {slot.time}</span>
-                        {slot.room && <span>📍 {slot.room}</span>}
+                        {slot.room && <span>● {slot.room}</span>}
                       </div>
                       {done && <div className="att-quick-done">✓ Marked</div>}
                     </button>

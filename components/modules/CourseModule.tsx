@@ -719,7 +719,7 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
         const courseWithFiles = { ...data, course_files: [], _fileCount: 0 }
         onCoursesChange([courseWithFiles, ...courses])
         setActiveCourse(courseWithFiles)
-        await pushNotificationBatch(students.map(s => s.id), `📚 New course: "${newCourse.title}" by ${profile.name}`, 'course')
+        await pushNotificationBatch(students.map(s => s.id), `▪ New course: "${newCourse.title}" by ${profile.name}`, 'course')
         await logActivity(`Teacher ${profile.name} created course: ${newCourse.title}`, 'course')
       }
     } catch (err) {
@@ -778,28 +778,28 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
 
   const uploadCourseFile = async () => {
     if (!uploadFile || !activeCourse) return
-    if (uploadFile.size > MAX_FILE_SIZE) { setStatus('❌ File too large. Maximum size is 50 MB.'); return }
-    if (!ALLOWED_FILE_TYPES.includes(uploadFile.type)) { setStatus('❌ File type not allowed. Use PDF, Word, Excel, PPT, images, or videos.'); return }
+    if (uploadFile.size > MAX_FILE_SIZE) { setStatus('× File too large. Maximum size is 50 MB.'); return }
+    if (!ALLOWED_FILE_TYPES.includes(uploadFile.type)) { setStatus('× File type not allowed. Use PDF, Word, Excel, PPT, images, or videos.'); return }
     setUploading(true); setStatus('Uploading...')
     try {
       const ext = uploadFile.name.split('.').pop()
       const storagePath = `${profile.id}/${activeCourse.id}/${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage.from('course-files').upload(storagePath, uploadFile)
-      if (upErr) { setStatus(`❌ Upload failed: ${upErr.message}`); setUploading(false); return }
+      if (upErr) { setStatus(`× Upload failed: ${upErr.message}`); setUploading(false); return }
       const { data: urlData } = supabase.storage.from('course-files').getPublicUrl(storagePath)
       const { error: dbErr } = await supabase.from('course_files').insert({
         course_id: activeCourse.id, name: uploadFile.name, storage_path: storagePath,
         url: urlData.publicUrl, type: uploadFile.type, size: uploadFile.size,
         section: fileSection || null, order_index: (activeCourse.course_files?.length || 0),
       }).select().single()
-      if (dbErr) { setStatus(`❌ DB error: ${dbErr.message}`); setUploading(false); return }
+      if (dbErr) { setStatus(`× DB error: ${dbErr.message}`); setUploading(false); return }
       setUploadFile(null); setFileSection('')
       if (fileInputRef.current) fileInputRef.current.value = ''
-      setStatus('✅ File uploaded!')
+      setStatus('✓ File uploaded!')
       setTimeout(() => setStatus(''), 3000)
       await refreshActiveCourse(activeCourse.id)
     } catch (e: any) {
-      setStatus('❌ Upload failed: unexpected error')
+      setStatus('× Upload failed: unexpected error')
     } finally {
       setUploading(false)
     }
@@ -1014,7 +1014,7 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
             </button>
           </div>
           {status && (
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: status.startsWith('✅') ? 'var(--success)' : 'var(--danger)', marginTop: 10 }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: status.startsWith('✓') ? 'var(--success)' : 'var(--danger)', marginTop: 10 }}>
               {status}
             </div>
           )}
@@ -1046,7 +1046,7 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
                           <span style={{ color: 'var(--accent)', cursor: 'pointer', borderBottom: '1px dashed var(--border)' }}
                             onClick={() => { setEditingFileId(f.id); setEditFileSectionValue(f.section || '') }}
                             title="Click to change section">
-                            📂 {f.section || 'General'}
+                            ▪ {f.section || 'General'}
                           </span>
                         )}
                       </div>

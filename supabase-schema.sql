@@ -3,6 +3,28 @@
 -- Run this entire file in Supabase SQL Editor
 -- ============================================================
 
+-- ============================================================
+-- STORAGE BUCKET (for course files, attachments, forum uploads)
+-- ============================================================
+insert into storage.buckets (id, name, public)
+  values ('course-files', 'course-files', true)
+  on conflict (id) do nothing;
+
+-- Allow authenticated users to upload files
+drop policy if exists "course_files_upload" on storage.objects;
+create policy "course_files_upload" on storage.objects for insert
+  with check (bucket_id = 'course-files' and auth.role() = 'authenticated');
+
+-- Allow public read access
+drop policy if exists "course_files_read" on storage.objects;
+create policy "course_files_read" on storage.objects for select
+  using (bucket_id = 'course-files');
+
+-- Allow users to delete their own uploads
+drop policy if exists "course_files_delete" on storage.objects;
+create policy "course_files_delete" on storage.objects for delete
+  using (bucket_id = 'course-files' and auth.uid()::text = (storage.foldername(name))[1]);
+
 -- PROFILES (extends Supabase auth.users)
 create table if not exists profiles (
   id uuid references auth.users on delete cascade primary key,
@@ -269,13 +291,13 @@ insert into platform_settings (key, value)
   on conflict (key) do nothing;
 insert into platform_settings (key, value)
   values ('xp_levels', '[
-    {"level":1,"name":"ROOKIE","xp":0,"icon":"🥉","color":"#6b7280"},
-    {"level":2,"name":"SCHOLAR","xp":500,"icon":"🥈","color":"#10b981"},
-    {"level":3,"name":"ACHIEVER","xp":1000,"icon":"🥇","color":"#f59e0b"},
-    {"level":4,"name":"ELITE","xp":2000,"icon":"💎","color":"#ff9500"},
-    {"level":5,"name":"LEGEND","xp":3500,"icon":"🔥","color":"#ef4444"},
-    {"level":6,"name":"MYTHIC","xp":5000,"icon":"⚡","color":"#8b5cf6"},
-    {"level":7,"name":"IMMORTAL","xp":7500,"icon":"👑","color":"#ec4899"}
+    {"level":1,"name":"ROOKIE","xp":0,"icon":"◇","color":"#6b7280"},
+    {"level":2,"name":"SCHOLAR","xp":500,"icon":"◈","color":"#10b981"},
+    {"level":3,"name":"ACHIEVER","xp":1000,"icon":"◆","color":"#f59e0b"},
+    {"level":4,"name":"ELITE","xp":2000,"icon":"★","color":"#ff9500"},
+    {"level":5,"name":"LEGEND","xp":3500,"icon":"◆","color":"#ef4444"},
+    {"level":6,"name":"MYTHIC","xp":5000,"icon":"◈","color":"#8b5cf6"},
+    {"level":7,"name":"IMMORTAL","xp":7500,"icon":"■","color":"#ec4899"}
   ]')
   on conflict (key) do nothing;
 insert into platform_settings (key, value)
@@ -284,6 +306,16 @@ insert into platform_settings (key, value)
 insert into platform_settings (key, value)
   values ('max_xp_per_test', '500')
   on conflict (key) do nothing;
+
+-- ============================================================
+-- DEFENSIVE MIGRATIONS: ensure student_id exists on all tables
+-- (fixes errors when tables existed from a previous partial run)
+-- ============================================================
+alter table attempts add column if not exists student_id uuid references profiles(id) on delete cascade;
+alter table enrollments add column if not exists student_id uuid references profiles(id) on delete cascade;
+alter table course_progress add column if not exists student_id uuid references profiles(id) on delete cascade;
+alter table course_ratings add column if not exists student_id uuid references profiles(id) on delete cascade;
+alter table submissions add column if not exists student_id uuid references profiles(id) on delete cascade;
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -314,8 +346,11 @@ alter table forum_posts add column if not exists best_answer_id uuid;
 alter table forum_comments add column if not exists is_best_answer boolean default false;
 
 -- Profiles
+drop policy if exists "profiles_select" on profiles;
 create policy "profiles_select" on profiles for select using (auth.role() = 'authenticated');
+drop policy if exists "profiles_insert" on profiles;
 create policy "profiles_insert" on profiles for insert with check (auth.uid() = id);
+drop policy if exists "profiles_update" on profiles;
 create policy "profiles_update" on profiles for update using (auth.uid() = id)
   with check (
     -- Prevent users from changing their own role via client
@@ -323,110 +358,161 @@ create policy "profiles_update" on profiles for update using (auth.uid() = id)
   );
 
 -- Announcements
+drop policy if exists "announcements_select" on announcements;
 create policy "announcements_select" on announcements for select using (true);
+drop policy if exists "announcements_insert" on announcements;
 create policy "announcements_insert" on announcements for insert with check (auth.role() = 'authenticated');
+drop policy if exists "announcements_delete" on announcements;
 create policy "announcements_delete" on announcements for delete using (auth.uid() = author_id);
 
 -- Tests
+drop policy if exists "tests_select" on tests;
 create policy "tests_select" on tests for select using (true);
+drop policy if exists "tests_insert" on tests;
 create policy "tests_insert" on tests for insert with check (auth.role() = 'authenticated');
+drop policy if exists "tests_update" on tests;
 create policy "tests_update" on tests for update using (auth.uid() = teacher_id);
+drop policy if exists "tests_delete" on tests;
 create policy "tests_delete" on tests for delete using (auth.uid() = teacher_id);
 
 -- Questions
 -- Teachers can see questions for their own tests; students only via server-side API
+drop policy if exists "questions_select" on questions;
 create policy "questions_select" on questions for select using (
   exists (select 1 from tests where tests.id = questions.test_id and tests.teacher_id = auth.uid())
   or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
 );
+drop policy if exists "questions_insert" on questions;
 create policy "questions_insert" on questions for insert with check (
   exists (select 1 from tests where tests.id = questions.test_id and tests.teacher_id = auth.uid())
 );
 -- Only the teacher who owns the test can delete questions
+drop policy if exists "questions_delete" on questions;
 create policy "questions_delete" on questions for delete using (
   exists (select 1 from tests where tests.id = questions.test_id and tests.teacher_id = auth.uid())
 );
 
 -- Attempts
+drop policy if exists "attempts_select" on attempts;
 create policy "attempts_select" on attempts for select using (auth.uid() = student_id);
+drop policy if exists "attempts_insert" on attempts;
 create policy "attempts_insert" on attempts for insert with check (auth.uid() = student_id);
+drop policy if exists "attempts_select_teacher" on attempts;
 create policy "attempts_select_teacher" on attempts for select using (
   exists (select 1 from tests where tests.id = attempts.test_id and tests.teacher_id = auth.uid())
 );
 -- Admin can see all attempts for platform analytics
+drop policy if exists "attempts_select_admin" on attempts;
 create policy "attempts_select_admin" on attempts for select using (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
 );
 
 -- Courses
+drop policy if exists "courses_select" on courses;
 create policy "courses_select" on courses for select using (true);
+drop policy if exists "courses_insert" on courses;
 create policy "courses_insert" on courses for insert with check (auth.role() = 'authenticated');
+drop policy if exists "courses_update" on courses;
 create policy "courses_update" on courses for update using (auth.uid() = teacher_id);
+drop policy if exists "courses_delete" on courses;
 create policy "courses_delete" on courses for delete using (
   auth.uid() = teacher_id or
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
 );
 
 -- Course files
+drop policy if exists "course_files_select" on course_files;
 create policy "course_files_select" on course_files for select using (true);
+drop policy if exists "course_files_insert" on course_files;
 create policy "course_files_insert" on course_files for insert with check (auth.role() = 'authenticated');
+drop policy if exists "course_files_delete" on course_files;
 create policy "course_files_delete" on course_files for delete using (auth.uid() = teacher_id);
 
 -- Enrollments
+drop policy if exists "enrollments_select" on enrollments;
 create policy "enrollments_select" on enrollments for select using (true);
+drop policy if exists "enrollments_insert" on enrollments;
 create policy "enrollments_insert" on enrollments for insert with check (auth.role() = 'authenticated');
+drop policy if exists "enrollments_delete" on enrollments;
 create policy "enrollments_delete" on enrollments for delete using (auth.uid() = student_id);
 
 -- Course Progress
+drop policy if exists "course_progress_select" on course_progress;
 create policy "course_progress_select" on course_progress for select using (true);
+drop policy if exists "course_progress_insert" on course_progress;
 create policy "course_progress_insert" on course_progress for insert with check (auth.uid() = student_id);
+drop policy if exists "course_progress_delete" on course_progress;
 create policy "course_progress_delete" on course_progress for delete using (auth.uid() = student_id);
 
 -- Course Ratings
+drop policy if exists "course_ratings_select" on course_ratings;
 create policy "course_ratings_select" on course_ratings for select using (true);
+drop policy if exists "course_ratings_insert" on course_ratings;
 create policy "course_ratings_insert" on course_ratings for insert with check (auth.uid() = student_id);
+drop policy if exists "course_ratings_update" on course_ratings;
 create policy "course_ratings_update" on course_ratings for update using (auth.uid() = student_id);
 
 -- Assignments
+drop policy if exists "assignments_select" on assignments;
 create policy "assignments_select" on assignments for select using (true);
+drop policy if exists "assignments_insert" on assignments;
 create policy "assignments_insert" on assignments for insert with check (auth.role() = 'authenticated');
 
 -- Submissions
+drop policy if exists "submissions_select" on submissions;
 create policy "submissions_select" on submissions for select using (
   auth.uid() = student_id or
   exists (select 1 from assignments where assignments.id = submissions.assignment_id and assignments.teacher_id = auth.uid())
 );
+drop policy if exists "submissions_insert" on submissions;
 create policy "submissions_insert" on submissions for insert with check (auth.uid() = student_id);
 
 -- Timetable
+drop policy if exists "timetable_select" on timetable;
 create policy "timetable_select" on timetable for select using (true);
+drop policy if exists "timetable_insert" on timetable;
 create policy "timetable_insert" on timetable for insert with check (auth.role() = 'authenticated');
 
 -- Notifications
+drop policy if exists "notifications_select" on notifications;
 create policy "notifications_select" on notifications for select using (auth.uid() = user_id);
+drop policy if exists "notifications_insert" on notifications;
 create policy "notifications_insert" on notifications for insert with check (auth.role() = 'authenticated');
+drop policy if exists "notifications_update" on notifications;
 create policy "notifications_update" on notifications for update using (auth.uid() = user_id);
 
 -- Activity log
+drop policy if exists "activity_log_select" on activity_log;
 create policy "activity_log_select" on activity_log for select using (true);
+drop policy if exists "activity_log_insert" on activity_log;
 create policy "activity_log_insert" on activity_log for insert with check (auth.role() = 'authenticated');
 
 -- Forum posts
+drop policy if exists "forum_posts_select" on forum_posts;
 create policy "forum_posts_select" on forum_posts for select using (true);
+drop policy if exists "forum_posts_insert" on forum_posts;
 create policy "forum_posts_insert" on forum_posts for insert with check (auth.role() = 'authenticated');
+drop policy if exists "forum_posts_update" on forum_posts;
 create policy "forum_posts_update" on forum_posts for update using (auth.uid() = author_id);
+drop policy if exists "forum_posts_delete" on forum_posts;
 create policy "forum_posts_delete" on forum_posts for delete using (auth.uid() = author_id);
 
 -- Forum comments
+drop policy if exists "forum_comments_select" on forum_comments;
 create policy "forum_comments_select" on forum_comments for select using (true);
+drop policy if exists "forum_comments_insert" on forum_comments;
 create policy "forum_comments_insert" on forum_comments for insert with check (auth.role() = 'authenticated');
+drop policy if exists "forum_comments_delete" on forum_comments;
 create policy "forum_comments_delete" on forum_comments for delete using (auth.uid() = author_id);
 
 -- Platform settings (admin-only update)
+drop policy if exists "platform_settings_select" on platform_settings;
 create policy "platform_settings_select" on platform_settings for select using (true);
+drop policy if exists "platform_settings_update" on platform_settings;
 create policy "platform_settings_update" on platform_settings for update using (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
 );
+drop policy if exists "platform_settings_insert" on platform_settings;
 create policy "platform_settings_insert" on platform_settings for insert with check (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
 );
@@ -561,14 +647,19 @@ create or replace trigger forum_comment_count_trigger
 -- ============================================================
 
 -- Timetable update + delete (teachers only)
+drop policy if exists "timetable_update" on timetable;
 create policy "timetable_update" on timetable for update using (auth.uid() = teacher_id);
+drop policy if exists "timetable_delete" on timetable;
 create policy "timetable_delete" on timetable for delete using (auth.uid() = teacher_id);
 
 -- Assignments update + delete (teachers only)
+drop policy if exists "assignments_update" on assignments;
 create policy "assignments_update" on assignments for update using (auth.uid() = teacher_id);
+drop policy if exists "assignments_delete" on assignments;
 create policy "assignments_delete" on assignments for delete using (auth.uid() = teacher_id);
 
 -- Submissions update (teacher of the assignment can grade)
+drop policy if exists "submissions_update" on submissions;
 create policy "submissions_update" on submissions for update using (
   auth.uid() = student_id or
   exists (select 1 from assignments where assignments.id = submissions.assignment_id and assignments.teacher_id = auth.uid())
@@ -606,19 +697,26 @@ create table if not exists attendance (
   unique(student_id, teacher_id, subject, date)
 );
 
+alter table attendance add column if not exists student_id uuid references profiles(id) on delete cascade;
 alter table attendance enable row level security;
 
 -- Students see their own records
+drop policy if exists "attendance_select_student" on attendance;
 create policy "attendance_select_student" on attendance for select using (auth.uid() = student_id);
 -- Teachers see records they created
+drop policy if exists "attendance_select_teacher" on attendance;
 create policy "attendance_select_teacher" on attendance for select using (auth.uid() = teacher_id);
 -- Admin sees all
+drop policy if exists "attendance_select_admin" on attendance;
 create policy "attendance_select_admin" on attendance for select using (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
 );
 -- Teachers can insert/update/delete their own attendance records
+drop policy if exists "attendance_insert" on attendance;
 create policy "attendance_insert" on attendance for insert with check (auth.uid() = teacher_id);
+drop policy if exists "attendance_update" on attendance;
 create policy "attendance_update" on attendance for update using (auth.uid() = teacher_id);
+drop policy if exists "attendance_delete" on attendance;
 create policy "attendance_delete" on attendance for delete using (auth.uid() = teacher_id);
 
 create index if not exists idx_attendance_student on attendance(student_id);
@@ -694,8 +792,11 @@ create table if not exists messages (
 );
 
 alter table messages enable row level security;
+drop policy if exists "messages_select" on messages;
 create policy "messages_select" on messages for select using (auth.uid() = sender_id or auth.uid() = receiver_id);
+drop policy if exists "messages_insert" on messages;
 create policy "messages_insert" on messages for insert with check (auth.uid() = sender_id);
+drop policy if exists "messages_update" on messages;
 create policy "messages_update" on messages for update using (auth.uid() = receiver_id);
 
 create index if not exists idx_messages_sender on messages(sender_id);
@@ -715,8 +816,11 @@ create table if not exists certificates (
   unique(student_id, course_id)
 );
 
+alter table certificates add column if not exists student_id uuid references profiles(id) on delete cascade;
 alter table certificates enable row level security;
+drop policy if exists "certificates_select" on certificates;
 create policy "certificates_select" on certificates for select using (auth.uid() = student_id or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('admin','teacher')));
+drop policy if exists "certificates_insert" on certificates;
 create policy "certificates_insert" on certificates for insert with check (auth.uid() = student_id);
 
 create index if not exists idx_certificates_student on certificates(student_id);
@@ -731,8 +835,11 @@ create table if not exists parent_students (
 );
 
 alter table parent_students enable row level security;
+drop policy if exists "parent_students_select" on parent_students;
 create policy "parent_students_select" on parent_students for select using (auth.uid() = parent_id or auth.uid() = student_id);
+drop policy if exists "parent_students_insert" on parent_students;
 create policy "parent_students_insert" on parent_students for insert with check (auth.uid() = parent_id);
+drop policy if exists "parent_students_delete" on parent_students;
 create policy "parent_students_delete" on parent_students for delete using (auth.uid() = parent_id);
 
 -- Update profiles role check to include parent
@@ -740,9 +847,11 @@ alter table profiles drop constraint if exists profiles_role_check;
 alter table profiles add constraint profiles_role_check check (role in ('admin','teacher','student','parent'));
 
 -- Parent RLS: parents can see their linked student's data
+drop policy if exists "attempts_select_parent" on attempts;
 create policy "attempts_select_parent" on attempts for select using (
   exists (select 1 from parent_students where parent_students.parent_id = auth.uid() and parent_students.student_id = attempts.student_id)
 );
+drop policy if exists "attendance_select_parent" on attendance;
 create policy "attendance_select_parent" on attendance for select using (
   exists (select 1 from parent_students where parent_students.parent_id = auth.uid() and parent_students.student_id = attendance.student_id)
 );
@@ -766,8 +875,11 @@ create table if not exists message_groups (
 );
 
 alter table message_groups enable row level security;
+drop policy if exists "msg_groups_select" on message_groups;
 create policy "msg_groups_select" on message_groups for select using (auth.uid()::text = any(member_ids));
+drop policy if exists "msg_groups_insert" on message_groups;
 create policy "msg_groups_insert" on message_groups for insert with check (auth.uid() = created_by);
+drop policy if exists "msg_groups_update" on message_groups;
 create policy "msg_groups_update" on message_groups for update using (auth.uid() = created_by);
 
 -- ============================================================
@@ -791,10 +903,12 @@ create table if not exists report_comments (
 );
 
 alter table report_comments enable row level security;
+drop policy if exists "report_comments_select" on report_comments;
 create policy "report_comments_select" on report_comments for select using (
   auth.uid() = student_id or auth.uid() = teacher_id or
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('admin','parent'))
 );
+drop policy if exists "report_comments_insert" on report_comments;
 create policy "report_comments_insert" on report_comments for insert with check (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('admin','teacher'))
 );
@@ -810,7 +924,9 @@ create table if not exists grade_weights (
 );
 
 alter table grade_weights enable row level security;
+drop policy if exists "grade_weights_select" on grade_weights;
 create policy "grade_weights_select" on grade_weights for select using (true);
+drop policy if exists "grade_weights_upsert" on grade_weights;
 create policy "grade_weights_upsert" on grade_weights for all using (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
 );
@@ -829,12 +945,16 @@ create table if not exists absence_excuses (
   created_at timestamptz default now()
 );
 
+alter table absence_excuses add column if not exists student_id uuid references profiles(id) on delete cascade;
 alter table absence_excuses enable row level security;
+drop policy if exists "excuses_select" on absence_excuses;
 create policy "excuses_select" on absence_excuses for select using (
   auth.uid() = parent_id or auth.uid() = student_id or
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('admin','teacher'))
 );
+drop policy if exists "excuses_insert" on absence_excuses;
 create policy "excuses_insert" on absence_excuses for insert with check (auth.uid() = parent_id);
+drop policy if exists "excuses_update" on absence_excuses;
 create policy "excuses_update" on absence_excuses for update using (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('admin','teacher'))
 );
@@ -851,7 +971,9 @@ create table if not exists ai_chats (
   updated_at timestamptz default now()
 );
 
+alter table ai_chats add column if not exists student_id uuid references profiles(id) on delete cascade;
 alter table ai_chats enable row level security;
+drop policy if exists "ai_chats_own" on ai_chats;
 create policy "ai_chats_own" on ai_chats for all using (auth.uid() = student_id);
 
 -- ============================================================
@@ -871,10 +993,13 @@ create table if not exists live_classes (
 );
 
 alter table live_classes enable row level security;
+drop policy if exists "live_classes_select" on live_classes;
 create policy "live_classes_select" on live_classes for select using (true);
+drop policy if exists "live_classes_insert" on live_classes;
 create policy "live_classes_insert" on live_classes for insert with check (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('admin','teacher'))
 );
+drop policy if exists "live_classes_update" on live_classes;
 create policy "live_classes_update" on live_classes for update using (auth.uid() = teacher_id);
 
 -- ============================================================
@@ -898,17 +1023,36 @@ create table if not exists quest_progress (
   quest_id uuid references quests(id) on delete cascade,
   progress integer default 0,
   completed boolean default false,
+  claimed boolean default false,
   completed_at timestamptz,
   unique(student_id, quest_id)
 );
 
+alter table quest_progress add column if not exists student_id uuid references profiles(id) on delete cascade;
+alter table quest_progress add column if not exists claimed boolean default false;
 alter table quests enable row level security;
 alter table quest_progress enable row level security;
+drop policy if exists "quests_select" on quests;
 create policy "quests_select" on quests for select using (true);
-create policy "quests_admin" on quests for all using (
+drop policy if exists "quests_admin" on quests;
+drop policy if exists "quests_admin_insert" on quests;
+create policy "quests_admin_insert" on quests for insert with check (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
 );
+drop policy if exists "quests_admin_update" on quests;
+create policy "quests_admin_update" on quests for update using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
+);
+drop policy if exists "quests_admin_delete" on quests;
+create policy "quests_admin_delete" on quests for delete using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
+);
+drop policy if exists "quest_progress_own" on quest_progress;
 create policy "quest_progress_own" on quest_progress for all using (auth.uid() = student_id);
+drop policy if exists "quest_progress_teacher_read" on quest_progress;
+create policy "quest_progress_teacher_read" on quest_progress for select using (
+  exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('teacher','admin'))
+);
 
 -- ============================================================
 -- PARENT-TEACHER MEETING SLOTS
@@ -928,10 +1072,13 @@ create table if not exists meeting_slots (
 );
 
 alter table meeting_slots enable row level security;
+drop policy if exists "meeting_slots_select" on meeting_slots;
 create policy "meeting_slots_select" on meeting_slots for select using (true);
+drop policy if exists "meeting_slots_teacher" on meeting_slots;
 create policy "meeting_slots_teacher" on meeting_slots for insert with check (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('admin','teacher'))
 );
+drop policy if exists "meeting_slots_update" on meeting_slots;
 create policy "meeting_slots_update" on meeting_slots for update using (
   auth.uid() = teacher_id or auth.uid() = booked_by
 );
@@ -960,7 +1107,9 @@ create table if not exists collaboration_rooms (
   created_at timestamptz default now()
 );
 alter table collaboration_rooms enable row level security;
+drop policy if exists "collab_rooms_read" on collaboration_rooms;
 create policy "collab_rooms_read" on collaboration_rooms for select using (true);
+drop policy if exists "collab_rooms_create" on collaboration_rooms;
 create policy "collab_rooms_create" on collaboration_rooms for insert with check (auth.uid() = created_by);
 
 create table if not exists room_messages (
@@ -972,11 +1121,16 @@ create table if not exists room_messages (
   created_at timestamptz default now()
 );
 alter table room_messages enable row level security;
+drop policy if exists "room_msg_read" on room_messages;
 create policy "room_msg_read" on room_messages for select using (true);
+drop policy if exists "room_msg_create" on room_messages;
 create policy "room_msg_create" on room_messages for insert with check (auth.uid() = user_id);
 
 -- Enable realtime for collaboration
-alter publication supabase_realtime add table room_messages;
+do $$ begin
+  alter publication supabase_realtime add table room_messages;
+exception when duplicate_object then null;
+end $$;
 
 -- ============================================================
 -- REPUTATION RPC

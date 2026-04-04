@@ -29,13 +29,13 @@ export interface XPLevel {
 }
 
 export const DEFAULT_XP_LEVELS: XPLevel[] = [
-  { level: 1, name: 'ROOKIE',   xp: 0,    icon: '🥉', color: '#6b7280' },
-  { level: 2, name: 'SCHOLAR',  xp: 500,  icon: '🥈', color: '#10b981' },
-  { level: 3, name: 'ACHIEVER', xp: 1000, icon: '🥇', color: '#f59e0b' },
-  { level: 4, name: 'ELITE',    xp: 2000, icon: '💎', color: '#ff9500' },
-  { level: 5, name: 'LEGEND',   xp: 3500, icon: '🔥', color: '#ef4444' },
-  { level: 6, name: 'MYTHIC',   xp: 5000, icon: '⚡', color: '#8b5cf6' },
-  { level: 7, name: 'IMMORTAL', xp: 7500, icon: '👑', color: '#ec4899' },
+  { level: 1, name: 'ROOKIE',   xp: 0,    icon: '◇', color: '#6b7280' },
+  { level: 2, name: 'SCHOLAR',  xp: 500,  icon: '◈', color: '#10b981' },
+  { level: 3, name: 'ACHIEVER', xp: 1000, icon: '◆', color: '#f59e0b' },
+  { level: 4, name: 'ELITE',    xp: 2000, icon: '★', color: '#ff9500' },
+  { level: 5, name: 'LEGEND',   xp: 3500, icon: '◆', color: '#ef4444' },
+  { level: 6, name: 'MYTHIC',   xp: 5000, icon: '◈', color: '#8b5cf6' },
+  { level: 7, name: 'IMMORTAL', xp: 7500, icon: '■', color: '#ec4899' },
 ]
 
 export function getLevel(xp: number, levels?: XPLevel[]) {
@@ -69,14 +69,14 @@ export function formatSize(bytes: number): string {
 }
 
 export function getFileIcon(type: string): string {
-  if (!type) return '📄'
-  if (type.includes('pdf')) return '📕'
-  if (type.includes('video')) return '🎬'
-  if (type.includes('image')) return '🖼️'
-  if (type.includes('word') || type.includes('document')) return '📝'
-  if (type.includes('sheet') || type.includes('excel')) return '📊'
-  if (type.includes('zip')) return '🗜️'
-  return '📄'
+  if (!type) return '▪'
+  if (type.includes('pdf')) return '▪'
+  if (type.includes('video')) return '▸'
+  if (type.includes('image')) return '◇'
+  if (type.includes('word') || type.includes('document')) return '▫'
+  if (type.includes('sheet') || type.includes('excel')) return '▪'
+  if (type.includes('zip')) return '◈'
+  return '▪'
 }
 
 /** Export tabular data as CSV file download */

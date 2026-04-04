@@ -172,7 +172,7 @@ export function CollaborationModule({ profile }: Props) {
             <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginLeft: 8 }}>{activeRoom.subject}</span>
           </div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--success)' }}>
-            🟢 {onlineUsers.length} online
+            ● {onlineUsers.length} online
           </div>
         </div>
 

@@ -50,7 +50,7 @@ function ForgotPasswordInner() {
         <div className="fade-up-1 card" style={{ padding: 32 }}>
           {sent ? (
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>✉️</div>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>▸</div>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--fg)', marginBottom: 8 }}>Check your email</div>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', lineHeight: 1.6 }}>
                 We sent a password reset link to <strong style={{ color: 'var(--fg)' }}>{email}</strong>. Click the link in your email to set a new password.

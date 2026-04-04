@@ -207,7 +207,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
       setCheckedIn(updated)
       localStorage.setItem(key, JSON.stringify(Array.from(updated)))
       if (onProfileUpdate) onProfileUpdate({ ...profile, xp: newXP })
-      toast(`✅ Checked in! +${xpReward} XP`, 'success')
+      toast(`✓ Checked in! +${xpReward} XP`, 'success')
     } catch {
       toast('Check-in failed', 'error')
     } finally {
@@ -337,7 +337,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
         <div className="tt-slot-header">
           <div className="tt-slot-header-left">
             {live && <div className="tt-live-badge"><span className="tt-live-dot" /> LIVE NOW</div>}
-            {didCheckIn && <div className="tt-checkin-badge">✅ Checked In · +{xpReward} XP</div>}
+            {didCheckIn && <div className="tt-checkin-badge">✓ Checked In · +{xpReward} XP</div>}
             <div className="tt-slot-subject" style={{ color }}>
               {periodNum !== undefined && <span className="tt-period-num">P{periodNum}</span>}
               {slot.subject}
@@ -369,7 +369,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
           {isStudent && live && !didCheckIn && (
             <button className="btn btn-xs tt-checkin-btn" disabled={checkingIn === slot.id}
               onClick={e => { e.stopPropagation(); handleCheckIn(slot) }}>
-              {checkingIn === slot.id ? '...' : `⚡ Check In +${xpReward} XP`}
+              {checkingIn === slot.id ? '...' : `◈ Check In +${xpReward} XP`}
             </button>
           )}
           {isTeacher && (
@@ -500,7 +500,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
         <div className="tt-timeline">
           {slots.length === 0 && (
             <div className="tt-empty-day">
-              <div className="tt-empty-icon">🎉</div>
+              <div className="tt-empty-icon">◇</div>
               <div className="tt-empty-title">No classes on {selectedDay}</div>
               <div className="tt-empty-sub">Enjoy your free time!</div>
               {isTeacher && (
@@ -549,7 +549,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
       })}
       {filtered.length === 0 && (
         <div className="tt-empty-day tt-empty-day-lg">
-          <div className="tt-empty-icon">📅</div>
+          <div className="tt-empty-icon">▫</div>
           <div className="tt-empty-title">{searchQ ? 'No matching classes.' : 'No classes scheduled yet.'}</div>
         </div>
       )}
@@ -621,11 +621,11 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
                 {isStudent && !checkedIn.has(liveSlot.id) && (
                   <button className="btn btn-sm tt-checkin-btn" disabled={checkingIn === liveSlot.id}
                     onClick={() => handleCheckIn(liveSlot)}>
-                    {checkingIn === liveSlot.id ? '...' : `⚡ Check In +${xpReward} XP`}
+                    {checkingIn === liveSlot.id ? '...' : `◈ Check In +${xpReward} XP`}
                   </button>
                 )}
                 {checkedIn.has(liveSlot.id) && (
-                  <span className="tt-checkin-done">✅ Checked in</span>
+                  <span className="tt-checkin-done">✓ Checked in</span>
                 )}
               </div>
             </>
@@ -651,28 +651,28 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
       {/* ── Stats bar ── */}
       <div className="tt-stats fade-up">
         <div className="tt-stat">
-          <div className="tt-stat-icon">📚</div>
+          <div className="tt-stat-icon">▪</div>
           <div className="tt-stat-value">{timetable.length}</div>
           <div className="tt-stat-label">Weekly Classes</div>
         </div>
         <div className="tt-stat">
-          <div className="tt-stat-icon">📋</div>
+          <div className="tt-stat-icon">▫</div>
           <div className="tt-stat-value">{todaySlots.length}</div>
           <div className="tt-stat-label">Today</div>
         </div>
         <div className="tt-stat">
-          <div className="tt-stat-icon">⏱️</div>
+          <div className="tt-stat-icon">○</div>
           <div className="tt-stat-value">{formatDuration(totalWeeklyMins)}</div>
           <div className="tt-stat-label">Weekly Hours</div>
         </div>
         <div className="tt-stat">
-          <div className="tt-stat-icon">🎨</div>
+          <div className="tt-stat-icon">◈</div>
           <div className="tt-stat-value">{uniqueSubjects.length}</div>
           <div className="tt-stat-label">Subjects</div>
         </div>
         {isStudent && (
           <div className="tt-stat tt-stat-xp">
-            <div className="tt-stat-icon">⚡</div>
+            <div className="tt-stat-icon">◈</div>
             <div className="tt-stat-value">{weeklyCheckIns * xpReward}</div>
             <div className="tt-stat-label">Weekly XP</div>
           </div>
@@ -710,7 +710,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
                   <span className="tt-today-chip-subject" style={{ color: done ? 'var(--fg-dim)' : color }}>{slot.subject}</span>
                   <span className="tt-today-chip-time">{slot.time}</span>
                   {done && <span className="tt-today-chip-done-icon">✓</span>}
-                  {checkedIn.has(slot.id) && <span className="tt-today-chip-xp">⚡</span>}
+                  {checkedIn.has(slot.id) && <span className="tt-today-chip-xp">◈</span>}
                 </div>
               )
             })}
@@ -724,7 +724,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
           {(['week', 'day', 'list'] as ViewMode[]).map(v => (
             <button key={v} className={`tt-view-btn ${view === v ? 'tt-view-active' : ''}`}
               onClick={() => setView(v)}>
-              {v === 'week' ? '📅' : v === 'day' ? '📋' : '📝'} {v.charAt(0).toUpperCase() + v.slice(1)}
+              {v === 'week' ? '▫' : v === 'day' ? '▫' : '▫'} {v.charAt(0).toUpperCase() + v.slice(1)}
             </button>
           ))}
         </div>

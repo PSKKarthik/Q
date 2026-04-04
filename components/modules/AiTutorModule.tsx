@@ -49,7 +49,7 @@ export function AiTutorModule({ profile, courses, enrolledIds }: Props) {
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      content: input.trim() || (attachedFile ? `📎 ${attachedFile.name}` : ''),
+      content: input.trim() || (attachedFile ? `▸ ${attachedFile.name}` : ''),
       timestamp: new Date(),
       fileName: attachedFile?.name,
     }
@@ -145,7 +145,7 @@ export function AiTutorModule({ profile, courses, enrolledIds }: Props) {
         <div style={{ flex: 1, overflow: 'auto', padding: '16px 16px 8px' }}>
           {messages.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-              <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>🤖</div>
+              <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>◈</div>
               <div style={{ fontFamily: 'var(--display)', fontSize: 20, marginBottom: 8 }}>QGX AI TUTOR</div>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', lineHeight: 1.8 }}>
                 Ask me anything about your courses!<br />

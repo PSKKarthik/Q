@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { pushNotificationBatch, logActivity } from '@/lib/actions'
 import { useToast } from '@/lib/toast'
-import type { Profile, Test, Course, Assignment, Submission, TimetableSlot, Announcement, Attempt } from '@/types'
+import type { Profile, Test, Course, Assignment, Submission, TimetableSlot, Announcement, Attempt, Quest, QuestProgress } from '@/types'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Icon } from '@/components/ui/Icon'
 import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
@@ -42,6 +42,8 @@ export default function TeacherDashboard() {
   const [students, setStudents]       = useState<Profile[]>([])
   const [allAttempts, setAllAttempts] = useState<Attempt[]>([])
   const [timetable, setTimetable]     = useState<TimetableSlot[]>([])
+  const [teacherQuests, setTeacherQuests] = useState<Quest[]>([])
+  const [questProgress, setQuestProgress] = useState<QuestProgress[]>([])
 
   const [announceModal, setAnnounceModal] = useState(false)
   const [newAnnounce, setNewAnnounce] = useState({ title:'', body:'', pinned:false })
@@ -76,6 +78,8 @@ export default function TeacherDashboard() {
         supabase.from('profiles').select('*').eq('role', 'student'),
         supabase.from('attempts').select('*').limit(2000),
         supabase.from('timetable').select('*').eq('teacher_id', p.id).order('day'),
+        supabase.from('quests').select('*').order('created_at', { ascending: false }),
+        supabase.from('quest_progress').select('*'),
       ])
       if (results[0].status === 'fulfilled' && results[0].value.data) setTests(results[0].value.data as Test[])
       if (results[1].status === 'fulfilled' && results[1].value.data) setCourses(results[1].value.data.map((course: any) => ({ ...course, _fileCount: course.course_files?.length || 0 })))
@@ -84,6 +88,8 @@ export default function TeacherDashboard() {
       if (results[4].status === 'fulfilled' && results[4].value.data) setStudents(results[4].value.data as Profile[])
       if (results[5].status === 'fulfilled' && results[5].value.data) setAllAttempts(results[5].value.data)
       if (results[6].status === 'fulfilled' && results[6].value.data) setTimetable(results[6].value.data)
+      if (results[7].status === 'fulfilled' && results[7].value.data) setTeacherQuests(results[7].value.data as Quest[])
+      if (results[8].status === 'fulfilled' && results[8].value.data) setQuestProgress(results[8].value.data as QuestProgress[])
     } catch (err) {
       // Show error toast for fetch failures
       console.error('Teacher dashboard fetch failed:', err)
@@ -96,7 +102,7 @@ export default function TeacherDashboard() {
     try {
       const { error } = await supabase.from('announcements').insert({ ...newAnnounce, target:'students', author_id:profile.id, author_name:profile.name, role:'teacher' })
       if (error) throw error
-      await pushNotificationBatch(students.map(s => s.id), `📢 ${profile.name}: ${newAnnounce.title}`, 'announcement')
+      await pushNotificationBatch(students.map(s => s.id), `◆ ${profile.name}: ${newAnnounce.title}`, 'announcement')
       await logActivity(`Teacher ${profile.name} posted: ${newAnnounce.title}`, 'announcement')
       setNewAnnounce({ title:'', body:'', pinned:false }); setAnnounceModal(false)
       const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending:false })
@@ -116,6 +122,7 @@ export default function TeacherDashboard() {
     { id:'attendance',    label:'Attendance',       icon:'check'    },
     { id:'grades',        label:'Grades',           icon:'star'     },
     { id:'analytics',     label:'Analytics',        icon:'chart'    },
+    { id:'quests',         label:'Quests',            icon:'star'     },
     { id:'calendar',      label:'Calendar',         icon:'calendar' },
     { id:'live-classes',  label:'Live Classes',     icon:'zap'      },
     { id:'announcements', label:'Announcements',    icon:'bell'     },
@@ -325,6 +332,69 @@ export default function TeacherDashboard() {
         )}
 
         {tab === 'notifications' && <NotificationsModule userId={profile.id} />}
+
+        {/* ── QUESTS OVERVIEW ── */}
+        {tab === 'quests' && (() => {
+          const totalStudents = students.length
+          const getQuestStats = (q: Quest) => {
+            const qp = questProgress.filter(p => p.quest_id === q.id)
+            const completed = qp.filter(p => p.completed).length
+            const claimed = qp.filter(p => p.claimed).length
+            return { started: qp.length, completed, claimed }
+          }
+          return (
+            <>
+              <PageHeader title="QUEST OVERVIEW" subtitle="Monitor student quest progress" />
+              <StatGrid items={[
+                { label: 'Total Quests', value: teacherQuests.length },
+                { label: 'Active', value: teacherQuests.filter(q => q.active).length },
+                { label: 'Students', value: totalStudents },
+                { label: 'Completions', value: questProgress.filter(p => p.completed).length },
+              ]} columns={4} />
+              {['daily', 'weekly', 'special'].map(type => {
+                const group = teacherQuests.filter(q => q.type === type)
+                if (!group.length) return null
+                return (
+                  <div key={type}>
+                    <SectionLabel>{type.charAt(0).toUpperCase() + type.slice(1)} Quests</SectionLabel>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12, marginBottom: 24 }}>
+                      {group.map(q => {
+                        const stats = getQuestStats(q)
+                        const pct = totalStudents ? Math.round(stats.completed / totalStudents * 100) : 0
+                        return (
+                          <div key={q.id} className="card" style={{ padding: 16, opacity: q.active ? 1 : 0.5 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>{q.title}</div>
+                              <span style={{ fontFamily: 'var(--display)', fontSize: 16, color: 'var(--warn)' }}>+{q.xp_reward}</span>
+                            </div>
+                            {q.description && <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', marginBottom: 8 }}>{q.description}</div>}
+                            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginBottom: 8 }}>
+                              Target: {q.target_type} x{q.target_count}
+                            </div>
+                            <div style={{ display: 'flex', gap: 16, fontFamily: 'var(--mono)', fontSize: 11 }}>
+                              <span>Started: {stats.started}</span>
+                              <span style={{ color: 'var(--success)' }}>Completed: {stats.completed}</span>
+                              <span>Claimed: {stats.claimed}</span>
+                            </div>
+                            <div style={{ marginTop: 8, height: 6, background: 'var(--border)', borderRadius: 3 }}>
+                              <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent)', borderRadius: 3, transition: 'width 0.5s ease' }} />
+                            </div>
+                            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginTop: 4 }}>{pct}% of students completed</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+              {teacherQuests.length === 0 && (
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', textAlign: 'center', marginTop: 40 }}>
+                  No quests available. Ask an admin to create quests.
+                </div>
+              )}
+            </>
+          )
+        })()}
 
         {tab==='profile' && (
           <ProfileTab

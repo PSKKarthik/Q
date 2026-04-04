@@ -282,7 +282,6 @@ export interface ReportComment {
   teacher_name: string
   term: string
   comment: string
-  category?: string
   conduct?: 'excellent' | 'good' | 'satisfactory' | 'needs_improvement' | 'poor'
   created_at: string
 }
