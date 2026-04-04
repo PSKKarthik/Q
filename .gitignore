@@ -3,4 +3,5 @@ node_modules/
 .env*
 build/
 dist/
-qgx/node_modules/
+.vercel
+.env*.local

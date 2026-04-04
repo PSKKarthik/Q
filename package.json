@@ -1,0 +1,37 @@
+{
+  "name": "qgx",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "seed": "node scripts/seed.mjs",
+    "test": "jest --verbose"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.10.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "jszip": "^3.10.1",
+    "next": "14.2.5",
+    "pdf-parse": "^1.1.1",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.5",
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
+    "ts-jest": "^29.4.9",
+    "typescript": "^5"
+  }
+}
