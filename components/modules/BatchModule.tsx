@@ -199,6 +199,13 @@ export function TeacherBatchGradeModule({ profile, assignments, students, onAssi
 
   const saveAllGrades = async () => {
     if (!assignment) return
+    const validCount = submissions.filter(sub => {
+      const g = grades[sub.id]
+      if (!g) return false
+      const score = parseInt(g.score)
+      return !isNaN(score)
+    }).length
+    if (!window.confirm(`Apply grades to ${validCount} submission(s) for "${assignment.title}"?`)) return
     setSaving(true)
     for (const sub of submissions) {
       const g = grades[sub.id]

@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/lib/toast'
+import { pushNotificationBatch } from '@/lib/actions'
 import type { Profile, LiveClass } from '@/types'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Icon } from '@/components/ui/Icon'
@@ -76,8 +77,14 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
     try {
       const { error } = await supabase.from('live_classes').update({ status: 'live' }).eq('id', cls.id)
       if (error) throw error
-      setClasses(prev => prev.map(c => c.id === cls.id ? { ...c, status: 'live' } : c))
-      joinClass(cls)
+      const liveClass = { ...cls, status: 'live' as const }
+      setClasses(prev => prev.map(c => c.id === cls.id ? liveClass : c))
+      if (isTeacher) {
+        const { data: students } = await supabase.from('profiles').select('id').eq('role', 'student')
+        const studentIds = (students || []).map((s: any) => s.id)
+        await pushNotificationBatch(studentIds, `● Class is live: ${cls.title} (${cls.subject}) by ${cls.teacher_name}`, 'live_class')
+      }
+      joinClass(liveClass)
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Failed to start class', 'error')
     }
@@ -100,8 +107,8 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
   }
 
   const joinClass = (cls: LiveClass) => {
-    // Only allow joining live classes — prevent joining ended/scheduled classes (#15)
-    if (cls.status !== 'live' && !(isTeacher && cls.teacher_id === profile.id)) {
+    // Only allow joining classes that are explicitly live.
+    if (cls.status !== 'live') {
       toast('This class is not currently live', 'error')
       return
     }
@@ -116,6 +123,7 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
   const now = new Date()
   const upcoming = classes.filter(c => c.status === 'scheduled' && new Date(c.scheduled_at) > now)
   const live = classes.filter(c => c.status === 'live')
+  const missed = classes.filter(c => c.status === 'scheduled' && new Date(c.scheduled_at) <= now)
   const past = classes.filter(c => c.status === 'ended')
 
   if (loading) return <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>Loading live classes...</div>
@@ -231,6 +239,28 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
       )}
 
       {/* Past */}
+      {missed.length > 0 && (
+        <>
+          <SectionLabel>Missed / Unstarted</SectionLabel>
+          <div className="fade-up-4" style={{ border: '1px solid var(--border)', marginBottom: 18 }}>
+            <table className="table">
+              <thead><tr><th>Title</th><th>Subject</th><th>Teacher</th><th>Scheduled</th><th>Status</th></tr></thead>
+              <tbody>
+                {missed.slice(0, pastLimit).map(cls => (
+                  <tr key={cls.id}>
+                    <td>{cls.title}</td>
+                    <td><span className="tag">{cls.subject}</span></td>
+                    <td><span className="mono" style={{ fontSize: 11 }}>{cls.teacher_name}</span></td>
+                    <td><span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{new Date(cls.scheduled_at).toLocaleString()}</span></td>
+                    <td><span className="mono" style={{ fontSize: 11, color: 'var(--warn)' }}>MISSED</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       {past.length > 0 && (
         <>
           <SectionLabel>Past Sessions</SectionLabel>

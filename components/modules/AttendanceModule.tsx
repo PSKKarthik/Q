@@ -27,7 +27,9 @@ const STATUSES: AttendanceStatus[] = ['present', 'absent', 'late', 'excused']
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-function toDateStr(d: Date): string { return d.toISOString().slice(0, 10) }
+function toDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 function parseDate(s: string): Date { return new Date(s + 'T00:00:00') }
 
 function getMonthDays(year: number, month: number): Date[] {
@@ -94,17 +96,22 @@ export function StudentAttendanceModule({ profile }: StudentAttendanceProps) {
     return { total, present, absent, late, excused, rate }
   }, [filtered])
 
-  // Streak calculation
+  // Streak calculation — dedupe dates first so multi-subject days don't inflate count
   const streak = useMemo(() => {
-    const sorted = [...filtered].filter(r => r.status === 'present' || r.status === 'late')
-      .map(r => r.date).sort().reverse()
-    if (!sorted.length) return 0
+    const uniqueDates = Array.from(
+      new Set(
+        filtered
+          .filter(r => r.status === 'present' || r.status === 'late')
+          .map(r => r.date)
+      )
+    ).sort().reverse()
+    if (!uniqueDates.length) return 0
     let count = 1
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = parseDate(sorted[i - 1])
-      const curr = parseDate(sorted[i])
+    for (let i = 1; i < uniqueDates.length; i++) {
+      const prev = parseDate(uniqueDates[i - 1])
+      const curr = parseDate(uniqueDates[i])
       const diff = (prev.getTime() - curr.getTime()) / 86400000
-      if (diff <= 1) count++
+      if (diff === 1) count++
       else break
     }
     return count
@@ -253,9 +260,10 @@ interface TeacherAttendanceProps {
 type BulkEntry = { student_id: string; student_name: string; status: AttendanceStatus; note: string }
 
 export function TeacherAttendanceModule({ profile, students, timetable }: TeacherAttendanceProps) {
-  const [records, setRecords]     = useState<AttendanceRecord[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [view, setView]           = useState<'mark' | 'history' | 'analytics'>('mark')
+  const [records, setRecords]         = useState<AttendanceRecord[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [recordsInitialized, setRecordsInitialized] = useState(false)
+  const [view, setView]               = useState<'mark' | 'history' | 'analytics'>('mark')
 
   // Mark attendance state
   const [markDate, setMarkDate]   = useState(toDateStr(new Date()))
@@ -272,8 +280,8 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
   const [editStatus, setEditStatus] = useState<AttendanceStatus>('present')
   const [editNote, setEditNote]   = useState('')
 
-  const fetchRecords = useCallback(async () => {
-    setLoading(true)
+  const fetchRecords = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const { data, error } = await supabase
         .from('attendance')
@@ -282,18 +290,22 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
         .order('date', { ascending: false })
       if (error) throw error
       setRecords((data || []) as AttendanceRecord[])
+      setRecordsInitialized(true)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to load attendance', 'error')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [profile.id, toast])
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
 
-  // Init bulk entries when students/date/subject change
+  // Init bulk entries when students/date/subject change, or once records first load.
+  // records is intentionally NOT in the dep array — silent post-save refreshes must
+  // not wipe unsaved edits the teacher may have made since clicking Save.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    // Check if records already exist for this date+subject
+    if (!recordsInitialized) return
     const existing = markSubject
       ? records.filter(r => r.date === markDate && r.subject === markSubject)
       : []
@@ -309,7 +321,8 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
       }
     })
     setBulkEntries(entries)
-  }, [students, markDate, markSubject, records])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, markDate, markSubject, recordsInitialized])
 
   const subjects = useMemo(() => {
     const set = new Set(records.map(r => r.subject))
@@ -354,6 +367,14 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
     return new Set(records.filter(r => r.date === markDate).map(r => r.subject))
   }, [records, markDate])
 
+  // Auto-fill subject from today's first timetable slot if not already set
+  useEffect(() => {
+    if (!markSubject && todaySlots.length > 0) {
+      setMarkSubject(todaySlots[0].subject)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todaySlots])
+
   const quickMark = (subject: string) => {
     setMarkSubject(subject)
   }
@@ -389,13 +410,17 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
 
       if (error) throw error
 
-      // Notify absent students
+      // Notify absent students & log activity (non-blocking)
       const absentIds = bulkEntries.filter(e => e.status === 'absent').map(e => e.student_id)
       if (absentIds.length) {
-        await pushNotificationBatch(absentIds, `△ Marked absent in ${markSubject} on ${markDate}`, 'attendance')
+        pushNotificationBatch(absentIds, `△ Marked absent in ${markSubject} on ${markDate}`, 'attendance').catch(err => {
+          console.error('Failed to send notifications:', err)
+        })
       }
-      await logActivity(`${profile.name} marked attendance for ${markSubject} on ${markDate}`, 'attendance')
-      await fetchRecords()
+      logActivity(`${profile.name} marked attendance for ${markSubject} on ${markDate}`, 'attendance').catch(err => {
+        console.error('Failed to log activity:', err)
+      })
+      await fetchRecords(true)
       toast('Attendance saved', 'success')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to save attendance', 'error')
@@ -413,7 +438,7 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
         .eq('id', editModal.id)
       if (error) throw error
       setEditModal(null)
-      await fetchRecords()
+      await fetchRecords(true)
       toast('Record updated', 'success')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to update record', 'error')
@@ -425,11 +450,20 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
     try {
       const { error } = await supabase.from('attendance').delete().eq('id', id)
       if (error) throw error
-      await fetchRecords()
+      await fetchRecords(true)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to delete record', 'error')
     }
   }
+
+  // Detect students that share a name so the UI can show an ID suffix
+  const duplicateNames = useMemo(() => {
+    const counts = new Map<string, number>()
+    students.forEach(s => counts.set(s.name, (counts.get(s.name) || 0) + 1))
+    const set = new Set<string>()
+    counts.forEach((count, name) => { if (count > 1) set.add(name) })
+    return set
+  }, [students])
 
   const filteredBulk = search
     ? bulkEntries.filter(e => e.student_name.toLowerCase().includes(search.toLowerCase()))
@@ -513,7 +547,12 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
           <div className="att-student-list card">
             {filteredBulk.map((entry, idx) => (
               <div key={entry.student_id} className={`att-student-row ${idx % 2 === 0 ? 'even' : ''}`}>
-                <div className="att-student-name">{entry.student_name}</div>
+                <div className="att-student-name">
+                  {entry.student_name}
+                  {duplicateNames.has(entry.student_name) && (
+                    <span style={{ color: 'var(--fg-dim)', fontSize: 10, fontFamily: 'var(--mono)', marginLeft: 4 }}>#{entry.student_id.slice(-4)}</span>
+                  )}
+                </div>
                 <div className="att-student-controls">
                   {STATUSES.map(s => (
                     <button key={s}
@@ -532,7 +571,7 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
           </div>
 
           <button className="btn btn-primary" style={{ marginTop: 12, width: '100%' }} onClick={saveBulk} disabled={saving || !markSubject}>
-            {saving ? 'Saving…' : `Save Attendance (${bulkEntries.length} students)`}
+            {saving ? 'Saving…' : `Save Attendance (${search ? filteredBulk.length : bulkEntries.length} students)`}
           </button>
         </div>
       )}

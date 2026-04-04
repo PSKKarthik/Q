@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/lib/toast'
 import type { Profile } from '@/types'
@@ -30,9 +30,7 @@ export function PredictiveAlertsModule({ profile }: Props) {
   const [filter, setFilter] = useState<'high' | 'medium' | 'all'>('high')
   const [alertPage, setAlertPage] = useState(0)
 
-  useEffect(() => { analyzeStudents() }, [])
-
-  const analyzeStudents = async () => {
+  const analyzeStudents = useCallback(async () => {
     setLoading(true)
     try {
       const [studentsRes, attRes, attemptsRes, subsRes, assignRes, testsRes] = await Promise.all([
@@ -119,7 +117,9 @@ export function PredictiveAlertsModule({ profile }: Props) {
       toast(err instanceof Error ? err.message : 'Failed to analyze students', 'error')
       setLoading(false)
     }
-  }
+  }, [profile.id, toast])
+
+  useEffect(() => { analyzeStudents() }, [analyzeStudents])
 
   const filtered = risks.filter(r => {
     if (filter === 'high') return r.riskScore >= 40

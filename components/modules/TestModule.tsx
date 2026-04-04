@@ -16,6 +16,7 @@ interface StudentTestModuleProps {
   attempts: Attempt[]
   doubleXP: { active: boolean; ends_at: number | null }
   allStudents: Profile[]
+  onExamStateChange?: (active: boolean) => void
   onAttemptDone: (attempt: Attempt, xpData: { newXP: number }) => void
 }
 
@@ -24,7 +25,7 @@ const qTypeLabel: Record<string, string> = { mcq:'Single Choice', msq:'Multi Sel
 const difficultyColor = (marks: number) => marks >= 3 ? 'var(--danger)' : marks >= 2 ? 'var(--warn)' : 'var(--success)'
 
 /* ────────────────────────────────────────────── */
-export function StudentTestModule({ profile, tests, attempts, doubleXP, allStudents, onAttemptDone }: StudentTestModuleProps) {
+export function StudentTestModule({ profile, tests, attempts, doubleXP, allStudents, onExamStateChange, onAttemptDone }: StudentTestModuleProps) {
   const { toast } = useToast()
 
   /* views */
@@ -45,6 +46,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
   const [doubleXPLocked, setDoubleXPLocked] = useState(false)
   const [isOffline, setIsOffline] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
+  const [ackIncomplete, setAckIncomplete] = useState(false)
 
   /* result */
   const [testResult, setTestResult] = useState<{
@@ -75,8 +77,17 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
 
   const attempted = attempts.map(a => a.test_id)
 
+  const canReviewAttempt = (test?: Test | null) => {
+    if (!test) return false
+    return test.type === 'quiz' || test.anti_cheat?.allowImmediateReview === true
+  }
+
   /* keep handleSubmitRef in sync */
   useEffect(() => { handleSubmitRef.current = handleSubmit })
+
+  useEffect(() => {
+    onExamStateChange?.(view === 'attempt')
+  }, [view, onExamStateChange])
 
   /* global timer */
   useEffect(() => {
@@ -121,7 +132,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
       console.warn('Failed to autosave answers to localStorage:', e)
       setIsOffline(prev => { if (!prev) toast('△ Storage full — your answers may not be saved locally. Submit soon!', 'error'); return prev })
     }
-  }, [answers, activeTest, testResult])
+  }, [answers, activeTest, testResult, toast])
 
   /* offline detection */
   useEffect(() => {
@@ -248,7 +259,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
 
     setActiveTest(testWithQuestions); setQuestions(qs); setAnswers(restored)
     setCurrentQ(0); setTimeLeft(remaining); setTestResult(null)
-    setFlagged(new Set()); setShowNav(false); setConfirmSubmit(false)
+    setFlagged(new Set()); setShowNav(false); setConfirmSubmit(false); setAckIncomplete(false)
     if (ac.timePerQ > 0) setQTimeLeft(ac.timePerQ)
     if (remaining <= 0) { setView('attempt'); setTimeout(() => handleSubmitRef.current(), 100); return }
     setView('attempt')
@@ -352,6 +363,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
             const isLocked = t.status === 'locked'
             const blocked = attCount >= maxAtt || isLocked
             const qCount = t.questions?.length || 0
+            const canReview = canReviewAttempt(t)
             const acFeatures = []
             if (t.anti_cheat?.tabSwitch) acFeatures.push('Tab Lock')
             if (t.anti_cheat?.copyPaste) acFeatures.push('No Copy')
@@ -415,7 +427,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
                 )}
 
                 <div className="tm-card-actions">
-                  {att && (
+                  {att && canReview && (
                     <button className="btn btn-sm tm-review-btn" onClick={() => openReview(att)}>
                       <Icon name="book" size={12} /> Review
                     </button>
@@ -447,6 +459,9 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
     const q = questions[currentQ]
     if (!q) return null
     const progress = questions.length ? (answeredCount / questions.length) * 100 : 0
+    const unansweredCount = Math.max(0, questions.length - answeredCount)
+    const requiresAllAnswered = !!ac.requireAllAnswered
+    const canSubmitNow = requiresAllAnswered ? unansweredCount === 0 : (unansweredCount === 0 || ackIncomplete)
     const qTimePct = ac.timePerQ > 0 ? (qTimeLeft / ac.timePerQ) * 100 : 100
 
     return (
@@ -477,7 +492,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
                 <div className="tm-confirm-stat-label">Answered</div>
               </div>
               <div className="tm-confirm-stat">
-                <div className="tm-confirm-stat-val">{questions.length - answeredCount}</div>
+                <div className="tm-confirm-stat-val">{unansweredCount}</div>
                 <div className="tm-confirm-stat-label">Unanswered</div>
               </div>
               <div className="tm-confirm-stat">
@@ -485,11 +500,22 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
                 <div className="tm-confirm-stat-label">Flagged</div>
               </div>
             </div>
-            {questions.length - answeredCount > 0 && (
-              <div className="tm-confirm-warn">△ You have {questions.length - answeredCount} unanswered question{questions.length - answeredCount > 1 ? 's' : ''}</div>
+            {unansweredCount > 0 && (
+              <div className="tm-confirm-warn">△ You have {unansweredCount} unanswered question{unansweredCount > 1 ? 's' : ''}</div>
+            )}
+            {unansweredCount > 0 && !requiresAllAnswered && (
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)' }}>
+                <input type="checkbox" checked={ackIncomplete} onChange={e => setAckIncomplete(e.target.checked)} />
+                I understand unanswered questions will be marked incorrect.
+              </label>
+            )}
+            {unansweredCount > 0 && requiresAllAnswered && (
+              <div style={{ marginTop: 10, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--danger)' }}>
+                This test requires all questions to be answered before submission.
+              </div>
             )}
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button className="btn btn-primary" disabled={submittingRef.current} onClick={handleSubmit}><Icon name="check" size={14} /> Confirm Submit</button>
+              <button className="btn btn-primary" disabled={submittingRef.current || !canSubmitNow} onClick={handleSubmit}><Icon name="check" size={14} /> Confirm Submit</button>
               <button className="btn" onClick={() => setConfirmSubmit(false)}>Continue Test</button>
             </div>
           </div>
@@ -717,9 +743,11 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
           </div>
 
           <div className="tm-result-actions">
-            <button className="btn btn-sm" onClick={() => openReview({ id: '', student_id: profile.id, test_id: activeTest.id, score: testResult.score, total: testResult.total, percent: testResult.percent, answer_map: testResult.answerMap, submitted_at: testResult.date })}>
-              <Icon name="book" size={12} /> Review Answers
-            </button>
+            {canReviewAttempt(activeTest) && (
+              <button className="btn btn-sm" onClick={() => openReview({ id: '', student_id: profile.id, test_id: activeTest.id, score: testResult.score, total: testResult.total, percent: testResult.percent, answer_map: testResult.answerMap, submitted_at: testResult.date })}>
+                <Icon name="book" size={12} /> Review Answers
+              </button>
+            )}
             <button className="btn btn-primary btn-sm" onClick={() => { setActiveTest(null); setTestResult(null); setView('list') }}>
               ← Back to Tests
             </button>

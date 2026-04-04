@@ -42,7 +42,16 @@ export async function middleware(req: NextRequest) {
         .eq('id', user.id)
         .single()
 
-      if (profile && profile.role !== dashRole) {
+      if (!profile || !profile.role) {
+        return NextResponse.redirect(new URL('/login', req.url))
+      }
+
+      const VALID_ROLES = ['admin', 'teacher', 'student', 'parent']
+      if (!VALID_ROLES.includes(profile.role)) {
+        return NextResponse.redirect(new URL('/login', req.url))
+      }
+
+      if (profile.role !== dashRole) {
         return NextResponse.redirect(new URL(`/dashboard/${profile.role}`, req.url))
       }
     } catch {

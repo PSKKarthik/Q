@@ -15,10 +15,23 @@ interface Props {
 interface SimilarityResult {
   studentA: string
   studentB: string
+  studentAId: string
+  studentBId: string
   submissionA: string
   submissionB: string
+  submissionAId: string
+  submissionBId: string
   similarity: number
   sharedPhrases: string[]
+}
+
+interface PlagiarismFlag {
+  id: string
+  assignment_id: string
+  submission_a_id: string
+  submission_b_id: string
+  similarity: number
+  status: 'open' | 'reviewed' | 'dismissed'
 }
 
 function tokenize(text: string): string[] {
@@ -56,6 +69,7 @@ export function PlagiarismModule({ profile, assignments }: Props) {
   const [scanning, setScanning] = useState(false)
   const [students, setStudents] = useState<Record<string, string>>({})
   const [threshold, setThreshold] = useState(30)
+  const [flags, setFlags] = useState<PlagiarismFlag[]>([])
 
   useEffect(() => {
     supabase.from('profiles').select('id, name').eq('role', 'student').then(({ data, error }) => {
@@ -68,6 +82,15 @@ export function PlagiarismModule({ profile, assignments }: Props) {
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const loadFlags = async (assignmentId: string) => {
+    const { data } = await supabase
+      .from('plagiarism_flags')
+      .select('*')
+      .eq('assignment_id', assignmentId)
+      .order('created_at', { ascending: false })
+    if (data) setFlags(data as PlagiarismFlag[])
+  }
 
   const runScan = async () => {
     if (!selectedAssignment) return
@@ -89,8 +112,12 @@ export function PlagiarismModule({ profile, assignments }: Props) {
           pairs.push({
             studentA: students[subs[i].student_id] || subs[i].student_id,
             studentB: students[subs[j].student_id] || subs[j].student_id,
+            studentAId: subs[i].student_id,
+            studentBId: subs[j].student_id,
             submissionA: (subs[i].text_response || '').slice(0, 100),
             submissionB: (subs[j].text_response || '').slice(0, 100),
+            submissionAId: subs[i].id,
+            submissionBId: subs[j].id,
             similarity,
             sharedPhrases,
           })
@@ -100,8 +127,42 @@ export function PlagiarismModule({ profile, assignments }: Props) {
 
     pairs.sort((a, b) => b.similarity - a.similarity)
     setResults(pairs)
+    await loadFlags(selectedAssignment)
     setScanning(false)
   }
+
+  const saveFlag = async (r: SimilarityResult) => {
+    if (!selectedAssignment) return
+    const { error } = await supabase.from('plagiarism_flags').insert({
+      assignment_id: selectedAssignment,
+      teacher_id: profile.id,
+      student_a_id: r.studentAId,
+      student_b_id: r.studentBId,
+      submission_a_id: r.submissionAId,
+      submission_b_id: r.submissionBId,
+      similarity: r.similarity,
+      status: 'open',
+      shared_phrases: r.sharedPhrases,
+    })
+    if (error) {
+      toast(error.message || 'Failed to flag case', 'error')
+      return
+    }
+    toast('Case flagged for review', 'success')
+    await loadFlags(selectedAssignment)
+  }
+
+  const updateFlagStatus = async (id: string, status: 'reviewed' | 'dismissed') => {
+    const { error } = await supabase.from('plagiarism_flags').update({ status }).eq('id', id)
+    if (error) { toast(error.message || 'Failed to update flag', 'error'); return }
+    setFlags(prev => prev.map(f => f.id === id ? { ...f, status } : f))
+  }
+
+  const getFlag = (r: SimilarityResult) => flags.find(f =>
+    f.assignment_id === selectedAssignment &&
+    ((f.submission_a_id === r.submissionAId && f.submission_b_id === r.submissionBId) ||
+     (f.submission_a_id === r.submissionBId && f.submission_b_id === r.submissionAId))
+  )
 
   const assignmentsWithSubs = assignments.filter(a => (a.submissions?.length || 0) >= 2)
 
@@ -163,6 +224,21 @@ export function PlagiarismModule({ profile, assignments }: Props) {
                     ))}
                   </div>
                 )}
+                <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {(() => {
+                    const existing = getFlag(r)
+                    if (!existing) {
+                      return <button className="btn btn-xs" onClick={() => saveFlag(r)}>Flag Case</button>
+                    }
+                    return (
+                      <>
+                        <span className="tag">{existing.status.toUpperCase()}</span>
+                        <button className="btn btn-xs" onClick={() => updateFlagStatus(existing.id, 'reviewed')}>Mark Reviewed</button>
+                        <button className="btn btn-xs" onClick={() => updateFlagStatus(existing.id, 'dismissed')}>Dismiss</button>
+                      </>
+                    )
+                  })()}
+                </div>
               </div>
             ))}
           </div>

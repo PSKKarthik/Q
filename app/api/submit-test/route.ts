@@ -42,6 +42,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Test not found' }, { status: 404 })
   }
 
+  // Ensure the student can only submit tests they are allowed to see.
+  // Access model mirrors student dashboard filtering: enrolled course subject or teacher.
+  const { data: enrollRows, error: enrollErr } = await supabase
+    .from('enrollments')
+    .select('course_id')
+    .eq('student_id', userId)
+
+  if (enrollErr) {
+    return NextResponse.json({ error: 'Could not verify enrollment' }, { status: 500 })
+  }
+
+  const enrolledCourseIds = (enrollRows || []).map((r: any) => r.course_id).filter(Boolean)
+  if (enrolledCourseIds.length === 0) {
+    return NextResponse.json({ error: 'You are not enrolled in any course' }, { status: 403 })
+  }
+
+  const { data: enrolledCourses, error: coursesErr } = await supabase
+    .from('courses')
+    .select('subject, teacher_id')
+    .in('id', enrolledCourseIds)
+
+  if (coursesErr) {
+    return NextResponse.json({ error: 'Could not verify course access' }, { status: 500 })
+  }
+
+  const allowedSubjects = new Set((enrolledCourses || []).map((c: any) => c.subject).filter(Boolean))
+  const allowedTeacherIds = new Set((enrolledCourses || []).map((c: any) => c.teacher_id).filter(Boolean))
+  const hasAccess = (test.subject && allowedSubjects.has(test.subject)) || (test.teacher_id && allowedTeacherIds.has(test.teacher_id))
+
+  if (!hasAccess) {
+    return NextResponse.json({ error: 'Forbidden: test is not assigned to your enrolled courses' }, { status: 403 })
+  }
+
   if (test.status === 'locked') {
     return NextResponse.json({ error: 'This test is locked' }, { status: 403 })
   }
@@ -149,25 +182,28 @@ export async function POST(req: Request) {
   })
   // Fallback to direct update if RPC doesn't exist yet
   if (updateErr) {
-    const newGhostWins = ghostBonus > 0 ? (profile.ghost_wins || 0) + 1 : (profile.ghost_wins || 0)
-    await supabase.from('profiles').update({
-      xp: newXP,
-      score: bestScore,
-      ghost_wins: newGhostWins,
-    }).eq('id', userId)
+    // Retry with RPC; if that also fails, fall back to direct update with stale data
+    const retryResult = await supabase.rpc('atomic_xp_update', {
+      p_user_id: userId, p_xp_delta: xpEarned,
+      p_best_score: bestScore, p_ghost_win_increment: ghostWinIncrement,
+    })
+    if (retryResult.error) {
+      const newGhostWins = ghostBonus > 0 ? (profile.ghost_wins || 0) + 1 : (profile.ghost_wins || 0)
+      await supabase.from('profiles').update({
+        xp: newXP,
+        score: bestScore,
+        ghost_wins: newGhostWins,
+      }).eq('id', userId)
+    }
   }
 
-  // Notifications & activity log (non-critical, don't block response)
-  supabase.from('notifications').insert({
-    user_id: userId,
-    message: `✓ Test "${test.title}" submitted — ${percent}%`,
-    type: 'attempt',
-    read: false,
-  }).then(() => {})
+  // Activity log (non-critical, don't block response)
   supabase.from('activity_log').insert({
     message: `Student ${profile.name} submitted test ${test_id}: ${percent}%`,
     type: 'attempt',
-  }).then(() => {})
+    actor_id: userId,
+    metadata: { test_id, percent, score, total, xp_earned: xpEarned },
+  }).then(null, e => console.error('Activity log insert failed:', e))
 
   return NextResponse.json({
     score, total, percent, xpEarned, isDoubleXP: !!is_double_xp,

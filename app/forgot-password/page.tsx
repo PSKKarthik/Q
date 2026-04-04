@@ -39,15 +39,15 @@ function ForgotPasswordInner() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', position: 'relative' }}>
+    <div className="auth-shell" style={{ background: 'var(--bg)', position: 'relative' }}>
       <div className="grid-bg" />
-      <div style={{ width: '100%', maxWidth: 400, padding: '0 16px', position: 'relative', zIndex: 5 }}>
+      <div className="auth-wrap" style={{ position: 'relative', zIndex: 5 }}>
         <div className="fade-up" style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ fontFamily: 'var(--display)', fontSize: 48, letterSpacing: '0.15em' }}>QGX</div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: 4 }}>Reset Password</div>
         </div>
 
-        <div className="fade-up-1 card" style={{ padding: 32 }}>
+        <div className="fade-up-1 card auth-card">
           {sent ? (
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>▸</div>
@@ -58,21 +58,26 @@ function ForgotPasswordInner() {
               <Link href="/login" style={{ display: 'inline-block', marginTop: 24, color: 'var(--fg)', fontFamily: 'var(--mono)', fontSize: 11 }}>← Back to Sign In</Link>
             </div>
           ) : (
-            <>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleReset()
+              }}
+            >
               <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', marginBottom: 20, lineHeight: 1.6 }}>
                 Enter the email address associated with your account and we&apos;ll send you a link to reset your password.
               </div>
               <div style={{ marginBottom: 24 }}>
                 <label className="label">Email</label>
-                <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com" onKeyDown={e => e.key === 'Enter' && handleReset()} />
+                <input className="input" type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="you@example.com" />
               </div>
               {error && <div style={{ color: 'var(--danger)', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 16 }}>{error}</div>}
-              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
-                onClick={handleReset} disabled={loading}>
+              <button className="btn btn-primary" type="submit" style={{ width: '100%', justifyContent: 'center' }}
+                disabled={loading}>
                 {loading ? <span className="spinner" /> : 'Send Reset Link →'}
               </button>
-            </>
+            </form>
           )}
         </div>
 

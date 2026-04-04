@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -13,8 +13,37 @@ export default function RegisterPage() {
   const [form, setForm]   = useState({ name: '', email: '', password: '', role: 'student' as Role, phone: '' })
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
+  const [checkingAdmin, setCheckingAdmin] = useState(true)
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  useEffect(() => {
+    let mounted = true
+    const guardAdminRegister = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        if (mounted) setCheckingAdmin(false)
+        return
+      }
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role === 'admin') {
+        router.replace('/dashboard/admin?tab=users&createUser=1')
+        return
+      }
+      if (mounted) setCheckingAdmin(false)
+    }
+    guardAdminRegister()
+    return () => { mounted = false }
+  }, [router])
+
+  if (checkingAdmin) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}>
+        <div className="spinner" />
+      </div>
+    )
+  }
 
   const handleRegister = async () => {
     if (!form.name || !form.email || !form.password) { setError('All fields required'); return }
@@ -24,7 +53,7 @@ export default function RegisterPage() {
     // Password strength: min 8 chars, at least 1 letter + 1 number
     if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
     if (!/[a-zA-Z]/.test(form.password) || !/[0-9]/.test(form.password)) { setError('Password must contain at least one letter and one number'); return }
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setNotice('')
 
     // Sign up with Supabase Auth
     const { data, error: signUpErr } = await supabase.auth.signUp({
@@ -34,6 +63,14 @@ export default function RegisterPage() {
     })
     if (signUpErr) { setError(signUpErr.message); setLoading(false); return }
     if (!data.user) { setError('Check your email to confirm your account before logging in.'); setLoading(false); return }
+
+    // If email confirmation is enabled, user may exist without an active session.
+    // In this case, do not continue profile enrichment client-side.
+    if (!data.session) {
+      setNotice('Account created. Please confirm your email, then sign in to continue.')
+      setLoading(false)
+      return
+    }
 
     // Generate QGX ID atomically via RPC to avoid race conditions
     let qgxId: string
@@ -48,7 +85,7 @@ export default function RegisterPage() {
     }
 
     // Update profile with additional fields (trigger creates base profile)
-    await supabase.from('profiles').upsert({
+    const { error: upsertErr } = await supabase.from('profiles').upsert({
       id: data.user.id,
       name: form.name,
       email: form.email,
@@ -59,21 +96,33 @@ export default function RegisterPage() {
       xp: 0, score: 0, ghost_wins: 0,
       joined: new Date().toISOString().slice(0, 10),
     })
+    if (upsertErr) {
+      setError(`Profile setup failed: ${upsertErr.message}`)
+      setLoading(false)
+      return
+    }
 
     await logActivity(`New ${form.role} registered: ${form.name}`, 'user_registered')
+    setLoading(false)
     router.push(`/dashboard/${form.role}`)
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', position: 'relative' }}>
+    <div className="auth-shell" style={{ background: 'var(--bg)', position: 'relative' }}>
       <div className="grid-bg" />
-        <div style={{ width: '100%', maxWidth: 420, padding: '0 16px', position: 'relative', zIndex: 5 }}>
+        <div className="auth-wrap" style={{ maxWidth: 420, position: 'relative', zIndex: 5 }}>
         <div className="fade-up" style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ fontFamily: 'var(--display)', fontSize: 48, letterSpacing: '0.15em' }}>QGX</div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: 4 }}>Create Account</div>
         </div>
 
-        <div className="fade-up-1 card" style={{ padding: 32 }}>
+        <form
+          className="fade-up-1 card auth-card"
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleRegister()
+          }}
+        >
           {(['name', 'email', 'password', 'phone'] as const).map((k) => (
             <div key={k} style={{ marginBottom: 16 }}>
               <label className="label">{k === 'phone' ? 'Phone (optional)' : k}</label>
@@ -82,7 +131,7 @@ export default function RegisterPage() {
                   <input className="input" type={showPw ? 'text' : 'password'}
                     value={form[k]} onChange={e => upd(k, e.target.value)} style={{ paddingRight: 40 }}
                     placeholder="Min 8 chars, 1 letter & 1 number" autoComplete="new-password"
-                    onKeyDown={e => e.key === 'Enter' && handleRegister()} />
+                    required />
                   <button type="button" onClick={() => setShowPw(!showPw)}
                     style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-dim)', padding: 4, display: 'flex', alignItems: 'center' }}
                     aria-label={showPw ? 'Hide password' : 'Show password'}>
@@ -93,7 +142,7 @@ export default function RegisterPage() {
                 <input className="input" type={k === 'email' ? 'email' : 'text'}
                   value={form[k]} onChange={e => upd(k, e.target.value)}
                   placeholder={k === 'name' ? 'Full name' : k === 'email' ? 'you@example.com' : k === 'phone' ? '+1 (555) 000-0000' : ''}
-                  onKeyDown={e => e.key === 'Enter' && handleRegister()} />
+                  required={k !== 'phone'} autoComplete={k === 'name' ? 'name' : k === 'email' ? 'email' : k === 'phone' ? 'tel' : undefined} />
               )}
             </div>
           ))}
@@ -105,15 +154,16 @@ export default function RegisterPage() {
               <option value="parent">Parent</option>
             </select>
           </div>
+          {notice && <div style={{ color: 'var(--success)', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 12 }}>{notice}</div>}
           {error && <div style={{ color: 'var(--danger)', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 12 }}>{error}</div>}
-          <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
-            onClick={handleRegister} disabled={loading}>
+          <button className="btn btn-primary" type="submit" style={{ width: '100%', justifyContent: 'center' }}
+            disabled={loading}>
             {loading ? <span className="spinner" /> : 'Create Account →'}
           </button>
           <div style={{ textAlign: 'center', marginTop: 16 }}>
             <Link href="/login" style={{ color: 'var(--fg-dim)', fontFamily: 'var(--mono)', fontSize: 11 }}>Already have an account? Sign in</Link>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   )

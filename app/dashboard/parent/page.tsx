@@ -2,17 +2,19 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import type { Profile, Attempt, AttendanceRecord, Test, Assignment, Submission, TimetableSlot, AbsenceExcuse, MeetingSlot, Message } from '@/types'
+import type { Profile, Attempt, AttendanceRecord, Test, Assignment, Submission, TimetableSlot, AbsenceExcuse, MeetingSlot, Message, Announcement } from '@/types'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatGrid } from '@/components/ui/StatGrid'
 import { SectionLabel } from '@/components/ui/SectionLabel'
+import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
 import { ProfileTab } from '@/components/ui/ProfileTab'
-import { NotificationsModule } from '@/components/modules/NotificationsModule'
 import { ReportCardModule } from '@/components/modules/ReportCardModule'
 import { MeetingSchedulerModule } from '@/components/modules/MeetingSchedulerModule'
+import { MessagingModule } from '@/components/modules/MessagingModule'
 import { Icon } from '@/components/ui/Icon'
 import { useToast } from '@/lib/toast'
+import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton'
 
 export default function ParentDashboard() {
   const router = useRouter()
@@ -34,6 +36,7 @@ export default function ParentDashboard() {
   const [msgTeacher, setMsgTeacher] = useState<string>('')
   const [msgText, setMsgText] = useState('')
   const [parentMessages, setParentMessages] = useState<Message[]>([])
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [alerts, setAlerts] = useState<{ type: string; message: string }[]>([])
 
   useEffect(() => {
@@ -82,17 +85,19 @@ export default function ParentDashboard() {
   const loadStudentData = async (student: Profile, parentProfile?: Profile) => {
     const resolvedProfile = parentProfile || profile
     try {
-      const [att, attn, t, a, tt] = await Promise.all([
+      const [att, attn, t, a, tt, ann] = await Promise.all([
         supabase.from('attempts').select('*').eq('student_id', student.id),
         supabase.from('attendance').select('*').eq('student_id', student.id).order('date', { ascending: false }),
         supabase.from('tests').select('id, title, subject, scheduled_date'),
         supabase.from('assignments').select('*, submissions(*)').order('created_at', { ascending: false }),
         supabase.from('timetable').select('*'),
+        supabase.from('announcements').select('*').in('target', ['all', 'parents']).order('created_at', { ascending: false }),
       ])
       if (att.data) setAttempts(att.data as Attempt[])
       if (attn.data) setAttendance(attn.data as AttendanceRecord[])
       if (t.data) setTests(t.data as Test[])
       if (a.data) setAssignments(a.data)
+      if (ann.data) setAnnouncements(ann.data as Announcement[])
 
       // Fix #7: Filter timetable to subjects the student actually attends
       if (tt.data) {
@@ -204,17 +209,11 @@ export default function ParentDashboard() {
     { id: 'meetings', label: 'Book Meeting', icon: 'calendar' },
     { id: 'messaging', label: 'Teacher Messages', icon: 'chat' },
     { id: 'alerts', label: 'Academic Alerts', icon: 'zap' },
-    { id: 'notifications', label: 'Notifications', icon: 'bell' },
     { section: 'Account' },
     { id: 'profile', label: 'My Profile', icon: 'user' },
   ]
 
-  if (!profile) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)', gap: 16 }}>
-      <div style={{ fontFamily: 'var(--display)', fontSize: 32, letterSpacing: '0.15em', opacity: 0.15 }}>QGX</div>
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', letterSpacing: '0.2em' }}>LOADING...</div>
-    </div>
-  )
+  if (!profile) return <DashboardSkeleton label="Loading parent dashboard..." />
 
   const studentAttempts = attempts
   const presentCount = attendance.filter(a => a.status === 'present' || a.status === 'late').length
@@ -251,7 +250,7 @@ export default function ParentDashboard() {
                   Enter your child&apos;s QGX ID to view their progress
                 </div>
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'center', maxWidth: 400, margin: '0 auto' }}>
-                  <input className="input" placeholder="QGX-S0001XXXX" value={linkCode} onChange={e => setLinkCode(e.target.value)}
+                  <input className="input" placeholder="QGX-ABCD-EFGH-IJKL" value={linkCode} onChange={e => setLinkCode(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') linkStudent() }} />
                   <button className="btn btn-primary" onClick={linkStudent}>Link</button>
                 </div>
@@ -270,7 +269,7 @@ export default function ParentDashboard() {
                 <div className="card fade-up-3" style={{ marginBottom: 20 }}>
                   <SectionLabel>Link Another Child</SectionLabel>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <input className="input" placeholder="QGX-S0001XXXX" value={linkCode} onChange={e => setLinkCode(e.target.value)}
+                    <input className="input" placeholder="QGX-ABCD-EFGH-IJKL" value={linkCode} onChange={e => setLinkCode(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') linkStudent() }} style={{ maxWidth: 220 }} />
                     <button className="btn btn-sm" onClick={linkStudent}>Link</button>
                   </div>
@@ -294,6 +293,33 @@ export default function ParentDashboard() {
                     )
                   })}
                   {studentAttempts.length === 0 && <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>No tests taken yet.</div>}
+                </div>
+
+                <SectionLabel>Upcoming Tests</SectionLabel>
+                <div className="fade-up-4" style={{ marginTop: 8 }}>
+                  {tests
+                    .filter(t => t.scheduled_date && new Date(t.scheduled_date) >= new Date(new Date().toISOString().slice(0, 10)))
+                    .sort((a, b) => (a.scheduled_date || '').localeCompare(b.scheduled_date || ''))
+                    .slice(0, 5)
+                    .map(t => (
+                      <div key={t.id} className="card" style={{ marginBottom: 8, padding: '12px 16px', display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 13 }}>{t.title}</span>
+                        <span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{t.scheduled_date}</span>
+                      </div>
+                    ))}
+                  {tests.filter(t => t.scheduled_date && new Date(t.scheduled_date) >= new Date(new Date().toISOString().slice(0, 10))).length === 0 && (
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>No upcoming tests scheduled.</div>
+                  )}
+                </div>
+
+                <SectionLabel>Announcements</SectionLabel>
+                <div className="fade-up-4" style={{ marginTop: 8 }}>
+                  {announcements.slice(0, 3).map((a) => (
+                    <AnnouncementCard key={a.id} a={a} canDelete={false} />
+                  ))}
+                  {announcements.length === 0 && (
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>No announcements for parents right now.</div>
+                  )}
                 </div>
               </>
             )}
@@ -445,39 +471,15 @@ export default function ParentDashboard() {
 
         {/* MEETINGS */}
         {tab === 'meetings' && (
-          <MeetingSchedulerModule profile={profile} />
+          <MeetingSchedulerModule
+            profile={profile}
+            allowedTeacherIds={Array.from(new Set((timetable || []).map(s => s.teacher_id).filter(Boolean)))}
+          />
         )}
 
         {/* TEACHER MESSAGING */}
         {tab === 'messaging' && (
-          <>
-            <PageHeader title="TEACHER MESSAGES" subtitle="Direct communication with teachers" />
-            <div className="card fade-up-2" style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <select className="input" value={msgTeacher} onChange={e => setMsgTeacher(e.target.value)} style={{ width: 220 }}>
-                  <option value="">Select teacher...</option>
-                  {teachers.map(t => <option key={t.id} value={t.id}>{t.name} ({t.subject || 'General'})</option>)}
-                </select>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input className="input" placeholder="Type a message..." value={msgText} onChange={e => setMsgText(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') sendMessage() }} style={{ flex: 1 }} />
-                <button className="btn btn-primary btn-sm" onClick={sendMessage} disabled={!msgTeacher || !msgText.trim()}>Send</button>
-              </div>
-            </div>
-            <SectionLabel>Conversation</SectionLabel>
-            <div className="fade-up-3" style={{ maxHeight: 500, overflow: 'auto' }}>
-              {parentMessages.filter(m => !msgTeacher || m.sender_id === msgTeacher || m.receiver_id === msgTeacher).map(m => (
-                <div key={m.id} style={{ marginBottom: 8, display: 'flex', justifyContent: m.sender_id === profile?.id ? 'flex-end' : 'flex-start' }}>
-                  <div style={{ maxWidth: '70%', padding: '10px 14px', background: m.sender_id === profile?.id ? 'var(--accent)' : 'rgba(255,255,255,0.05)', borderRadius: 12, color: m.sender_id === profile?.id ? '#000' : 'var(--fg)' }}>
-                    <div style={{ fontSize: 13 }}>{m.body}</div>
-                    <div style={{ fontFamily: 'var(--mono)', fontSize: 9, opacity: 0.6, marginTop: 4 }}>{new Date(m.created_at).toLocaleString()}</div>
-                  </div>
-                </div>
-              ))}
-              {parentMessages.length === 0 && <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>No messages yet. Select a teacher and send a message.</div>}
-            </div>
-          </>
+          <MessagingModule profile={profile} contacts={teachers} />
         )}
 
         {/* ALERTS */}
@@ -495,8 +497,6 @@ export default function ParentDashboard() {
             </div>
           </>
         )}
-
-        {tab === 'notifications' && <NotificationsModule userId={profile.id} />}
 
         {tab === 'profile' && (
           <ProfileTab profile={profile} onUpdate={p => setProfile(p)} />

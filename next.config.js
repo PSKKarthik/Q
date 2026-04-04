@@ -1,9 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Prevent webpack from bundling Node.js-only packages used in API routes.
+  // pdf-parse reads test files via fs at module init; jszip uses Node Buffers.
+  // Without this they fail silently when Next.js bundles them for the edge.
   // Enable experimental features compatible with latest Vercel
   experimental: {
     // Enable faster builds with SWC
     swcMinify: true,
+    serverComponentsExternalPackages: ['pdf-parse', 'jszip'],
   },
 
   // Optimize images for Vercel

@@ -30,7 +30,6 @@ export default function ResetPasswordPage() {
 
     // Listen for PASSWORD_RECOVERY event (fired when hash tokens are processed)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[reset-password] auth event:', event, !!session)
       if (event === 'PASSWORD_RECOVERY' && session) {
         setReady(true)
         setChecking(false)
@@ -62,15 +61,12 @@ export default function ResetPasswordPage() {
     const timer = setTimeout(() => {
       setChecking(prev => {
         if (prev) {
-          // Log debug info for troubleshooting
-          console.log('[reset-password] Timed out. URL:', window.location.href)
-          console.log('[reset-password] Hash:', window.location.hash)
           setError('Reset link expired or was already used. Please request a new one.')
           return false
         }
         return prev
       })
-    }, 6000)
+    }, 12000)
 
     return () => {
       subscription.unsubscribe()
@@ -82,6 +78,10 @@ export default function ResetPasswordPage() {
   const handleUpdate = async () => {
     if (!password)           { setError('Enter a new password'); return }
     if (password.length < 8) { setError('Password must be at least 8 characters'); return }
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      setError('Password must contain at least one letter and one number')
+      return
+    }
     if (password !== confirm) { setError('Passwords do not match'); return }
     setLoading(true); setError('')
 
@@ -94,16 +94,16 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', position: 'relative' }}>
+    <div className="auth-shell" style={{ background: 'var(--bg)', position: 'relative' }}>
       <div className="grid-bg" />
-      <div style={{ width: '100%', maxWidth: 400, padding: '0 16px', position: 'relative', zIndex: 5 }}>
+      <div className="auth-wrap" style={{ position: 'relative', zIndex: 5 }}>
 
         <div className="fade-up" style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ fontFamily: 'var(--display)', fontSize: 48, letterSpacing: '0.15em' }}>QGX</div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: 4 }}>New Password</div>
         </div>
 
-        <div className="fade-up-1 card" style={{ padding: 32 }}>
+        <div className="fade-up-1 card auth-card">
           {/* Error state */}
           {!checking && !ready && error ? (
             <div style={{ textAlign: 'center' }}>
@@ -124,13 +124,20 @@ export default function ResetPasswordPage() {
             </div>
           ) : (
             /* Ready — show form */
-            <>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleUpdate()
+              }}
+            >
               <div style={{ marginBottom: 18 }}>
                 <label className="label">New Password</label>
                 <input
                   className="input" type="password"
                   value={password} onChange={e => setPassword(e.target.value)}
                   placeholder="Min 8 characters"
+                  autoComplete="new-password"
+                  required
                   autoFocus
                 />
               </div>
@@ -139,13 +146,14 @@ export default function ResetPasswordPage() {
                 <input
                   className="input" type="password"
                   value={confirm} onChange={e => setConfirm(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleUpdate()}
+                  autoComplete="new-password"
+                  required
                 />
               </div>
               {/* Strength hint */}
               {password.length > 0 && (
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: password.length >= 8 ? 'var(--success)' : 'var(--warn)', marginBottom: 12 }}>
-                  {password.length >= 8 ? '✓ Strong enough' : `${8 - password.length} more character(s) needed`}
+                  {password.length >= 8 ? '✓ Length OK (include letters and numbers)' : `${8 - password.length} more character(s) needed`}
                 </div>
               )}
               {error && (
@@ -153,13 +161,13 @@ export default function ResetPasswordPage() {
               )}
               <button
                 className="btn btn-primary"
+                type="submit"
                 style={{ width: '100%', justifyContent: 'center' }}
-                onClick={handleUpdate}
                 disabled={loading}
               >
                 {loading ? <span className="spinner" /> : 'Update Password →'}
               </button>
-            </>
+            </form>
           )}
         </div>
 

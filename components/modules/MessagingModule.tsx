@@ -41,13 +41,16 @@ export function MessagingModule({ profile, contacts }: Props) {
   const audioChunksRef = useRef<Blob[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const channelRef = useRef<any>(null)
+  const inboxChannelRef = useRef<any>(null)
   const typingRef = useRef<any>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadThreads()
+    setupInboxChannel()
     return () => {
       if (channelRef.current) supabase.removeChannel(channelRef.current)
+      if (inboxChannelRef.current) supabase.removeChannel(inboxChannelRef.current)
       if (typingRef.current) supabase.removeChannel(typingRef.current)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -63,6 +66,15 @@ export function MessagingModule({ profile, contacts }: Props) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const isMessageInActiveThread = (msg: Message, contactId?: string, groupId?: string) => {
+    if (groupId) return msg.group_id === groupId
+    if (!contactId) return false
+    return !msg.group_id && (
+      (msg.sender_id === profile.id && msg.receiver_id === contactId) ||
+      (msg.sender_id === contactId && msg.receiver_id === profile.id)
+    )
+  }
+
   const loadThreads = async () => {
     setLoading(true)
     try {
@@ -73,42 +85,67 @@ export function MessagingModule({ profile, contacts }: Props) {
         supabase.from('message_groups').select('*').contains('member_ids', [profile.id]),
       ])
 
-    const allMsgs = (dmRes.data || []) as Message[]
-    const groups = (groupRes.data || []) as MessageGroup[]
+      if (dmRes.error) throw dmRes.error
+      if (groupRes.error) throw groupRes.error
 
-    // DM threads
-    const threadMap: Record<string, { lastMsg: Message; unread: number }> = {}
-    allMsgs.filter(m => !m.deleted).forEach((m) => {
-      const otherId = m.sender_id === profile.id ? m.receiver_id : m.sender_id
-      if (!threadMap[otherId]) threadMap[otherId] = { lastMsg: m, unread: 0 }
-      if (!m.read && m.receiver_id === profile.id) threadMap[otherId].unread++
-    })
+      const allMsgs = (dmRes.data || []) as Message[]
+      const groups = (groupRes.data || []) as MessageGroup[]
 
-    const dmThreads: ThreadItem[] = contacts
-      .filter(c => threadMap[c.id])
-      .map(c => ({ type: 'dm' as const, contact: c, lastMsg: threadMap[c.id].lastMsg, unread: threadMap[c.id].unread }))
-      .sort((a, b) => new Date(b.lastMsg!.created_at).getTime() - new Date(a.lastMsg!.created_at).getTime())
+      // DM threads — only messages that have a receiver_id (not group messages)
+      const threadMap: Record<string, { lastMsg: Message; unread: number }> = {}
+      allMsgs.filter(m => !m.deleted && m.receiver_id).forEach((m) => {
+        const otherId = (m.sender_id === profile.id ? m.receiver_id : m.sender_id) as string
+        if (!threadMap[otherId]) threadMap[otherId] = { lastMsg: m, unread: 0 }
+        if (!m.read && m.receiver_id === profile.id) threadMap[otherId].unread++
+      })
 
-    const withoutThread = contacts.filter(c => !threadMap[c.id] && c.id !== profile.id)
-    const allDm: ThreadItem[] = [...dmThreads, ...withoutThread.map(c => ({ type: 'dm' as const, contact: c, unread: 0 }))]
+      const dmThreads: ThreadItem[] = contacts
+        .filter(c => threadMap[c.id])
+        .map(c => ({ type: 'dm' as const, contact: c, lastMsg: threadMap[c.id].lastMsg, unread: threadMap[c.id].unread }))
+        .sort((a, b) => new Date(b.lastMsg!.created_at).getTime() - new Date(a.lastMsg!.created_at).getTime())
 
-    // Group threads
-    const groupThreads: ThreadItem[] = []
-    for (const g of groups) {
-      const { data: gMsgs } = await supabase.from('messages').select('*').eq('group_id', g.id)
-        .eq('deleted', false).order('created_at', { ascending: false }).limit(1)
-      const lastMsg = gMsgs?.[0] as Message | undefined
-      const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true })
-        .eq('group_id', g.id).eq('read', false).neq('sender_id', profile.id)
-      groupThreads.push({ type: 'group', group: g, lastMsg, unread: count || 0 })
-    }
+      const withoutThread = contacts.filter(c => !threadMap[c.id] && c.id !== profile.id)
+      const allDm: ThreadItem[] = [...dmThreads, ...withoutThread.map(c => ({ type: 'dm' as const, contact: c, unread: 0 }))]
 
-    setThreads([...groupThreads, ...allDm])
-    setLoading(false)
+      // Group threads — parallel queries per group
+      const groupThreads: ThreadItem[] = await Promise.all(
+        groups.map(async g => {
+          const [msgRes, countRes] = await Promise.all([
+            supabase.from('messages').select('*').eq('group_id', g.id)
+              .eq('deleted', false).order('created_at', { ascending: false }).limit(1),
+            supabase.from('messages').select('*', { count: 'exact', head: true })
+              .eq('group_id', g.id).eq('read', false).neq('sender_id', profile.id),
+          ])
+          return { type: 'group' as const, group: g, lastMsg: msgRes.data?.[0] as Message | undefined, unread: countRes.count || 0 }
+        })
+      )
+
+      // Unified sort by most-recent message descending
+      const allThreads: ThreadItem[] = [...groupThreads, ...allDm]
+      allThreads.sort((a, b) => {
+        const at = a.lastMsg ? new Date(a.lastMsg.created_at).getTime() : 0
+        const bt = b.lastMsg ? new Date(b.lastMsg.created_at).getTime() : 0
+        return bt - at
+      })
+      setThreads(allThreads)
+      setLoading(false)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to load messages', 'error')
       setLoading(false)
     }
+  }
+
+  const setupInboxChannel = () => {
+    if (inboxChannelRef.current) supabase.removeChannel(inboxChannelRef.current)
+
+    inboxChannelRef.current = supabase.channel(`inbox-${profile.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
+        loadThreads()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_groups' }, () => {
+        loadThreads()
+      })
+      .subscribe()
   }
 
   const loadConversation = async (contactId: string) => {
@@ -131,6 +168,14 @@ export function MessagingModule({ profile, contacts }: Props) {
       const { data } = await supabase.from('messages').select('*').eq('group_id', groupId)
         .order('created_at', { ascending: true })
       if (data) setMessages(data.filter((m: Message) => !m.deleted) as Message[])
+
+      // Mark all unread group messages (from others) as read
+      await supabase.from('messages').update({ read: true })
+        .eq('group_id', groupId).eq('read', false).neq('sender_id', profile.id)
+      setThreads(prev => prev.map(t =>
+        t.type === 'group' && t.group.id === groupId ? { ...t, unread: 0 } : t
+      ))
+
       setupChannel(`grp-${groupId}`)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to load group conversation', 'error')
@@ -141,15 +186,34 @@ export function MessagingModule({ profile, contacts }: Props) {
     if (channelRef.current) supabase.removeChannel(channelRef.current)
     if (typingRef.current) supabase.removeChannel(typingRef.current)
 
+    const activeGroupId = activeGroup?.id
+
     channelRef.current = supabase.channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const msg = payload.new as Message
-          if (!msg.deleted) setMessages(prev => [...prev, msg])
-          if (msg.receiver_id === profile.id) supabase.from('messages').update({ read: true }).eq('id', msg.id).then()
+          if (isMessageInActiveThread(msg, contactId, activeGroupId) && !msg.deleted) {
+            setMessages(prev => prev.some(existing => existing.id === msg.id) ? prev : [...prev, msg])
+          }
+          // Mark as read: DM received in active thread
+          if (!msg.group_id && msg.receiver_id === profile.id && contactId && msg.sender_id === contactId) {
+            supabase.from('messages').update({ read: true }).eq('id', msg.id).then()
+          }
+          // Mark as read: group message received in active group
+          if (msg.group_id && activeGroupId && msg.group_id === activeGroupId && msg.sender_id !== profile.id) {
+            supabase.from('messages').update({ read: true }).eq('id', msg.id).then()
+          }
+          loadThreads()
         } else if (payload.eventType === 'UPDATE') {
           const msg = payload.new as Message
-          setMessages(prev => msg.deleted ? prev.filter(m => m.id !== msg.id) : prev.map(m => m.id === msg.id ? msg : m))
+          if (isMessageInActiveThread(msg, contactId, activeGroupId)) {
+            setMessages(prev => {
+              if (msg.deleted) return prev.filter(m => m.id !== msg.id)
+              if (prev.some(m => m.id === msg.id)) return prev.map(m => m.id === msg.id ? msg : m)
+              return [...prev, msg]
+            })
+          }
+          loadThreads()
         }
       })
       .subscribe()
@@ -202,13 +266,17 @@ export function MessagingModule({ profile, contacts }: Props) {
 
       const msg: any = {
         sender_id: profile.id,
-        receiver_id: activeContact?.id || profile.id,
         body: body || (att ? `▸ ${att.name}` : ''),
         ...(att && { attachment_url: att.url, attachment_name: att.name, attachment_type: att.type }),
+        ...(activeContact ? { receiver_id: activeContact.id } : {}),
         ...(activeGroup && { group_id: activeGroup.id }),
       }
 
-      await supabase.from('messages').insert(msg)
+      const { data: insertedMessage, error } = await supabase.from('messages').insert(msg).select().single()
+      if (error) throw error
+      if (insertedMessage) {
+        setMessages(prev => prev.some(existing => existing.id === insertedMessage.id) ? prev : [...prev, insertedMessage as Message])
+      }
       setDraft('')
       setAttachment(null)
       if (fileRef.current) fileRef.current.value = ''
@@ -264,14 +332,18 @@ export function MessagingModule({ profile, contacts }: Props) {
           const { data: urlData } = supabase.storage.from('course-files').getPublicUrl(path)
           const msg: any = {
             sender_id: profile.id,
-            receiver_id: activeContact?.id || profile.id,
             body: '◈ Voice note',
             attachment_url: urlData.publicUrl,
             attachment_name: file.name,
             attachment_type: 'audio/webm',
+            ...(activeContact ? { receiver_id: activeContact.id } : {}),
             ...(activeGroup && { group_id: activeGroup.id }),
           }
-          await supabase.from('messages').insert(msg)
+          const { data: insertedMessage, error: insertError } = await supabase.from('messages').insert(msg).select().single()
+          if (insertError) throw insertError
+          if (insertedMessage) {
+            setMessages(prev => prev.some(existing => existing.id === insertedMessage.id) ? prev : [...prev, insertedMessage as Message])
+          }
           loadThreads()
         }
         setUploading(false)
@@ -312,7 +384,8 @@ export function MessagingModule({ profile, contacts }: Props) {
     : threads
 
   const totalUnread = threads.reduce((s, t) => s + t.unread, 0)
-  const senderName = (senderId: string) => contacts.find(c => c.id === senderId)?.name || 'Unknown'
+  const senderName = (senderId: string) =>
+    senderId === profile.id ? 'You' : contacts.find(c => c.id === senderId)?.name || 'Unknown'
 
   return (
     <>

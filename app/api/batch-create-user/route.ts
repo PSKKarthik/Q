@@ -4,10 +4,16 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.json({ error: 'Supabase URL/anon key not configured on server' }, { status: 500 })
+  }
+
   const cookieStore = cookies()
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() { return cookieStore.getAll() },
@@ -55,13 +61,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid email format' }, { status: 400 })
   }
 
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SERVICE_ROLE_KEY
   if (!serviceKey) {
-    return NextResponse.json({ error: 'Service role key not configured' }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: 'Service role key not configured. Set SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY / SERVICE_ROLE_KEY) and restart dev server.',
+      },
+      { status: 500 }
+    )
   }
 
   const adminClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseUrl,
     serviceKey
   )
 
@@ -102,9 +116,9 @@ export async function POST(req: Request) {
     qgxId = rpcId
   }
 
-  // Upsert profile
+  // Upsert profile (use adminClient to bypass RLS — admin is creating another user's profile)
   const avatar = name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
-  await supabase.from('profiles').upsert({
+  const { error: upsertErr } = await adminClient.from('profiles').upsert({
     id: newUser.user.id,
     name,
     email,
@@ -117,10 +131,16 @@ export async function POST(req: Request) {
     joined: new Date().toISOString().slice(0, 10),
   })
 
+  if (upsertErr) {
+    return NextResponse.json({ error: `Profile setup failed: ${upsertErr.message}` }, { status: 500 })
+  }
+
   // Audit trail
   await supabase.from('activity_log').insert({
     message: `Admin batch-created user ${email} (${role})`,
     type: 'admin_batch_create',
+    actor_id: user.id,
+    metadata: { created_user_id: newUser.user.id, email, role },
   })
 
   // Generate a password reset link so user can set their own password

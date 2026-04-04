@@ -1,5 +1,6 @@
 'use client'
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
+import Image from 'next/image'
 import type { Profile, Course, CourseFile, CourseProgress, CourseRating } from '@/types'
 import { Icon } from '@/components/ui/Icon'
 import { Modal } from '@/components/ui/Modal'
@@ -264,12 +265,13 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
         const fileCount = activeCourse.course_files?.length || 0
         const newCompleted = progress.filter(p => p.course_id === activeCourse.id).length + 1
         if (newCompleted >= fileCount && fileCount > 0) {
-          // Award XP for course completion
-          const { data: prof } = await supabase.from('profiles').select('xp').eq('id', profile.id).single()
-          if (prof) {
-            await supabase.from('profiles').update({ xp: (prof.xp || 0) + 100 }).eq('id', profile.id)
-            await logActivity(`${profile.name} completed course: ${activeCourse.title} (+100 XP)`, 'achievement')
-          }
+          // Award XP once per student+course, guarded server-side.
+          const { data: awarded } = await supabase.rpc('award_course_completion_xp', {
+            p_user_id: profile.id,
+            p_course_id: activeCourse.id,
+            p_xp_delta: 100,
+          })
+          if (awarded) await logActivity(`${profile.name} completed course: ${activeCourse.title} (+100 XP)`, 'achievement')
         }
       }
     } catch (err) {
@@ -328,7 +330,7 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
             <iframe src={preview.file.url} style={{ width: '100%', height: '70vh', border: 'none', borderRadius: 8 }} />
           )}
           {preview?.type === 'image' && preview.file.url && (
-            <img src={preview.file.url} alt={preview.file.name} style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 8 }} />
+            <Image src={preview.file.url} alt={preview.file.name} width={1200} height={800} unoptimized style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 8 }} />
           )}
           {preview?.type === 'video' && preview.file.url && (
             <div>

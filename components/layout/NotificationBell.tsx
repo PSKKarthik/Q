@@ -21,7 +21,7 @@ export function NotificationBell({ userId }: { userId: string }) {
     load()
     const ch = supabase.channel('notifs-' + userId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-        (p) => setNotifs(prev => [p.new as Notification, ...prev].slice(0, 10)))
+        (p: { new: Notification }) => setNotifs(prev => [p.new, ...prev].slice(0, 10)))
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [userId])

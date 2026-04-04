@@ -1,8 +1,10 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import type { Profile, Role } from '@/types'
 import { Icon } from '@/components/ui/Icon'
 import { ProfileModal } from '@/components/ui/ProfileModal'
+import { resolveAvatarUrl } from '@/lib/avatar'
 
 const ROLE_TAG: Record<Role, string> = {
   admin: 'tag-danger',
@@ -19,6 +21,18 @@ interface ProfileTabProps {
 
 export function ProfileTab({ profile, onUpdate, extraFields = [] }: ProfileTabProps) {
   const [showEdit, setShowEdit] = useState(false)
+  const [avatarSrc, setAvatarSrc] = useState<string | null>(profile.avatar_url || null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const resolved = await resolveAvatarUrl(profile.avatar_url)
+      if (!cancelled) setAvatarSrc(resolved)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [profile.avatar_url])
 
   const fields: [string, string | number | undefined][] = [
     ['Bio', profile.bio],
@@ -33,9 +47,13 @@ export function ProfileTab({ profile, onUpdate, extraFields = [] }: ProfileTabPr
       <div className="page-title" style={{ marginBottom: 20 }}>MY PROFILE</div>
       <div className="card" style={{ padding: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 24 }}>
-          <div style={{ width: 72, height: 72, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--display)', fontSize: 28 }}>
-            {profile.avatar}
-          </div>
+          {avatarSrc ? (
+            <Image src={avatarSrc} alt="Avatar" width={72} height={72} unoptimized style={{ width: 72, height: 72, border: '1px solid var(--border)', objectFit: 'cover', borderRadius: 8 }} />
+          ) : (
+            <div style={{ width: 72, height: 72, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--display)', fontSize: 28 }}>
+              {profile.avatar}
+            </div>
+          )}
           <div>
             <div style={{ fontSize: 18, fontWeight: 600 }}>{profile.name}</div>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', marginTop: 2 }}>{profile.email}</div>

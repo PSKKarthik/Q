@@ -6,6 +6,7 @@ export interface Profile {
   email: string
   role: Role
   avatar: string
+  avatar_url?: string
   phone?: string
   bio?: string
   subject?: string
@@ -27,9 +28,11 @@ export interface Announcement {
   author_id: string
   author_name: string
   role: string
-  target: 'all' | 'teachers' | 'students'
+  target: 'all' | 'teachers' | 'students' | 'parents'
   pinned: boolean
   created_at: string
+  updated_at?: string
+  expires_at?: string | null
 }
 
 export interface Test {
@@ -58,6 +61,8 @@ export interface AntiCheat {
   fullscreen: boolean
   timePerQ: number
   maxAttempts: number
+  allowImmediateReview?: boolean
+  requireAllAnswered?: boolean
 }
 
 export interface Question {
@@ -219,6 +224,8 @@ export interface ActivityLog {
   id: string
   message: string
   type: string
+  actor_id?: string | null
+  metadata?: Record<string, unknown>
   created_at: string
 }
 
@@ -239,7 +246,7 @@ export interface AttendanceRecord {
 export interface Message {
   id: string
   sender_id: string
-  receiver_id: string
+  receiver_id?: string
   body: string
   read: boolean
   created_at: string

@@ -350,29 +350,7 @@ async function createForumPosts() {
   else console.log(`  ✓ ${posts.length} forum posts`)
 }
 
-// ─── Step 11: Notifications ───
-async function createNotifications() {
-  console.log('Creating notifications...')
-  const notifs = []
-  for (const [i, sid] of STUDENTS.entries()) {
-    notifs.push(
-      { user_id: sid, message: 'Welcome to QGX! Start by exploring your dashboard.', type: 'info', read: true },
-      { user_id: sid, message: `You earned ${rand(80, 200)} XP on "Limits & Continuity"!`, type: 'xp', read: i < 3 },
-      { user_id: sid, message: 'New assignment: Limits Practice Set (due in 7 days)', type: 'assignment', read: false },
-      { user_id: sid, message: 'Double XP Weekend is live! 🎉', type: 'event', read: false },
-    )
-  }
-  notifs.push(
-    { user_id: IDS.teacher1, message: '5 students completed "Limits & Continuity"', type: 'info', read: false },
-    { user_id: IDS.teacher2, message: '5 students completed "Python Basics Quiz"', type: 'info', read: false },
-    { user_id: IDS.admin,    message: 'Platform has 10 registered users', type: 'info', read: true },
-  )
-  const { error } = await supabase.from('notifications').insert(notifs)
-  if (error) console.error(`  ✗ Notifications: ${error.message}`)
-  else console.log(`  ✓ ${notifs.length} notifications`)
-}
-
-// ─── Step 12: Activity Log ───
+// ─── Step 11: Activity Log ───
 async function createActivityLog() {
   console.log('Creating activity log...')
   const logs = [
@@ -392,7 +370,7 @@ async function createActivityLog() {
   else console.log(`  ✓ ${logs.length} activity entries`)
 }
 
-// ─── Step 13: Parent-Student Links ───
+// ─── Step 12: Parent-Student Links ───
 async function createParentLinks() {
   console.log('Linking parents to students...')
   const links = [
@@ -420,7 +398,6 @@ async function main() {
   await createAssignments()
   await createAttendance()
   await createForumPosts()
-  await createNotifications()
   await createActivityLog()
   await createParentLinks()
 

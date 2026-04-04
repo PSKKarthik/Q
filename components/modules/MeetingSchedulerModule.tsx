@@ -10,9 +10,10 @@ import { StatGrid } from '@/components/ui/StatGrid'
 
 interface Props {
   profile: Profile
+  allowedTeacherIds?: string[]
 }
 
-export function MeetingSchedulerModule({ profile }: Props) {
+export function MeetingSchedulerModule({ profile, allowedTeacherIds = [] }: Props) {
   const isTeacher = profile.role === 'teacher'
   const { toast } = useToast()
   const [slots, setSlots] = useState<MeetingSlot[]>([])
@@ -136,9 +137,30 @@ export function MeetingSchedulerModule({ profile }: Props) {
     setBusy(null)
   }
 
-  const available = slots.filter(s => s.status === 'available' && (!filterDate || s.date === filterDate))
+  const allowedTeacherSet = new Set(allowedTeacherIds)
+  const available = slots.filter(s => {
+    const dateOk = !filterDate || s.date === filterDate
+    const teacherOk = isTeacher || allowedTeacherSet.size === 0 || allowedTeacherSet.has(s.teacher_id)
+    return s.status === 'available' && dateOk && teacherOk
+  })
   const booked = slots.filter(s => s.status === 'booked')
   const myBookings = isTeacher ? booked : booked.filter(s => s.booked_by === profile.id)
+
+  const markCompleted = async (slot: MeetingSlot) => {
+    if (!isTeacher || slot.teacher_id !== profile.id) return
+    setBusy(slot.id)
+    try {
+      const { data, error } = await supabase.from('meeting_slots').update({ status: 'completed' }).eq('id', slot.id).select().single()
+      if (error) throw error
+      if (data) {
+        setSlots(prev => prev.map(s => s.id === slot.id ? data as MeetingSlot : s))
+        toast('Meeting marked as completed', 'success')
+      }
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to mark completed', 'error')
+    }
+    setBusy(null)
+  }
 
   if (loading) return <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>Loading meetings...</div>
 
@@ -198,6 +220,11 @@ export function MeetingSchedulerModule({ profile }: Props) {
                   </div>
                 </div>
                 <button className="btn btn-sm" onClick={() => cancelBooking(s)} disabled={busy === s.id} style={{ color: 'var(--danger)' }}>{busy === s.id ? 'Cancelling...' : 'Cancel'}</button>
+                {isTeacher && s.teacher_id === profile.id && (
+                  <button className="btn btn-sm" onClick={() => markCompleted(s)} disabled={busy === s.id}>
+                    {busy === s.id ? 'Updating...' : 'Mark Completed'}
+                  </button>
+                )}
               </div>
             ))}
           </div>

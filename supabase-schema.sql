@@ -252,8 +252,8 @@ create table if not exists forum_posts (
   author_id uuid references profiles(id) on delete cascade,
   author_name text,
   author_role text default 'student',
-  likes text[] default '{}',
-  bookmarks text[] default '{}',
+  likes uuid[] default '{}',
+  bookmarks uuid[] default '{}',
   flair text check (flair in ('question','discussion','announcement','resource','help','showcase')),
   tags text[] default '{}',
   attachment_url text,
@@ -276,7 +276,7 @@ create table if not exists forum_comments (
   author_name text,
   author_role text default 'student',
   body text not null,
-  likes text[] default '{}',
+  likes uuid[] default '{}',
   is_best_answer boolean default false,
   created_at timestamptz default now()
 );
@@ -341,7 +341,61 @@ alter table course_progress enable row level security;
 alter table course_ratings enable row level security;
 
 -- Migration: add bookmarks, best_answer_id, is_best_answer for existing databases
-alter table forum_posts add column if not exists bookmarks text[] default '{}';
+alter table forum_posts add column if not exists bookmarks uuid[] default '{}';
+do $$
+declare
+  v_post_likes_type text;
+  v_post_bookmarks_type text;
+  v_comment_likes_type text;
+begin
+  select udt_name into v_post_likes_type
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'forum_posts' and column_name = 'likes';
+
+  if v_post_likes_type = '_text' then
+    alter table forum_posts add column if not exists likes_uuid uuid[] default '{}'::uuid[];
+    update forum_posts
+    set likes_uuid = coalesce(likes, '{}'::text[])::uuid[];
+    alter table forum_posts drop column likes;
+    alter table forum_posts rename column likes_uuid to likes;
+  elsif v_post_likes_type is null then
+    alter table forum_posts add column likes uuid[] default '{}'::uuid[];
+  else
+    alter table forum_posts alter column likes set default '{}'::uuid[];
+  end if;
+
+  select udt_name into v_post_bookmarks_type
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'forum_posts' and column_name = 'bookmarks';
+
+  if v_post_bookmarks_type = '_text' then
+    alter table forum_posts add column if not exists bookmarks_uuid uuid[] default '{}'::uuid[];
+    update forum_posts
+    set bookmarks_uuid = coalesce(bookmarks, '{}'::text[])::uuid[];
+    alter table forum_posts drop column bookmarks;
+    alter table forum_posts rename column bookmarks_uuid to bookmarks;
+  elsif v_post_bookmarks_type is null then
+    alter table forum_posts add column bookmarks uuid[] default '{}'::uuid[];
+  else
+    alter table forum_posts alter column bookmarks set default '{}'::uuid[];
+  end if;
+
+  select udt_name into v_comment_likes_type
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'forum_comments' and column_name = 'likes';
+
+  if v_comment_likes_type = '_text' then
+    alter table forum_comments add column if not exists likes_uuid uuid[] default '{}'::uuid[];
+    update forum_comments
+    set likes_uuid = coalesce(likes, '{}'::text[])::uuid[];
+    alter table forum_comments drop column likes;
+    alter table forum_comments rename column likes_uuid to likes;
+  elsif v_comment_likes_type is null then
+    alter table forum_comments add column likes uuid[] default '{}'::uuid[];
+  else
+    alter table forum_comments alter column likes set default '{}'::uuid[];
+  end if;
+end $$;
 alter table forum_posts add column if not exists best_answer_id uuid;
 alter table forum_comments add column if not exists is_best_answer boolean default false;
 
@@ -549,42 +603,48 @@ create or replace trigger on_auth_user_created
 -- ============================================================
 -- RPC: Atomic toggle like on forum posts
 -- ============================================================
+drop function if exists public.toggle_forum_like(uuid, uuid);
 create or replace function public.toggle_forum_like(post_id uuid, user_id uuid)
-returns text[] as $$
+returns uuid[] as $$
 declare
-  current_likes text[];
+  current_likes uuid[];
 begin
-  select coalesce(likes, '{}') into current_likes from forum_posts where id = post_id for update;
-  if user_id::text = any(current_likes) then
-    update forum_posts set likes = array_remove(current_likes, user_id::text) where id = post_id
+  select coalesce(likes, '{}'::uuid[]) into current_likes from forum_posts where id = post_id for update;
+  if user_id = any(current_likes) then
+    update forum_posts set likes = array_remove(current_likes, user_id) where id = post_id
       returning likes into current_likes;
   else
-    update forum_posts set likes = array_append(current_likes, user_id::text) where id = post_id
+    update forum_posts set likes = array_append(current_likes, user_id) where id = post_id
       returning likes into current_likes;
   end if;
   return current_likes;
 end;
 $$ language plpgsql security definer;
 
+grant execute on function public.toggle_forum_like(uuid, uuid) to authenticated;
+
 -- ============================================================
 -- RPC: Atomic toggle like on forum comments
 -- ============================================================
+drop function if exists public.toggle_comment_like(uuid, uuid);
 create or replace function public.toggle_comment_like(comment_id uuid, user_id uuid)
-returns text[] as $$
+returns uuid[] as $$
 declare
-  current_likes text[];
+  current_likes uuid[];
 begin
-  select coalesce(likes, '{}') into current_likes from forum_comments where id = comment_id for update;
-  if user_id::text = any(current_likes) then
-    update forum_comments set likes = array_remove(current_likes, user_id::text) where id = comment_id
+  select coalesce(likes, '{}'::uuid[]) into current_likes from forum_comments where id = comment_id for update;
+  if user_id = any(current_likes) then
+    update forum_comments set likes = array_remove(current_likes, user_id) where id = comment_id
       returning likes into current_likes;
   else
-    update forum_comments set likes = array_append(current_likes, user_id::text) where id = comment_id
+    update forum_comments set likes = array_append(current_likes, user_id) where id = comment_id
       returning likes into current_likes;
   end if;
   return current_likes;
 end;
 $$ language plpgsql security definer;
+
+grant execute on function public.toggle_comment_like(uuid, uuid) to authenticated;
 
 -- ============================================================
 -- RPC: Increment view count atomically
@@ -595,6 +655,91 @@ begin
   update forum_posts set view_count = view_count + 1 where id = p_post_id;
 end;
 $$ language plpgsql security definer;
+
+grant execute on function public.increment_view_count(uuid) to authenticated;
+
+-- ============================================================
+-- RPC: Atomic toggle bookmark on forum posts
+-- ============================================================
+drop function if exists public.toggle_forum_bookmark(uuid, uuid);
+create or replace function public.toggle_forum_bookmark(p_post_id uuid, p_user_id uuid)
+returns uuid[] as $$
+declare
+  current_bookmarks uuid[];
+begin
+  if auth.uid() is null or auth.uid() <> p_user_id then
+    raise exception 'not authorized';
+  end if;
+  select coalesce(bookmarks, '{}'::uuid[]) into current_bookmarks
+  from forum_posts where id = p_post_id for update;
+  if p_user_id = any(current_bookmarks) then
+    update forum_posts set bookmarks = array_remove(current_bookmarks, p_user_id)
+    where id = p_post_id returning bookmarks into current_bookmarks;
+  else
+    update forum_posts set bookmarks = array_append(current_bookmarks, p_user_id)
+    where id = p_post_id returning bookmarks into current_bookmarks;
+  end if;
+  return coalesce(current_bookmarks, '{}'::uuid[]);
+end;
+$$ language plpgsql security definer;
+
+grant execute on function public.toggle_forum_bookmark(uuid, uuid) to authenticated;
+
+-- ============================================================
+-- RPC: Toggle pin on forum posts (admin / teacher only)
+-- ============================================================
+create or replace function public.toggle_forum_pin(p_post_id uuid)
+returns boolean as $$
+declare
+  caller_role text;
+  new_pinned boolean;
+begin
+  select role into caller_role from profiles where id = auth.uid();
+  if caller_role not in ('admin', 'teacher') then
+    raise exception 'not authorized';
+  end if;
+  update forum_posts set pinned = not pinned where id = p_post_id returning pinned into new_pinned;
+  return coalesce(new_pinned, false);
+end;
+$$ language plpgsql security definer;
+
+grant execute on function public.toggle_forum_pin(uuid) to authenticated;
+
+-- ============================================================
+-- RPC: Admin delete forum post (admin / teacher only)
+-- ============================================================
+create or replace function public.admin_delete_forum_post(p_post_id uuid)
+returns void as $$
+declare
+  caller_role text;
+begin
+  select role into caller_role from profiles where id = auth.uid();
+  if caller_role not in ('admin', 'teacher') then
+    raise exception 'not authorized';
+  end if;
+  delete from forum_posts where id = p_post_id;
+end;
+$$ language plpgsql security definer;
+
+grant execute on function public.admin_delete_forum_post(uuid) to authenticated;
+
+-- ============================================================
+-- RPC: Admin delete forum comment (admin / teacher only)
+-- ============================================================
+create or replace function public.admin_delete_forum_comment(p_comment_id uuid)
+returns void as $$
+declare
+  caller_role text;
+begin
+  select role into caller_role from profiles where id = auth.uid();
+  if caller_role not in ('admin', 'teacher') then
+    raise exception 'not authorized';
+  end if;
+  delete from forum_comments where id = p_comment_id;
+end;
+$$ language plpgsql security definer;
+
+grant execute on function public.admin_delete_forum_comment(uuid) to authenticated;
 
 -- ============================================================
 -- RPC: Atomic XP update to prevent race conditions (#11)
@@ -620,6 +765,8 @@ begin
   where id = p_user_id;
 end;
 $$ language plpgsql security definer;
+
+grant execute on function public.atomic_xp_update(uuid, int, int, int) to authenticated;
 
 -- ============================================================
 -- TRIGGER: Sync comment_count on forum_posts
@@ -750,6 +897,8 @@ begin
   return 'QGX-' || prefix || lpad(cnt::text, 4, '0') || suffix;
 end;
 $$ language plpgsql security definer;
+
+grant execute on function public.generate_qgx_id(text) to authenticated;
 
 -- ============================================================
 -- PHASE 2 MIGRATIONS (#016-#030)
@@ -882,6 +1031,47 @@ create policy "msg_groups_insert" on message_groups for insert with check (auth.
 drop policy if exists "msg_groups_update" on message_groups;
 create policy "msg_groups_update" on message_groups for update using (auth.uid() = created_by);
 
+-- Re-apply messages policies after group upgrades so group chat is authorized correctly
+drop policy if exists "messages_select" on messages;
+create policy "messages_select" on messages for select using (
+  (group_id is null and (auth.uid() = sender_id or auth.uid() = receiver_id))
+  or
+  (group_id is not null and exists (
+    select 1 from message_groups
+    where message_groups.id = messages.group_id
+      and auth.uid()::text = any(message_groups.member_ids)
+  ))
+);
+
+drop policy if exists "messages_insert" on messages;
+create policy "messages_insert" on messages for insert with check (
+  auth.uid() = sender_id
+  and (
+    (group_id is null and receiver_id is not null)
+    or
+    (group_id is not null and exists (
+      select 1 from message_groups
+      where message_groups.id = messages.group_id
+        and auth.uid()::text = any(message_groups.member_ids)
+    ))
+  )
+);
+
+drop policy if exists "messages_update" on messages;
+create policy "messages_update" on messages for update using (
+  -- DM sender can edit/delete own messages; receiver can mark as read
+  (group_id is null and (auth.uid() = sender_id or auth.uid() = receiver_id))
+  or
+  -- Group members can update messages in their group
+  (group_id is not null and exists (
+    select 1 from message_groups
+    where message_groups.id = messages.group_id
+      and auth.uid()::text = any(message_groups.member_ids)
+  ))
+);
+
+create index if not exists idx_messages_group on messages(group_id);
+
 -- ============================================================
 -- CERTIFICATE UPGRADE — credential ID, verification
 -- ============================================================
@@ -985,12 +1175,17 @@ create table if not exists live_classes (
   teacher_id uuid references profiles(id) on delete cascade,
   teacher_name text,
   course_id uuid references courses(id) on delete set null,
+  subject text,
+  room_id text,
   room_url text,
   scheduled_at timestamptz not null,
   duration integer default 60,
   status text default 'scheduled' check (status in ('scheduled','live','ended')),
   created_at timestamptz default now()
 );
+
+alter table live_classes add column if not exists subject text;
+alter table live_classes add column if not exists room_id text;
 
 alter table live_classes enable row level security;
 drop policy if exists "live_classes_select" on live_classes;
@@ -1054,6 +1249,111 @@ create policy "quest_progress_teacher_read" on quest_progress for select using (
   exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role in ('teacher','admin'))
 );
 
+-- QUEST AUTOMATION: Initialize progress for all students when a new quest is created
+create or replace function public.init_quest_progress_for_all()
+returns trigger as $$
+begin
+  insert into quest_progress (student_id, quest_id, progress, completed, claimed)
+  select id, new.id, 0, false, false from profiles where role = 'student'
+  on conflict (student_id, quest_id) do nothing;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists quests_init_progress_trigger on quests;
+create trigger quests_init_progress_trigger
+  after insert on quests
+  for each row execute procedure public.init_quest_progress_for_all();
+
+-- Auto-increment quest_progress when test attempt is submitted
+create or replace function public.update_quest_on_test_attempt()
+returns trigger as $$
+begin
+  if new.score is not null and new.score >= 0 then
+    update quest_progress
+    set progress = progress + 1,
+        completed = (progress + 1) >= (select target_count from quests where id = quest_progress.quest_id and target_type = 'test'),
+        completed_at = case when (progress + 1) >= (select target_count from quests where id = quest_progress.quest_id and target_type = 'test') then now() else completed_at end
+    where student_id = new.student_id
+      and quest_id in (select id from quests where target_type = 'test' and active = true);
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists quests_test_attempt_trigger on attempts;
+create trigger quests_test_attempt_trigger
+  after insert on attempts
+  for each row execute procedure public.update_quest_on_test_attempt();
+
+-- Auto-increment quest_progress when assignment is submitted
+create or replace function public.update_quest_on_assignment_submit()
+returns trigger as $$
+begin
+  if new.status = 'submitted' then
+    update quest_progress
+    set progress = progress + 1,
+        completed = (progress + 1) >= (select target_count from quests where id = quest_progress.quest_id and target_type = 'course'),
+        completed_at = case when (progress + 1) >= (select target_count from quests where id = quest_progress.quest_id and target_type = 'course') then now() else completed_at end
+    where student_id = new.student_id
+      and quest_id in (select id from quests where target_type = 'course' and active = true);
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists quests_assignment_trigger on submissions;
+create trigger quests_assignment_trigger
+  after insert or update on submissions
+  for each row execute procedure public.update_quest_on_assignment_submit();
+
+-- Auto-increment quest_progress for forum posts (social quest)
+create or replace function public.update_quest_on_forum_post()
+returns trigger as $$
+begin
+  update quest_progress
+  set progress = progress + 1,
+      completed = (progress + 1) >= (select target_count from quests where id = quest_progress.quest_id and target_type = 'social'),
+      completed_at = case when (progress + 1) >= (select target_count from quests where id = quest_progress.quest_id and target_type = 'social') then now() else completed_at end
+  where student_id = new.author_id
+    and quest_id in (select id from quests where target_type = 'social' and active = true);
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists quests_forum_post_trigger on forum_posts;
+create trigger quests_forum_post_trigger
+  after insert on forum_posts
+  for each row execute procedure public.update_quest_on_forum_post();
+
+-- Auto-increment quest_progress on XP gain (via atomic_xp_update)
+create or replace function public.update_quest_on_xp_gain()
+returns trigger as $$
+begin
+  if new.xp > old.xp then
+    update quest_progress
+    set progress = progress + 1,
+        completed = (progress + 1) >= (select target_count from quests where id = quest_progress.quest_id and target_type = 'xp'),
+        completed_at = case when (progress + 1) >= (select target_count from quests where id = quest_progress.quest_id and target_type = 'xp') then now() else completed_at end
+    where student_id = new.id
+      and quest_id in (select id from quests where target_type = 'xp' and active = true);
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists quests_xp_gain_trigger on profiles;
+create trigger quests_xp_gain_trigger
+  after update on profiles
+  for each row execute procedure public.update_quest_on_xp_gain();
+
+-- Performance indexes for quest queries
+create index if not exists idx_quests_active_type on quests(active, type);
+create index if not exists idx_quest_progress_student on quest_progress(student_id);
+create index if not exists idx_quest_progress_quest on quest_progress(quest_id);
+create index if not exists idx_quest_progress_student_quest on quest_progress(student_id, quest_id);
+create index if not exists idx_quest_progress_completed on quest_progress(completed, completed_at);
+
 -- ============================================================
 -- PARENT-TEACHER MEETING SLOTS
 -- ============================================================
@@ -1062,14 +1362,22 @@ create table if not exists meeting_slots (
   teacher_id uuid references profiles(id) on delete cascade,
   teacher_name text,
   date text not null,
-  time text not null,
+  time text,
+  start_time text,
+  end_time text,
   duration integer default 15,
   booked_by uuid references profiles(id) on delete set null,
   booked_name text,
+  parent_name text,
   student_id uuid references profiles(id) on delete set null,
   status text default 'available' check (status in ('available','booked','completed','cancelled')),
   created_at timestamptz default now()
 );
+
+alter table meeting_slots alter column time drop not null;
+alter table meeting_slots add column if not exists start_time text;
+alter table meeting_slots add column if not exists end_time text;
+alter table meeting_slots add column if not exists parent_name text;
 
 alter table meeting_slots enable row level security;
 drop policy if exists "meeting_slots_select" on meeting_slots;
@@ -1106,11 +1414,22 @@ create table if not exists collaboration_rooms (
   is_active boolean default true,
   created_at timestamptz default now()
 );
+alter table collaboration_rooms add column if not exists subject text default '';
+alter table collaboration_rooms add column if not exists created_by uuid references profiles(id);
+alter table collaboration_rooms add column if not exists creator_name text;
+alter table collaboration_rooms add column if not exists is_active boolean default true;
+alter table collaboration_rooms add column if not exists created_at timestamptz default now();
+update collaboration_rooms set is_active = true where is_active is null;
 alter table collaboration_rooms enable row level security;
 drop policy if exists "collab_rooms_read" on collaboration_rooms;
 create policy "collab_rooms_read" on collaboration_rooms for select using (true);
 drop policy if exists "collab_rooms_create" on collaboration_rooms;
 create policy "collab_rooms_create" on collaboration_rooms for insert with check (auth.uid() = created_by);
+drop policy if exists "collab_rooms_update" on collaboration_rooms;
+create policy "collab_rooms_update" on collaboration_rooms for update using (
+  auth.uid() = created_by
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
+);
 
 create table if not exists room_messages (
   id uuid primary key default gen_random_uuid(),
@@ -1120,6 +1439,11 @@ create table if not exists room_messages (
   content text not null,
   created_at timestamptz default now()
 );
+alter table room_messages add column if not exists room_id uuid references collaboration_rooms(id) on delete cascade;
+alter table room_messages add column if not exists user_id uuid references profiles(id);
+alter table room_messages add column if not exists user_name text;
+alter table room_messages add column if not exists content text;
+alter table room_messages add column if not exists created_at timestamptz default now();
 alter table room_messages enable row level security;
 drop policy if exists "room_msg_read" on room_messages;
 create policy "room_msg_read" on room_messages for select using (true);
@@ -1141,3 +1465,5 @@ begin
   update profiles set reputation = greatest(0, coalesce(reputation, 0) + delta) where id = target_user;
 end;
 $$;
+
+grant execute on function public.increment_reputation(uuid, integer) to authenticated;

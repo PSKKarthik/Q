@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/lib/toast'
 import type { Profile, ForumPost, ForumComment, ForumFlair } from '@/types'
@@ -117,8 +118,11 @@ export function ForumModule({ profile }: ForumModuleProps) {
   const [commentLoading, setCommentLoading] = useState(false)
   const [postLoading, setPostLoading] = useState(false)
   const [commentSort, setCommentSort] = useState<CommentSort>('oldest')
+  const [postActionBusy, setPostActionBusy] = useState<Record<string, boolean>>({})
+  const [commentActionBusy, setCommentActionBusy] = useState<Record<string, boolean>>({})
 
   const channelRef = useRef<any>(null)
+  const commentChannelRef = useRef<any>(null)
 
   /* ── data fetching ── */
   const fetchPosts = useCallback(async () => {
@@ -139,8 +143,34 @@ export function ForumModule({ profile }: ForumModuleProps) {
     channelRef.current = supabase.channel(`forum-${profile.role}-${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_posts' }, () => fetchPosts())
       .subscribe()
-    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current) }
+    return () => {
+      if (channelRef.current) supabase.removeChannel(channelRef.current)
+      if (commentChannelRef.current) supabase.removeChannel(commentChannelRef.current)
+    }
   }, [fetchPosts, profile.role])
+
+  useEffect(() => {
+    if (commentChannelRef.current) {
+      supabase.removeChannel(commentChannelRef.current)
+      commentChannelRef.current = null
+    }
+    if (!activePost) return
+
+    commentChannelRef.current = supabase.channel(`forum-comments-${activePost.id}-${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_comments', filter: `post_id=eq.${activePost.id}` }, () => {
+        supabase.from('forum_comments').select('*').eq('post_id', activePost.id).order('created_at', { ascending: true }).then(({ data }) => {
+          if (data) setComments(data as ForumComment[])
+        })
+      })
+      .subscribe()
+
+    return () => {
+      if (commentChannelRef.current) {
+        supabase.removeChannel(commentChannelRef.current)
+        commentChannelRef.current = null
+      }
+    }
+  }, [activePost])
 
   const openPost = async (post: ForumPost) => {
     setPostLoading(true)
@@ -220,6 +250,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
   }
 
   const submitPost = async () => {
+    if (uploading) return
     if (!formTitle.trim() || !formBody.trim()) return
     setUploading(true)
     try {
@@ -270,8 +301,12 @@ export function ForumModule({ profile }: ForumModuleProps) {
       if (data) {
         setPosts(prev => [data as ForumPost, ...prev])
         // Award +5 XP for creating a new post
-        supabase.rpc('atomic_xp_update', { p_user_id: profile.id, p_xp_delta: 5, p_best_score: 0, p_ghost_win_increment: 0 })
-        toast('▪ +5 XP — New forum post!', 'success')
+        const { error: xpErr } = await supabase.rpc('atomic_xp_update', { p_user_id: profile.id, p_xp_delta: 5, p_best_score: 0, p_ghost_win_increment: 0 })
+        if (xpErr) {
+          toast('Post created but XP award failed', 'info')
+        } else {
+          toast('▪ +5 XP — New forum post!', 'success')
+        }
       }
     }
     setPostModal(false)
@@ -283,19 +318,32 @@ export function ForumModule({ profile }: ForumModuleProps) {
   }
 
   const deletePost = async (postId: string) => {
+    if (postActionBusy[postId]) return
     if (!confirm('Delete this post and all comments? This cannot be undone.')) return
+    setPostActionBusy(prev => ({ ...prev, [postId]: true }))
     try {
-      const { error } = await supabase.from('forum_posts').delete().eq('id', postId).eq('author_id', profile.id)
-      if (error) throw error
+      const isStaff = profile.role === 'admin' || profile.role === 'teacher'
+      const targetPost = posts.find(p => p.id === postId)
+      if (isStaff && targetPost?.author_id !== profile.id) {
+        const { error } = await supabase.rpc('admin_delete_forum_post', { p_post_id: postId })
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('forum_posts').delete().eq('id', postId).eq('author_id', profile.id)
+        if (error) throw error
+      }
       setPosts(prev => prev.filter(p => p.id !== postId))
       if (activePost?.id === postId) { setActivePost(null); setComments([]) }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to delete post', 'error')
+    } finally {
+      setPostActionBusy(prev => ({ ...prev, [postId]: false }))
     }
   }
 
   /* ── voting ── */
   const togglePostLike = async (post: ForumPost) => {
+    if (postActionBusy[post.id]) return
+    setPostActionBusy(prev => ({ ...prev, [post.id]: true }))
     try {
       const wasLiked = (post.likes || []).includes(profile.id)
       const { data, error } = await supabase.rpc('toggle_forum_like', { post_id: post.id, user_id: profile.id })
@@ -311,49 +359,79 @@ export function ForumModule({ profile }: ForumModuleProps) {
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to like post', 'error')
+    } finally {
+      setPostActionBusy(prev => ({ ...prev, [post.id]: false }))
     }
   }
 
   const toggleCommentLike = async (comment: ForumComment) => {
+    if (commentActionBusy[comment.id]) return
+    setCommentActionBusy(prev => ({ ...prev, [comment.id]: true }))
     const wasLiked = (comment.likes || []).includes(profile.id)
     const { data, error } = await supabase.rpc('toggle_comment_like', { comment_id: comment.id, user_id: profile.id })
-    if (error) { toast(error.message || 'Failed to like comment', 'error'); return }
-    const newLikes: string[] = data ?? []
-    setComments(prev => prev.map(c => c.id === comment.id ? { ...c, likes: newLikes } : c))
-    // Award/revoke reputation to comment author
-    if (comment.author_id !== profile.id) {
-      const delta = wasLiked ? -1 : 1
-      supabase.rpc('increment_reputation', { target_user: comment.author_id, delta })
+    try {
+      if (error) { toast(error.message || 'Failed to like comment', 'error'); return }
+      const newLikes: string[] = data ?? []
+      setComments(prev => prev.map(c => c.id === comment.id ? { ...c, likes: newLikes } : c))
+      // Award/revoke reputation to comment author
+      if (comment.author_id !== profile.id) {
+        const delta = wasLiked ? -1 : 1
+        supabase.rpc('increment_reputation', { target_user: comment.author_id, delta })
+      }
+    } finally {
+      setCommentActionBusy(prev => ({ ...prev, [comment.id]: false }))
     }
   }
 
   /* ── bookmark ── */
   const toggleBookmark = async (post: ForumPost) => {
+    if (postActionBusy[post.id]) return
+    setPostActionBusy(prev => ({ ...prev, [post.id]: true }))
     try {
-      const current = post.bookmarks || []
-      const isBookmarked = current.includes(profile.id)
-      const newBookmarks = isBookmarked ? current.filter(id => id !== profile.id) : [...current, profile.id]
-      const { data } = await supabase.from('forum_posts').update({ bookmarks: newBookmarks })
-        .eq('id', post.id).select().single()
-      if (data) {
-        const updated = data as ForumPost
-        setPosts(prev => prev.map(p => p.id === updated.id ? updated : p))
-        if (activePost?.id === updated.id) setActivePost(updated)
-      }
+      const { data, error } = await supabase.rpc('toggle_forum_bookmark', { p_post_id: post.id, p_user_id: profile.id })
+      if (error) throw error
+      const newBookmarks: string[] = data ?? []
+      const updated = { ...post, bookmarks: newBookmarks }
+      setPosts(prev => prev.map(p => p.id === updated.id ? updated : p))
+      if (activePost?.id === updated.id) setActivePost(updated)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to update bookmark', 'error')
+    } finally {
+      setPostActionBusy(prev => ({ ...prev, [post.id]: false }))
+    }
+  }
+
+  /* ── pin/unpin (admin / teacher only) ── */
+  const togglePin = async (post: ForumPost) => {
+    if (postActionBusy[post.id]) return
+    setPostActionBusy(prev => ({ ...prev, [post.id]: true }))
+    try {
+      const { data, error } = await supabase.rpc('toggle_forum_pin', { p_post_id: post.id })
+      if (error) throw error
+      const newPinned = data as boolean
+      const updated = { ...post, pinned: newPinned }
+      setPosts(prev => prev.map(p => p.id === post.id ? updated : p))
+      if (activePost?.id === post.id) setActivePost(updated)
+      toast(newPinned ? '● Post pinned' : '● Post unpinned', 'success')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to pin post', 'error')
+    } finally {
+      setPostActionBusy(prev => ({ ...prev, [post.id]: false }))
     }
   }
 
   /* ── best answer ── */
   const markBestAnswer = async (commentId: string) => {
     if (!activePost) return
+    if (postActionBusy[activePost.id]) return
     if (activePost.author_id !== profile.id) { toast('Only the post author can mark best answer', 'error'); return }
+    setPostActionBusy(prev => ({ ...prev, [activePost.id]: true }))
     try {
       const prevBestId = activePost.best_answer_id
       const newId = prevBestId === commentId ? null : commentId
-      const { data } = await supabase.from('forum_posts').update({ best_answer_id: newId })
+      const { data, error } = await supabase.from('forum_posts').update({ best_answer_id: newId })
         .eq('id', activePost.id).eq('author_id', profile.id).select().single()
+      if (error) throw error
       if (data) {
         const updated = data as ForumPost
         setPosts(prev => prev.map(p => p.id === updated.id ? updated : p))
@@ -371,17 +449,21 @@ export function ForumModule({ profile }: ForumModuleProps) {
           if (newComment && newComment.author_id !== profile.id) {
             supabase.rpc('increment_reputation', { target_user: newComment.author_id, delta: 5 })
             // Award +15 XP to comment author for best answer
-            supabase.rpc('atomic_xp_update', { p_user_id: newComment.author_id, p_xp_delta: 15, p_best_score: 0, p_ghost_win_increment: 0 })
+            const { error: xpErr } = await supabase.rpc('atomic_xp_update', { p_user_id: newComment.author_id, p_xp_delta: 15, p_best_score: 0, p_ghost_win_increment: 0 })
+            if (!xpErr) toast('✓ Best answer marked! +15 XP awarded', 'success')
           }
         }
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to mark best answer', 'error')
+    } finally {
+      setPostActionBusy(prev => ({ ...prev, [activePost.id]: false }))
     }
   }
 
   /* ── comments ── */
   const addComment = async () => {
+    if (commentLoading) return
     if (!newComment.trim() || !activePost) return
     setCommentLoading(true)
     try {
@@ -397,8 +479,12 @@ export function ForumModule({ profile }: ForumModuleProps) {
         setActivePost(prev => prev ? { ...prev, comment_count: (prev.comment_count || 0) + 1 } : prev)
         setPosts(prev => prev.map(p => p.id === activePost.id ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p))
         // Award +3 XP for commenting
-        supabase.rpc('atomic_xp_update', { p_user_id: profile.id, p_xp_delta: 3, p_best_score: 0, p_ghost_win_increment: 0 })
-        toast('◇ +3 XP — Forum comment!', 'success')
+        const { error: xpErr } = await supabase.rpc('atomic_xp_update', { p_user_id: profile.id, p_xp_delta: 3, p_best_score: 0, p_ghost_win_increment: 0 })
+        if (xpErr) {
+          toast('Comment added but XP award failed', 'info')
+        } else {
+          toast('◇ +3 XP — Forum comment!', 'success')
+        }
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to add comment', 'error')
@@ -407,9 +493,19 @@ export function ForumModule({ profile }: ForumModuleProps) {
   }
 
   const deleteComment = async (commentId: string) => {
+    if (commentActionBusy[commentId]) return
     if (!confirm('Delete this comment?')) return
+    setCommentActionBusy(prev => ({ ...prev, [commentId]: true }))
     try {
-      await supabase.from('forum_comments').delete().eq('id', commentId).eq('author_id', profile.id)
+      const isStaff = profile.role === 'admin' || profile.role === 'teacher'
+      const targetComment = comments.find(c => c.id === commentId)
+      if (isStaff && targetComment?.author_id !== profile.id) {
+        const { error } = await supabase.rpc('admin_delete_forum_comment', { p_comment_id: commentId })
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('forum_comments').delete().eq('id', commentId).eq('author_id', profile.id)
+        if (error) throw error
+      }
       setComments(prev => prev.filter(c => c.id !== commentId))
       if (activePost) {
         setActivePost(prev => prev ? { ...prev, comment_count: Math.max((prev.comment_count || 0) - 1, 0) } : prev)
@@ -422,6 +518,8 @@ export function ForumModule({ profile }: ForumModuleProps) {
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to delete comment', 'error')
+    } finally {
+      setCommentActionBusy(prev => ({ ...prev, [commentId]: false }))
     }
   }
 
@@ -448,12 +546,12 @@ export function ForumModule({ profile }: ForumModuleProps) {
   }
 
   /* ── render helpers ── */
-  const VoteBar = ({ likes, onVote, vertical = true }: { likes: string[]; onVote: () => void; vertical?: boolean }) => {
+  const VoteBar = ({ likes, onVote, vertical = true, disabled = false }: { likes: string[]; onVote: () => void; vertical?: boolean; disabled?: boolean }) => {
     const liked = (likes || []).includes(profile.id)
     const count = likes?.length || 0
     return (
       <div className={`fm-vote ${vertical ? 'fm-vote-v' : 'fm-vote-h'}`}>
-        <button className={`fm-vote-btn ${liked ? 'fm-voted' : ''}`} onClick={e => { e.stopPropagation(); onVote() }} aria-label="Upvote">
+        <button className={`fm-vote-btn ${liked ? 'fm-voted' : ''}`} onClick={e => { e.stopPropagation(); onVote() }} aria-label="Upvote" disabled={disabled}>
           <svg width={14} height={14} viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M12 4l-8 8h5v8h6v-8h5z"/></svg>
         </button>
         <span className={`fm-vote-count ${liked ? 'fm-voted' : ''}`}>{count}</span>
@@ -502,17 +600,17 @@ export function ForumModule({ profile }: ForumModuleProps) {
             <AuthorBadge name={c.author_name} role={c.author_role} date={c.created_at} />
             <MdBody text={c.body} className="fm-comment-text" />
             <div className="fm-comment-actions">
-              <VoteBar likes={c.likes || []} onVote={() => toggleCommentLike(c)} vertical={false} />
-              <button className="fm-action-btn" onClick={() => { setReplyTo(c); setNewComment(`@${c.author_name} `) }}>
+              <VoteBar likes={c.likes || []} onVote={() => toggleCommentLike(c)} vertical={false} disabled={!!commentActionBusy[c.id]} />
+              <button className="fm-action-btn" onClick={() => { setReplyTo(c); setNewComment(`@${c.author_name} `) }} disabled={!!commentActionBusy[c.id]}>
                 <Icon name="chat" size={11} /> Reply
               </button>
               {canMarkBest && (
-                <button className={`fm-action-btn ${isBest ? 'fm-action-best-active' : ''}`} onClick={() => markBestAnswer(c.id)}>
+                <button className={`fm-action-btn ${isBest ? 'fm-action-best-active' : ''}`} onClick={() => markBestAnswer(c.id)} disabled={!!activePost && !!postActionBusy[activePost.id]}>
                   {isBest ? '✓ Unmark' : '✓ Best Answer'}
                 </button>
               )}
-              {c.author_id === profile.id && (
-                <button className="fm-action-btn fm-action-danger" onClick={() => deleteComment(c.id)}>
+              {(c.author_id === profile.id || profile.role === 'admin' || profile.role === 'teacher') && (
+                <button className="fm-action-btn fm-action-danger" onClick={() => deleteComment(c.id)} disabled={!!commentActionBusy[c.id]}>
                   <Icon name="trash" size={11} /> Delete
                 </button>
               )}
@@ -656,7 +754,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
             <div key={post.id} className={`fm-post-card fade-up${Math.min(i, 3) > 0 ? `-${Math.min(i, 3)}` : ''}`} onClick={() => openPost(post)}>
               {/* Vote column */}
               <div className="fm-post-vote">
-                <VoteBar likes={post.likes || []} onVote={() => togglePostLike(post)} />
+                <VoteBar likes={post.likes || []} onVote={() => togglePostLike(post)} disabled={!!postActionBusy[post.id]} />
               </div>
 
               {/* Content */}
@@ -676,7 +774,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
 
                 {post.attachment_name && isImage(post.attachment_type, post.attachment_name) && post.attachment_url && (
                   <div className="fm-img-thumb" onClick={e => e.stopPropagation()}>
-                    <img src={post.attachment_url} alt={post.attachment_name} loading="lazy" />
+                    <Image src={post.attachment_url} alt={post.attachment_name} width={960} height={540} unoptimized loading="lazy" />
                   </div>
                 )}
 
@@ -692,13 +790,21 @@ export function ForumModule({ profile }: ForumModuleProps) {
                   <span className="fm-stat"><Icon name="chat" size={11} /> {post.comment_count || 0} comment{(post.comment_count || 0) !== 1 ? 's' : ''}</span>
                   <span className="fm-stat">◎ {post.view_count || 0}</span>
                   <button className={`fm-action-btn ${bookmarked ? 'fm-bookmarked' : ''}`}
-                    onClick={e => { e.stopPropagation(); toggleBookmark(post) }}>
+                    onClick={e => { e.stopPropagation(); toggleBookmark(post) }} disabled={!!postActionBusy[post.id]}>
                     {bookmarked ? '◈' : '◇'} {bookmarked ? 'Saved' : 'Save'}
                   </button>
                   {post.author_id === profile.id && (
                     <>
-                      <button className="fm-action-btn" onClick={e => { e.stopPropagation(); openEditModal(post) }}><Icon name="edit" size={11} /> Edit</button>
-                      <button className="fm-action-btn fm-action-danger" onClick={e => { e.stopPropagation(); deletePost(post.id) }}><Icon name="trash" size={11} /> Delete</button>
+                      <button className="fm-action-btn" onClick={e => { e.stopPropagation(); openEditModal(post) }} disabled={!!postActionBusy[post.id]}><Icon name="edit" size={11} /> Edit</button>
+                      <button className="fm-action-btn fm-action-danger" onClick={e => { e.stopPropagation(); deletePost(post.id) }} disabled={!!postActionBusy[post.id]}><Icon name="trash" size={11} /> Delete</button>
+                    </>
+                  )}
+                  {(profile.role === 'admin' || profile.role === 'teacher') && (
+                    <>
+                      <button className={`fm-action-btn ${post.pinned ? 'fm-action-best-active' : ''}`} onClick={e => { e.stopPropagation(); togglePin(post) }} disabled={!!postActionBusy[post.id]}>● {post.pinned ? 'Unpin' : 'Pin'}</button>
+                      {post.author_id !== profile.id && (
+                        <button className="fm-action-btn fm-action-danger" onClick={e => { e.stopPropagation(); deletePost(post.id) }} disabled={!!postActionBusy[post.id]}><Icon name="trash" size={11} /> Remove</button>
+                      )}
                     </>
                   )}
                 </div>
@@ -749,7 +855,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
           {activePost.attachment_url && isImage(activePost.attachment_type, activePost.attachment_name) && (
             <div className="fm-img-preview">
               <a href={activePost.attachment_url} target="_blank" rel="noopener noreferrer">
-                <img src={activePost.attachment_url} alt={activePost.attachment_name || 'Image'} loading="lazy" />
+                <Image src={activePost.attachment_url} alt={activePost.attachment_name || 'Image'} width={1280} height={720} unoptimized loading="lazy" />
               </a>
               <div className="fm-img-caption">
                 ▪ {activePost.attachment_name}
@@ -767,13 +873,21 @@ export function ForumModule({ profile }: ForumModuleProps) {
 
           <div className="fm-post-stats" style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
             <span className="fm-stat"><Icon name="chat" size={11} /> {activePost.comment_count || 0} comments</span>
-            <button className={`fm-action-btn ${bookmarked ? 'fm-bookmarked' : ''}`} onClick={() => toggleBookmark(activePost)}>
+            <button className={`fm-action-btn ${bookmarked ? 'fm-bookmarked' : ''}`} onClick={() => toggleBookmark(activePost)} disabled={!!postActionBusy[activePost.id]}>
               {bookmarked ? '◈ Saved' : '◇ Save'}
             </button>
             {activePost.author_id === profile.id && (
               <>
-                <button className="fm-action-btn" onClick={() => openEditModal(activePost)}><Icon name="edit" size={11} /> Edit</button>
-                <button className="fm-action-btn fm-action-danger" onClick={() => deletePost(activePost.id)}><Icon name="trash" size={11} /> Delete</button>
+                <button className="fm-action-btn" onClick={() => openEditModal(activePost)} disabled={!!postActionBusy[activePost.id]}><Icon name="edit" size={11} /> Edit</button>
+                <button className="fm-action-btn fm-action-danger" onClick={() => deletePost(activePost.id)} disabled={!!postActionBusy[activePost.id]}><Icon name="trash" size={11} /> Delete</button>
+              </>
+            )}
+            {(profile.role === 'admin' || profile.role === 'teacher') && (
+              <>
+                <button className={`fm-action-btn ${activePost.pinned ? 'fm-action-best-active' : ''}`} onClick={() => togglePin(activePost)} disabled={!!postActionBusy[activePost.id]}>● {activePost.pinned ? 'Unpin' : 'Pin'}</button>
+                {activePost.author_id !== profile.id && (
+                  <button className="fm-action-btn fm-action-danger" onClick={() => deletePost(activePost.id)} disabled={!!postActionBusy[activePost.id]}><Icon name="trash" size={11} /> Remove</button>
+                )}
               </>
             )}
           </div>

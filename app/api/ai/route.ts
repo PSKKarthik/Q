@@ -2,6 +2,9 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
+// Force Node.js runtime — pdf-parse and jszip require fs/Buffer, not available in Edge runtime
+export const runtime = 'nodejs'
+
 // In-memory per-user rate limiter (10 requests/minute)
 const RATE_WINDOW_MS = 60_000
 const RATE_LIMIT = 10
@@ -76,6 +79,10 @@ export async function POST(req: Request) {
 
   // AI Tutor mode (student-facing)
   if (body.mode === 'tutor') {
+    if (!profile || profile.role !== 'student') {
+      return NextResponse.json({ error: 'Forbidden: students only for tutor mode' }, { status: 403 })
+    }
+
     const { message, courseContext, history, file } = body
     if ((!message || typeof message !== 'string' || message.length > 2000) && !file) {
       return NextResponse.json({ error: 'Invalid message' }, { status: 400 })
@@ -102,7 +109,7 @@ export async function POST(req: Request) {
         imageMime = file.mimeType || 'image/jpeg'
       } else if (file.type === 'pdf') {
         try {
-          const pdfParse = (await import('pdf-parse')).default
+          const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default
           const buffer = Buffer.from(file.data, 'base64')
           const pdfData = await pdfParse(buffer)
           fileContext = pdfData.text.slice(0, 8000)
@@ -163,22 +170,31 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
       }
     }
 
-    // Standard text model (optionally with extracted document context)
-    const messages = [
+    // Standard text model — streaming SSE response
+    const tutorMessages = [
       { role: 'system', content: systemPrompt },
-      ...(Array.isArray(history) ? history.slice(-8) : []),
+      ...(Array.isArray(history) ? history.slice(-12) : []),
       { role: 'user', content: userContent },
     ]
 
     try {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const streamRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
-        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: 1500, temperature: 0.7, messages }),
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: 1500, temperature: 0.7, stream: true, messages: tutorMessages }),
       })
-      if (!res.ok) return NextResponse.json({ error: 'AI service error' }, { status: res.status })
-      const data = await res.json()
-      return NextResponse.json({ reply: data.choices?.[0]?.message?.content || 'No response generated.' })
+      if (!streamRes.ok) {
+        const errBody = await streamRes.json().catch(() => ({}))
+        return NextResponse.json({ error: (errBody as { error?: { message?: string } }).error?.message || 'AI service error' }, { status: streamRes.status })
+      }
+      if (!streamRes.body) return NextResponse.json({ error: 'Stream unavailable' }, { status: 500 })
+      return new Response(streamRes.body, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache, no-transform',
+          'X-Accel-Buffering': 'no',
+        },
+      })
     } catch {
       return NextResponse.json({ error: 'AI generation failed' }, { status: 500 })
     }
@@ -225,7 +241,7 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
       teacherImageMime = teacherFile.mimeType || 'image/jpeg'
     } else if (teacherFile.type === 'pdf') {
       try {
-        const pdfParse = (await import('pdf-parse')).default
+        const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default
         const buffer = Buffer.from(teacherFile.data, 'base64')
         const pdfData = await pdfParse(buffer)
         teacherFileContext = pdfData.text.slice(0, 8000)

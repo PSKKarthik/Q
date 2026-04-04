@@ -119,6 +119,7 @@ async function syncOfflineMessages() {
         const body = await res.json();
         await fetch(req, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         await cache.delete(req);
+        await cache.delete(req);
       }
     }
   } catch {

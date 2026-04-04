@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const nextParam = searchParams.get('next') ?? '/reset-password'
 
   // Whitelist safe redirect paths — prevent open redirect
-  const SAFE_PATHS = ['/reset-password', '/dashboard/student', '/dashboard/teacher', '/dashboard/admin', '/login']
+  const SAFE_PATHS = ['/reset-password', '/dashboard/student', '/dashboard/teacher', '/dashboard/parent', '/dashboard/admin', '/login']
   const next = SAFE_PATHS.includes(nextParam) ? nextParam : '/reset-password'
 
   if (code) {

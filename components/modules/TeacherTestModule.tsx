@@ -52,6 +52,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
   const [aiBloom, setAiBloom] = useState<string>('understand')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState<Question[] | null>(null)
+  const [previewTest, setPreviewTest] = useState<Test | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
   const [aiEditIdx, setAiEditIdx] = useState<number | null>(null)
   const [bankEditIdx, setBankEditIdx] = useState<string | null>(null)
@@ -78,6 +79,15 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
       toast(err instanceof Error ? err.message : 'Failed to load questions', 'error')
     }
     setView('bank')
+  }
+
+  const openPreview = async (test: Test) => {
+    try {
+      const { data } = await supabase.from('tests').select('*, questions(*)').eq('id', test.id).single()
+      setPreviewTest((data as Test) || test)
+    } catch {
+      setPreviewTest(test)
+    }
   }
 
   const createTest = async () => {
@@ -515,6 +525,37 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
         )}
       </Modal>
 
+      <Modal open={!!previewTest} onClose={() => setPreviewTest(null)} title="Student Preview" width={640}>
+        {previewTest && (
+          <>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontWeight: 600, fontSize: 16 }}>{previewTest.title}</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)' }}>
+                {previewTest.subject} · {previewTest.duration} min · {previewTest.questions?.length || 0} questions
+              </div>
+            </div>
+            <div style={{ marginBottom: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {previewTest.anti_cheat?.tabSwitch && <span className="tm-ac-tag">Tab Lock</span>}
+              {previewTest.anti_cheat?.copyPaste && <span className="tm-ac-tag">No Copy/Paste</span>}
+              {previewTest.anti_cheat?.fullscreen && <span className="tm-ac-tag">Fullscreen</span>}
+              {previewTest.anti_cheat?.randomQ && <span className="tm-ac-tag">Shuffled Q</span>}
+              {previewTest.anti_cheat?.randomOpts && <span className="tm-ac-tag">Shuffled Options</span>}
+            </div>
+            <div style={{ maxHeight: 340, overflow: 'auto', border: '1px solid var(--border)', padding: 10 }}>
+              {(previewTest.questions || []).map((q, i) => (
+                <div key={q.id || i} style={{ marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)' }}>Q{i + 1} · {qTypeLabel[q.type] || q.type}</div>
+                  <div style={{ fontSize: 13, marginTop: 3 }}>{q.text}</div>
+                </div>
+              ))}
+              {!previewTest.questions?.length && (
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)' }}>No questions added yet.</div>
+              )}
+            </div>
+          </>
+        )}
+      </Modal>
+
       {/* ── LIST VIEW ── */}
       {view === 'list' && (
         <>
@@ -586,6 +627,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
 
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button className="btn btn-xs" onClick={() => openQuestionBank(t)}><Icon name="edit" size={10} /> Questions</button>
+                    <button className="btn btn-xs" onClick={() => openPreview(t)}><Icon name="eye" size={10} /> Preview</button>
                     <button className="btn btn-xs" onClick={() => toggleTestStatus(t)} style={{ borderColor: t.status === 'locked' ? 'var(--warn)' : 'var(--success)', color: t.status === 'locked' ? 'var(--warn)' : 'var(--success)' }}>
                       <Icon name={t.status === 'locked' ? 'eye-off' : 'eye'} size={10} /> {t.status === 'locked' ? 'Unlock' : 'Lock'}
                     </button>

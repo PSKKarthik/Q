@@ -217,6 +217,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
 
   /* ── Weekly check-in count ── */
   const weeklyCheckIns = useMemo(() => {
+    void checkedIn.size
     let total = 0
     const now = new Date()
     for (let i = 0; i < 7; i++) {
@@ -296,7 +297,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
       if (m > 0 && m < bestMins) { bestMins = m; bestSlot = s }
     }
     return bestSlot ? { slot: bestSlot, minutes: bestMins } : null
-  }, [timetable, todayName])
+  }, [timetable])
 
   /* ── Total weekly hours ── */
   const totalWeeklyMins = useMemo(() =>

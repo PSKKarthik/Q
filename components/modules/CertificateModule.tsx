@@ -184,9 +184,9 @@ export function CertificateModule({ profile, courses, enrolledIds }: Props) {
 
       enrolledCourses.forEach(course => {
         const courseFiles = files.filter(f => f.course_id === course.id)
-        const completedFiles = progress.filter(p => p.course_id === course.id)
+        const completedFileIds = new Set(progress.filter(p => p.course_id === course.id).map(p => p.file_id))
         if (courseFiles.length > 0) {
-          eligible.push({ course, fileCount: courseFiles.length, completedCount: completedFiles.length })
+          eligible.push({ course, fileCount: courseFiles.length, completedCount: completedFileIds.size })
         }
       })
 
@@ -204,6 +204,11 @@ export function CertificateModule({ profile, courses, enrolledIds }: Props) {
 
   const generateCertificate = async (course: Course) => {
     if (certificates.find(c => c.course_id === course.id)) return
+    const progress = eligibleCourses.find(e => e.course.id === course.id)
+    if (!progress || progress.completedCount < progress.fileCount) {
+      toast('Complete all course files before generating a certificate.', 'error')
+      return
+    }
     setBusy(course.id)
     try {
       const credentialId = generateCredentialId()

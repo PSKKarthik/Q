@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { pushNotificationBatch, logActivity } from '@/lib/actions'
+import { logActivity } from '@/lib/actions'
 import { useToast } from '@/lib/toast'
 import type { Profile, Test, Course, Assignment, Submission, TimetableSlot, Announcement, Attempt, Quest, QuestProgress } from '@/types'
 import DashboardLayout from '@/components/layout/DashboardLayout'
@@ -20,7 +20,6 @@ import { TeacherCourseModule } from '@/components/modules/CourseModule'
 import { TeacherAssignmentModule } from '@/components/modules/AssignmentModule'
 import { TeacherAttendanceModule } from '@/components/modules/AttendanceModule'
 import { TeacherGradesModule } from '@/components/modules/GradesModule'
-import { NotificationsModule } from '@/components/modules/NotificationsModule'
 import { MessagingModule } from '@/components/modules/MessagingModule'
 import { ReportCardModule } from '@/components/modules/ReportCardModule'
 import { TeacherBatchGradeModule } from '@/components/modules/BatchModule'
@@ -29,6 +28,7 @@ import { LiveClassModule } from '@/components/modules/LiveClassModule'
 import { PlagiarismModule } from '@/components/modules/PlagiarismModule'
 import { MeetingSchedulerModule } from '@/components/modules/MeetingSchedulerModule'
 import { PredictiveAlertsModule } from '@/components/modules/PredictiveAlertsModule'
+import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton'
 
 export default function TeacherDashboard() {
   const router = useRouter()
@@ -40,13 +40,19 @@ export default function TeacherDashboard() {
   const [assignments, setAssignments] = useState<(Assignment & { submissions?: Submission[] })[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [students, setStudents]       = useState<Profile[]>([])
+  const [parents, setParents]         = useState<Profile[]>([])
   const [allAttempts, setAllAttempts] = useState<Attempt[]>([])
   const [timetable, setTimetable]     = useState<TimetableSlot[]>([])
   const [teacherQuests, setTeacherQuests] = useState<Quest[]>([])
   const [questProgress, setQuestProgress] = useState<QuestProgress[]>([])
 
   const [announceModal, setAnnounceModal] = useState(false)
-  const [newAnnounce, setNewAnnounce] = useState({ title:'', body:'', pinned:false })
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null)
+  const [announceFilter, setAnnounceFilter] = useState<'all' | 'mine' | 'pinned' | 'students' | 'parents'>('all')
+  const [announceSort, setAnnounceSort] = useState<'latest' | 'oldest'>('latest')
+  const [announceSearch, setAnnounceSearch] = useState('')
+  const [newAnnounce, setNewAnnounce] = useState<{ title: string; body: string; pinned: boolean; target: 'students' | 'parents' | 'all' }>({ title:'', body:'', pinned:false, target: 'students' })
+  const [announceSubmitting, setAnnounceSubmitting] = useState(false)
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -66,7 +72,7 @@ export default function TeacherDashboard() {
     })
 
     return () => { subscription.unsubscribe() }
-  }, [])
+  }, [router])
 
   const fetchAll = async (p: Profile) => {
     try {
@@ -76,6 +82,7 @@ export default function TeacherDashboard() {
         supabase.from('assignments').select('*, submissions(*)').eq('teacher_id', p.id).order('created_at', { ascending: false }),
         supabase.from('announcements').select('*').order('created_at', { ascending: false }),
         supabase.from('profiles').select('*').eq('role', 'student'),
+        supabase.from('profiles').select('*').eq('role', 'parent'),
         supabase.from('attempts').select('*').limit(2000),
         supabase.from('timetable').select('*').eq('teacher_id', p.id).order('day'),
         supabase.from('quests').select('*').order('created_at', { ascending: false }),
@@ -86,10 +93,11 @@ export default function TeacherDashboard() {
       if (results[2].status === 'fulfilled' && results[2].value.data) setAssignments(results[2].value.data)
       if (results[3].status === 'fulfilled' && results[3].value.data) setAnnouncements(results[3].value.data)
       if (results[4].status === 'fulfilled' && results[4].value.data) setStudents(results[4].value.data as Profile[])
-      if (results[5].status === 'fulfilled' && results[5].value.data) setAllAttempts(results[5].value.data)
-      if (results[6].status === 'fulfilled' && results[6].value.data) setTimetable(results[6].value.data)
-      if (results[7].status === 'fulfilled' && results[7].value.data) setTeacherQuests(results[7].value.data as Quest[])
-      if (results[8].status === 'fulfilled' && results[8].value.data) setQuestProgress(results[8].value.data as QuestProgress[])
+      if (results[5].status === 'fulfilled' && results[5].value.data) setParents(results[5].value.data as Profile[])
+      if (results[6].status === 'fulfilled' && results[6].value.data) setAllAttempts(results[6].value.data)
+      if (results[7].status === 'fulfilled' && results[7].value.data) setTimetable(results[7].value.data)
+      if (results[8].status === 'fulfilled' && results[8].value.data) setTeacherQuests(results[8].value.data as Quest[])
+      if (results[9].status === 'fulfilled' && results[9].value.data) setQuestProgress(results[9].value.data as QuestProgress[])
     } catch (err) {
       // Show error toast for fetch failures
       console.error('Teacher dashboard fetch failed:', err)
@@ -97,18 +105,94 @@ export default function TeacherDashboard() {
   }
 
 
+  const reloadAnnouncements = async () => {
+    const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false })
+    if (data) setAnnouncements(data as Announcement[])
+  }
+
+  const resetAnnouncementComposer = () => {
+    setNewAnnounce({ title:'', body:'', pinned:false, target: 'students' })
+    setEditingAnnouncementId(null)
+    setAnnounceModal(false)
+  }
+
   const postAnnouncement = async () => {
+    if (announceSubmitting) return
     if (!newAnnounce.title || !newAnnounce.body || !profile) return
+    setAnnounceSubmitting(true)
     try {
-      const { error } = await supabase.from('announcements').insert({ ...newAnnounce, target:'students', author_id:profile.id, author_name:profile.name, role:'teacher' })
-      if (error) throw error
-      await pushNotificationBatch(students.map(s => s.id), `◆ ${profile.name}: ${newAnnounce.title}`, 'announcement')
-      await logActivity(`Teacher ${profile.name} posted: ${newAnnounce.title}`, 'announcement')
-      setNewAnnounce({ title:'', body:'', pinned:false }); setAnnounceModal(false)
-      const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending:false })
-      if (data) setAnnouncements(data)
+      if (editingAnnouncementId) {
+        const { error } = await supabase
+          .from('announcements')
+          .update({
+            title: newAnnounce.title,
+            body: newAnnounce.body,
+            pinned: newAnnounce.pinned,
+            target: newAnnounce.target,
+          })
+          .eq('id', editingAnnouncementId)
+          .eq('author_id', profile.id)
+        if (error) throw error
+        await logActivity(`Teacher ${profile.name} updated announcement: ${newAnnounce.title}`, 'announcement')
+      } else {
+        const { error } = await supabase.from('announcements').insert({ ...newAnnounce, author_id:profile.id, author_name:profile.name, role:'teacher' })
+        if (error) throw error
+        await logActivity(`Teacher ${profile.name} posted: ${newAnnounce.title}`, 'announcement')
+      }
+      resetAnnouncementComposer()
+      await reloadAnnouncements()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to post announcement', 'error')
+    } finally {
+      setAnnounceSubmitting(false)
+    }
+  }
+
+  const openCreateAnnouncement = () => {
+    setEditingAnnouncementId(null)
+    setNewAnnounce({ title:'', body:'', pinned:false, target: 'students' })
+    setAnnounceModal(true)
+  }
+
+  const openEditAnnouncement = (announcement: Announcement) => {
+    if (!profile || announcement.author_id !== profile.id) return
+    setEditingAnnouncementId(announcement.id)
+    setNewAnnounce({
+      title: announcement.title || '',
+      body: announcement.body || '',
+      pinned: !!announcement.pinned,
+      target: (announcement.target === 'parents' || announcement.target === 'all') ? announcement.target : 'students',
+    })
+    setAnnounceModal(true)
+  }
+
+  const deleteAnnouncement = async (id: string) => {
+    if (!profile || !confirm('Delete this announcement?')) return
+    const prev = announcements
+    setAnnouncements(current => current.filter((x) => x.id !== id))
+    const { error } = await supabase.from('announcements').delete().eq('id', id).eq('author_id', profile.id)
+    if (error) {
+      setAnnouncements(prev)
+      toast(error.message || 'Failed to delete announcement', 'error')
+      return
+    }
+    await logActivity(`Teacher ${profile.name} deleted announcement`, 'announcement')
+  }
+
+  const toggleAnnouncementPin = async (announcement: Announcement) => {
+    if (!profile || announcement.author_id !== profile.id) return
+    const nextPinned = !announcement.pinned
+    const prev = announcements
+    setAnnouncements(current => current.map(item => item.id === announcement.id ? { ...item, pinned: nextPinned } : item))
+    const { error } = await supabase
+      .from('announcements')
+      .update({ pinned: nextPinned })
+      .eq('id', announcement.id)
+      .eq('author_id', profile.id)
+    if (error) {
+      setAnnouncements(prev)
+      toast(error.message || 'Failed to update pin state', 'error')
+      return
     }
   }
 
@@ -134,13 +218,23 @@ export default function TeacherDashboard() {
     { id:'messaging',     label:'Messages',         icon:'chat'     },
     { id:'report-card',   label:'Report Cards',     icon:'star'     },
     { id:'batch-grades',  label:'Batch Grades',     icon:'task'     },
-    { id:'notifications', label:'Notifications',    icon:'bell'     },
     { section:'Account' },
     { id:'profile',       label:'My Profile',       icon:'user'     },
   ]
 
   const myTests   = tests.filter(t => t.type==='test')
   const myQuizzes = tests.filter(t => t.type==='quiz')
+  const scopedStudentIds = useMemo(() => {
+    const ids = new Set<string>()
+    allAttempts.forEach(a => {
+      if (tests.some(t => t.id === a.test_id)) ids.add(a.student_id)
+    })
+    assignments.forEach(a => {
+      ;(a.submissions || []).forEach(s => ids.add(s.student_id))
+    })
+    return ids
+  }, [allAttempts, tests, assignments])
+  const scopedStudents = useMemo(() => students.filter(s => scopedStudentIds.has(s.id)), [students, scopedStudentIds])
 
   const analyticsData = useMemo(() => tests.map(t => {
     const tAttempts = allAttempts.filter(a => a.test_id === t.id)
@@ -152,22 +246,66 @@ export default function TeacherDashboard() {
     return { test: t, tAttempts, avg, high, low, pass }
   }).filter(Boolean) as { test: Test; tAttempts: Attempt[]; avg: number; high: number; low: number; pass: number }[], [tests, allAttempts])
 
-  if (!profile) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'var(--bg)', fontFamily:'var(--mono)', fontSize:12, color:'var(--fg-dim)' }}>Loading...</div>
-  )
+  const managedAnnouncements = useMemo(() => {
+    const profileId = profile?.id ?? ''
+    const query = announceSearch.trim().toLowerCase()
+    return announcements
+      .filter((a) => {
+        if (announceFilter === 'mine') return a.author_id === profileId
+        if (announceFilter === 'pinned') return !!a.pinned
+        if (announceFilter === 'students') return a.target === 'students' || a.target === 'all'
+        if (announceFilter === 'parents') return a.target === 'parents' || a.target === 'all'
+        return true
+      })
+      .filter((a) => {
+        if (!query) return true
+        const haystack = `${a.title || ''} ${a.body || ''} ${a.author_name || ''}`.toLowerCase()
+        return haystack.includes(query)
+      })
+      .sort((a, b) => {
+        const aTime = new Date(a.created_at || 0).getTime()
+        const bTime = new Date(b.created_at || 0).getTime()
+        return announceSort === 'oldest' ? aTime - bTime : bTime - aTime
+      })
+  }, [announcements, announceFilter, announceSearch, announceSort, profile?.id])
+
+  const pinnedAnnouncements = useMemo(() => managedAnnouncements.filter((a) => a.pinned), [managedAnnouncements])
+  const regularAnnouncements = useMemo(() => managedAnnouncements.filter((a) => !a.pinned), [managedAnnouncements])
+
+  if (!profile) return <DashboardSkeleton label="Loading teacher dashboard..." />
 
   return (
     <DashboardLayout profile={profile} navItems={navItems} activeTab={tab} onTabChange={t=>{ setTab(t) }}>
 
       {/* ── Timetable — handled by TimetableModule ── */}
 
-      <Modal open={announceModal} onClose={()=>setAnnounceModal(false)} title="New Announcement">
-            <div style={{ marginBottom:14 }}><label className="label">Title</label><input className="input" value={newAnnounce.title} onChange={e=>setNewAnnounce(a=>({...a,title:e.target.value}))} /></div>
-            <div style={{ marginBottom:14 }}><label className="label">Message</label><textarea className="input" rows={4} value={newAnnounce.body} onChange={e=>setNewAnnounce(a=>({...a,body:e.target.value}))} /></div>
-            <div style={{ display:'flex', gap:8 }}>
-              <button className="btn btn-primary" onClick={postAnnouncement}>Post</button>
-              <button className="btn" onClick={()=>setAnnounceModal(false)}>Cancel</button>
-            </div>
+      <Modal open={announceModal} onClose={resetAnnouncementComposer} title={editingAnnouncementId ? 'Edit Announcement' : 'New Announcement'}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                postAnnouncement()
+              }}
+            >
+              <div style={{ marginBottom:14 }}><label className="label">Title</label><input className="input" required value={newAnnounce.title} onChange={e=>setNewAnnounce(a=>({...a,title:e.target.value}))} /></div>
+              <div style={{ marginBottom:14 }}><label className="label">Message</label><textarea className="input" rows={4} required value={newAnnounce.body} onChange={e=>setNewAnnounce(a=>({...a,body:e.target.value}))} /></div>
+              <div style={{ marginBottom:14 }}><label className="label">Target</label>
+                <select className="input" value={newAnnounce.target} onChange={e=>setNewAnnounce(a=>({...a,target: e.target.value as 'students' | 'parents' | 'all'}))}>
+                  <option value="students">My Students</option>
+                  <option value="parents">Parents</option>
+                  <option value="all">Students + Parents</option>
+                </select>
+              </div>
+              <div style={{ marginBottom:14 }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={newAnnounce.pinned} onChange={e=>setNewAnnounce(a=>({...a,pinned:e.target.checked}))} />
+                  <span className="label" style={{ margin: 0 }}>Pin announcement</span>
+                </label>
+              </div>
+              <div className="modal-form-actions">
+                <button className="btn btn-primary" type="submit" disabled={announceSubmitting}>{announceSubmitting ? <span className="spinner" /> : (editingAnnouncementId ? 'Save Changes' : 'Post')}</button>
+                <button className="btn" type="button" onClick={resetAnnouncementComposer} disabled={announceSubmitting}>Cancel</button>
+              </div>
+            </form>
       </Modal>
 
       <div className="page">
@@ -202,7 +340,7 @@ export default function TeacherDashboard() {
           <TeacherTestModule
             profile={profile}
             tests={tests}
-            students={students}
+            students={scopedStudents}
             allAttempts={allAttempts}
             onTestsChange={setTests}
           />
@@ -213,7 +351,7 @@ export default function TeacherDashboard() {
           <TeacherAssignmentModule
             profile={profile}
             assignments={assignments}
-            students={students}
+            students={scopedStudents}
             onAssignmentsChange={setAssignments}
           />
         )}
@@ -227,7 +365,7 @@ export default function TeacherDashboard() {
         {tab==='grades' && (
           <TeacherGradesModule
             profile={profile}
-            students={students}
+            students={scopedStudents}
             allAttempts={allAttempts}
             assignments={assignments}
             courses={courses}
@@ -272,14 +410,65 @@ export default function TeacherDashboard() {
 
         {tab==='announcements' && (
           <>
-            <PageHeader title="ANNOUNCEMENTS" />
-            <div style={{ marginBottom:16 }} className="fade-up-1">
-              <button className="btn btn-primary btn-sm" onClick={()=>setAnnounceModal(true)}><Icon name="plus" size={12}/> New Announcement</button>
+            <PageHeader title="ANNOUNCEMENTS" subtitle={`Showing ${managedAnnouncements.length} announcement${managedAnnouncements.length === 1 ? '' : 's'}`} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr auto', gap: 10, marginBottom: 12 }} className="fade-up-1">
+              <input
+                className="input"
+                placeholder="Search title, content, author..."
+                value={announceSearch}
+                onChange={(e) => setAnnounceSearch(e.target.value)}
+              />
+              <select className="input" value={announceFilter} onChange={(e) => setAnnounceFilter(e.target.value as 'all' | 'mine' | 'pinned' | 'students' | 'parents')}>
+                <option value="all">All</option>
+                <option value="mine">My Announcements</option>
+                <option value="pinned">Pinned</option>
+                <option value="students">For Students</option>
+                <option value="parents">For Parents</option>
+              </select>
+              <select className="input" value={announceSort} onChange={(e) => setAnnounceSort(e.target.value as 'latest' | 'oldest')}>
+                <option value="latest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+              </select>
+              <button className="btn btn-primary btn-sm" onClick={openCreateAnnouncement}><Icon name="plus" size={12}/> New</button>
             </div>
-            <div className="fade-up-2">
-              {announcements.filter((a:any)=>a.author_id===profile.id||a.role==='admin').map((a:any)=>(
-                <AnnouncementCard key={a.id} a={a} canDelete={a.author_id===profile.id} onDelete={async id=>{ if(!confirm('Delete this announcement?')) return; await supabase.from('announcements').delete().eq('id',id).eq('author_id',profile.id); setAnnouncements(prev=>prev.filter((x:any)=>x.id!==id)) }} />
+
+            {pinnedAnnouncements.length > 0 && (
+              <div className="fade-up-2" style={{ marginBottom: 14 }}>
+                <SectionLabel>Pinned</SectionLabel>
+                {pinnedAnnouncements.map((a) => (
+                  <AnnouncementCard
+                    key={a.id}
+                    a={a}
+                    canDelete={a.author_id===profile.id}
+                    canEdit={a.author_id===profile.id}
+                    canPin={a.author_id===profile.id}
+                    onDelete={deleteAnnouncement}
+                    onEdit={openEditAnnouncement}
+                    onTogglePin={toggleAnnouncementPin}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className="fade-up-3">
+              <SectionLabel>All Matching</SectionLabel>
+              {regularAnnouncements.map((a) => (
+                <AnnouncementCard
+                  key={a.id}
+                  a={a}
+                  canDelete={a.author_id===profile.id}
+                  canEdit={a.author_id===profile.id}
+                  canPin={a.author_id===profile.id}
+                  onDelete={deleteAnnouncement}
+                  onEdit={openEditAnnouncement}
+                  onTogglePin={toggleAnnouncementPin}
+                />
               ))}
+              {managedAnnouncements.length === 0 && (
+                <div className="card" style={{ textAlign: 'center', color: 'var(--fg-dim)', fontFamily: 'var(--mono)', fontSize: 12 }}>
+                  No announcements match your current filter.
+                </div>
+              )}
             </div>
           </>
         )}
@@ -293,7 +482,7 @@ export default function TeacherDashboard() {
 
         {/* ── LIVE CLASSES ── */}
         {tab === 'live-classes' && (
-          <LiveClassModule profile={profile} />
+          <LiveClassModule profile={profile} isTeacher />
         )}
 
         {/* ── PLAGIARISM ── */}
@@ -313,12 +502,12 @@ export default function TeacherDashboard() {
 
         {/* ── MESSAGING ── */}
         {tab === 'messaging' && (
-          <MessagingModule profile={profile} contacts={students} />
+          <MessagingModule profile={profile} contacts={[...scopedStudents, ...parents]} />
         )}
 
         {/* ── REPORT CARDS ── */}
         {tab === 'report-card' && (
-          <ReportCardModule profile={profile} students={students} isTeacher />
+          <ReportCardModule profile={profile} students={scopedStudents} isTeacher />
         )}
 
         {/* ── BATCH GRADES ── */}
@@ -326,12 +515,10 @@ export default function TeacherDashboard() {
           <TeacherBatchGradeModule
             profile={profile}
             assignments={assignments}
-            students={students}
+            students={scopedStudents}
             onAssignmentsChange={setAssignments}
           />
         )}
-
-        {tab === 'notifications' && <NotificationsModule userId={profile.id} />}
 
         {/* ── QUESTS OVERVIEW ── */}
         {tab === 'quests' && (() => {

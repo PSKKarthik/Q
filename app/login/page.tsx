@@ -10,6 +10,13 @@ function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const resetSuccess = searchParams.get('reset') === 'success'
+  const redirectPath = searchParams.get('redirect')
+
+  const isSafeRedirect = (path: string) => {
+    if (!path.startsWith('/')) return false
+    if (path.startsWith('//')) return false
+    return path.startsWith('/dashboard/')
+  }
 
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -41,19 +48,28 @@ function LoginForm() {
       .from('profiles').select('role').eq('id', data.user.id).single()
 
     const role = profile?.role || 'student'
-    router.push(`/dashboard/${role}`)
+    const target = redirectPath && isSafeRedirect(redirectPath)
+      ? redirectPath
+      : `/dashboard/${role}`
+    router.push(target)
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', position: 'relative' }}>
+    <div className="auth-shell" style={{ background: 'var(--bg)', position: 'relative' }}>
       <div className="grid-bg" />
-      <div style={{ width: '100%', maxWidth: 400, padding: '0 16px', position: 'relative', zIndex: 5 }}>
+      <div className="auth-wrap" style={{ position: 'relative', zIndex: 5 }}>
         <div className="fade-up" style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ fontFamily: 'var(--display)', fontSize: 48, letterSpacing: '0.15em' }}>QGX</div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', letterSpacing: '0.2em', textTransform: 'uppercase', marginTop: 4 }}>Sign In</div>
         </div>
 
-        <div className="fade-up-1 card" style={{ padding: 32 }}>
+        <form
+          className="fade-up-1 card auth-card"
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleLogin()
+          }}
+        >
           {resetSuccess && (
             <div style={{ color: 'var(--success)', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 16, textAlign: 'center' }}>
               ✓ Password updated! Sign in with your new password.
@@ -61,14 +77,14 @@ function LoginForm() {
           )}
           <div style={{ marginBottom: 18 }}>
             <label className="label">Email or QGX ID</label>
-            <input className="input" type="text" value={identifier} onChange={e => setIdentifier(e.target.value)}
-              placeholder="you@example.com or QGX-S0001-A7F2" onKeyDown={e => e.key === 'Enter' && handleLogin()} />
+            <input className="input" type="text" required value={identifier} onChange={e => setIdentifier(e.target.value)}
+              placeholder="you@example.com or QGX-S0001-A7F2" autoComplete="username" />
           </div>
           <div style={{ marginBottom: 24 }}>
             <label className="label">Password</label>
             <div style={{ position: 'relative' }}>
-              <input className="input" type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()} style={{ paddingRight: 40 }} autoComplete="current-password" />
+              <input className="input" type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)}
+                style={{ paddingRight: 40 }} autoComplete="current-password" />
               <button type="button" onClick={() => setShowPw(!showPw)}
                 style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-dim)', padding: 4, display: 'flex', alignItems: 'center' }}
                 aria-label={showPw ? 'Hide password' : 'Show password'}>
@@ -77,8 +93,8 @@ function LoginForm() {
             </div>
           </div>
           {error && <div style={{ color: 'var(--danger)', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 16 }}>{error}</div>}
-          <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
-            onClick={handleLogin} disabled={loading}>
+          <button className="btn btn-primary" type="submit" style={{ width: '100%', justifyContent: 'center' }}
+            disabled={loading}>
             {loading ? <span className="spinner" /> : 'Sign In →'}
           </button>
           <div style={{ textAlign: 'right', marginTop: 12 }}>
@@ -88,7 +104,7 @@ function LoginForm() {
             <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)' }}>No account? </span>
             <Link href="/register" style={{ color: 'var(--fg)', fontFamily: 'var(--mono)', fontSize: 11 }}>Register</Link>
           </div>
-        </div>
+        </form>
 
         <div style={{ textAlign: 'center', marginTop: 20 }}>
           <Link href="/" style={{ color: 'var(--fg-dim)', fontFamily: 'var(--mono)', fontSize: 11 }}>← Back to Home</Link>

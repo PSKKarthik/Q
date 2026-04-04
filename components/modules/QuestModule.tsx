@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/lib/toast'
 import type { Profile, Quest, QuestProgress } from '@/types'
@@ -16,6 +16,15 @@ const QUEST_ICONS: Record<string, string> = {
   test: '▫', course: '▪', streak: '◆', social: '◇', achievement: '★', xp: '◈',
 }
 
+const QUEST_ACTIONS: Record<string, string> = {
+  test: 'Complete tests',
+  course: 'Finish course materials',
+  streak: 'Maintain daily activity streak',
+  social: 'Post or interact in forums',
+  achievement: 'Unlock major milestones',
+  xp: 'Earn XP from activities',
+}
+
 export function QuestModule({ profile }: Props) {
   const { toast } = useToast()
   const [quests, setQuests] = useState<Quest[]>([])
@@ -23,11 +32,7 @@ export function QuestModule({ profile }: Props) {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('active')
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     try {
       const [questsRes, progressRes] = await Promise.all([
@@ -40,7 +45,11 @@ export function QuestModule({ profile }: Props) {
       toast(err instanceof Error ? err.message : 'Failed to load quests', 'error')
     }
     setLoading(false)
-  }
+  }, [profile.id, toast])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const claimReward = async (quest: Quest, prog: QuestProgress) => {
     if (!prog.completed || prog.claimed) return
@@ -146,6 +155,7 @@ export function QuestModule({ profile }: Props) {
 function QuestCard({ quest, progress, onClaim }: { quest: Quest; progress?: QuestProgress; onClaim: (q: Quest, p: QuestProgress) => void }) {
   const pct = progress ? Math.min(100, Math.round((progress.progress / quest.target_count) * 100)) : 0
   const icon = QUEST_ICONS[quest.target_type] || '◉'
+  const actionHint = QUEST_ACTIONS[quest.target_type] || 'Complete quest actions'
 
   return (
     <div className="card" style={{ padding: 20, opacity: progress?.claimed ? 0.6 : 1 }}>
@@ -159,6 +169,9 @@ function QuestCard({ quest, progress, onClaim }: { quest: Quest; progress?: Ques
       </div>
 
       <div style={{ marginBottom: 8 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginBottom: 6 }}>
+          Do this: {actionHint} ({quest.target_count} needed)
+        </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 10, marginBottom: 4 }}>
           <span>{progress?.progress || 0}/{quest.target_count}</span>
           <span>{pct}%</span>

@@ -269,7 +269,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       toast('Double XP event has ended', 'info')
     }, remaining)
     return () => clearTimeout(timer)
-  }, [liveDoubleXP])
+  }, [liveDoubleXP, toast])
 
   // Fetch forum post count
   useEffect(() => {
@@ -279,13 +279,18 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
         if (error) { toast('Failed to load forum activity', 'error'); return }
         setForumCount(count || 0)
       })
-  }, [profile.id])
+  }, [profile.id, toast])
 
   // Check daily login claim status
   useEffect(() => {
     const todayStr = new Date().toISOString().slice(0, 10)
-    const claimed = localStorage.getItem(`qgx-daily-${profile.id}-${todayStr}`)
-    setDailyLoginClaimed(!!claimed)
+    supabase
+      .from('daily_xp_claims')
+      .select('student_id')
+      .eq('student_id', profile.id)
+      .eq('claim_date', todayStr)
+      .maybeSingle()
+      .then(({ data }) => setDailyLoginClaimed(!!data))
   }, [profile.id])
 
   /* ── Computed stats ── */
@@ -333,7 +338,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       supabase.from('profiles').update({ badges: earnedIds }).eq('id', profile.id)
         .then(() => onProfileUpdate({ ...profile, badges: earnedIds }))
     }
-  }, [earnedBadges])
+  }, [earnedBadges, onProfileUpdate, profile, toast])
 
   // --- Level-Up Detection ---
   useEffect(() => {
@@ -345,7 +350,7 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       toast(`${toTier.icon} TIER UP! You reached ${toTier.label}!`, 'success')
     }
     prevTierRef.current = currentIdx
-  }, [tierData.idx])
+  }, [tierData.idx, TIERS, toast])
 
   // --- Daily Login XP Claim ---
   const claimDailyLogin = async () => {
@@ -354,26 +359,25 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
     const todayKey = new Date().toISOString().slice(0, 10)
     const loginXP = 10 + Math.min(streak.current * 2, 40) // 10 base + 2 per streak day (max 50)
     try {
-      const { error } = await supabase.rpc('atomic_xp_update', {
+      const { data, error } = await supabase.rpc('claim_daily_login_xp', {
         p_user_id: profile.id,
+        p_claim_date: todayKey,
         p_xp_delta: loginXP,
-        p_best_score: profile.score || 0,
-        p_ghost_win_increment: 0,
       })
       if (error) throw error
-      localStorage.setItem(`qgx-daily-${profile.id}-${todayKey}`, '1')
+      const result = data as { claimed?: boolean; xp?: number } | null
+      if (!result?.claimed) {
+        setDailyLoginClaimed(true)
+        toast('Daily login bonus already claimed for today.', 'info')
+        setClaimingLogin(false)
+        return
+      }
       setDailyLoginClaimed(true)
-      const newXP = (profile.xp || 0) + loginXP
+      const newXP = result?.xp ?? ((profile.xp || 0) + loginXP)
       onProfileUpdate({ ...profile, xp: newXP })
       toast(`◈ +${loginXP} XP — Daily login bonus! ${streak.current > 0 ? `(${streak.current}-day streak bonus!)` : ''}`, 'success')
     } catch {
-      // Fallback: try direct update
-      const newXP = (profile.xp || 0) + loginXP
-      await supabase.from('profiles').update({ xp: newXP }).eq('id', profile.id)
-      localStorage.setItem(`qgx-daily-${profile.id}-${todayKey}`, '1')
-      setDailyLoginClaimed(true)
-      onProfileUpdate({ ...profile, xp: newXP })
-      toast(`◈ +${loginXP} XP — Daily login bonus!`, 'success')
+      toast('Could not claim daily login bonus right now.', 'error')
     }
     setClaimingLogin(false)
   }

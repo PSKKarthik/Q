@@ -18,7 +18,6 @@ import { StudentCourseModule } from '@/components/modules/CourseModule'
 import { StudentAssignmentModule } from '@/components/modules/AssignmentModule'
 import { StudentAttendanceModule } from '@/components/modules/AttendanceModule'
 import { StudentGradesModule } from '@/components/modules/GradesModule'
-import { NotificationsModule } from '@/components/modules/NotificationsModule'
 import { MessagingModule } from '@/components/modules/MessagingModule'
 import { ReportCardModule } from '@/components/modules/ReportCardModule'
 import { StudentAnalyticsModule } from '@/components/modules/StudentAnalyticsModule'
@@ -29,6 +28,7 @@ import { LiveClassModule } from '@/components/modules/LiveClassModule'
 import { QuestModule } from '@/components/modules/QuestModule'
 import { CollaborationModule } from '@/components/modules/CollaborationModule'
 import { CodePlaygroundModule } from '@/components/modules/CodePlaygroundModule'
+import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton'
 
 export default function StudentDashboard() {
   const router = useRouter()
@@ -43,9 +43,11 @@ export default function StudentDashboard() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [allStudents, setAllStudents] = useState<Profile[]>([])
   const [allTeachers, setAllTeachers] = useState<Profile[]>([])
+  const [peerIds, setPeerIds]         = useState<string[]>([])
   const [doubleXP, setDoubleXP]       = useState<{ active: boolean; ends_at: number | null }>({ active: false, ends_at: null })
   const [xpLevels, setXpLevels]       = useState<XPLevel[]>(DEFAULT_XP_LEVELS)
   const [checkinXP, setCheckinXP]     = useState(10)
+  const [isExamMode, setIsExamMode]   = useState(false)
   const channelRefs = useRef<any[]>([])
   const [isOffline, setIsOffline]   = useState(false)
 
@@ -77,7 +79,7 @@ export default function StudentDashboard() {
       window.removeEventListener('offline', goOffline)
       window.removeEventListener('online', goOnline)
     }
-  }, [])
+  }, [router])
 
   const fetchAll = async (p: Profile) => {
     const { data: enrollData } = await supabase.from('enrollments').select('course_id').eq('student_id', p.id)
@@ -96,16 +98,30 @@ export default function StudentDashboard() {
         supabase.from('profiles').select('*').eq('role', 'student'),
         supabase.from('profiles').select('*').eq('role', 'teacher'),
         supabase.from('platform_settings').select('*').eq('key', 'double_xp').single(),
+        supabase.from('enrollments').select('student_id,course_id').in('course_id', eIds),
       ])
-      if (results[0].status === 'fulfilled' && results[0].value.data)  setTests(results[0].value.data as Test[])
+      const allTests = (results[0].status === 'fulfilled' && results[0].value.data) ? results[0].value.data as Test[] : []
       if (results[1].status === 'fulfilled' && results[1].value.data)  setAttempts(results[1].value.data as Attempt[])
-      if (results[2].status === 'fulfilled' && results[2].value.data)  setAllCourses(results[2].value.data as Course[])
+      const loadedCourses = (results[2].status === 'fulfilled' && results[2].value.data) ? results[2].value.data as Course[] : []
+      if (loadedCourses.length) setAllCourses(loadedCourses)
       if (results[3].status === 'fulfilled' && results[3].value.data)  setAssignments(results[3].value.data)
       if (results[4].status === 'fulfilled' && results[4].value.data)  setTimetable(results[4].value.data)
       if (results[5].status === 'fulfilled' && results[5].value.data)  setAnnouncements(results[5].value.data)
       if (results[6].status === 'fulfilled' && results[6].value.data)  setAllStudents(results[6].value.data as Profile[])
       if (results[7].status === 'fulfilled' && results[7].value.data)  setAllTeachers(results[7].value.data as Profile[])
       if (results[8].status === 'fulfilled' && results[8].value.data)  setDoubleXP(results[8].value.data.value)
+      if (results[9].status === 'fulfilled' && results[9].value.data) {
+        const peers = new Set<string>()
+        ;(results[9].value.data as { student_id: string }[]).forEach(r => peers.add(r.student_id))
+        peers.delete(p.id)
+        setPeerIds(Array.from(peers))
+      }
+
+      const enrolledCourses = loadedCourses.filter(c => eIds.includes(c.id))
+      const allowedSubjects = new Set(enrolledCourses.map(c => c.subject).filter(Boolean))
+      const allowedTeacherIds = new Set(enrolledCourses.map(c => c.teacher_id).filter(Boolean))
+      const filteredTests = allTests.filter(t => allowedSubjects.has(t.subject) || allowedTeacherIds.has(t.teacher_id))
+      setTests(filteredTests)
 
       // Fetch XP levels config
       const { data: xlData } = await supabase.from('platform_settings').select('*').eq('key', 'xp_levels').single()
@@ -124,7 +140,15 @@ export default function StudentDashboard() {
         (payload) => setAnnouncements(prev => [payload.new as Announcement, ...prev]))
       .subscribe()
 
-    channelRefs.current = [ch1]
+    const ch2 = supabase.channel(`student-leaderboard-${p.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: 'role=eq.student' }, () => {
+        supabase.from('profiles').select('*').eq('role', 'student').then(({ data }) => {
+          if (data) setAllStudents(data as Profile[])
+        })
+      })
+      .subscribe()
+
+    channelRefs.current = [ch1, ch2]
   }
 
   // Forum CRUD now handled by ForumModule component
@@ -153,17 +177,16 @@ export default function StudentDashboard() {
     { id:'report-card', label:'Report Card', icon:'download' },
     { id:'my-analytics',label:'My Analytics',icon:'chart'    },
     { id:'certificates',label:'Certificates',icon:'pin'      },
-    { id:'notifications', label:'Notifications', icon:'bell' },
     { section:'Account' },
     { id:'profile',     label:'My Profile',  icon:'user'     },
   ]
 
-  if (!profile) return <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'var(--bg)', fontFamily:'var(--mono)', fontSize:12, color:'var(--fg-dim)' }}>Loading...</div>
+  if (!profile) return <DashboardSkeleton label="Loading student dashboard..." />
 
   const myAttempts = attempts
 
   return (
-    <DashboardLayout profile={profile} navItems={navItems} activeTab={tab} onTabChange={t => { setTab(t) }}>
+    <DashboardLayout profile={profile} navItems={navItems} activeTab={tab} locked={isExamMode} onTabChange={t => { if (!isExamMode) setTab(t) }}>
       {isOffline && (
         <div style={{ background:'var(--danger)', color:'#fff', textAlign:'center', padding:'8px', fontFamily:'var(--mono)', fontSize:11, letterSpacing:'0.1em' }}>
           △ You are offline — some features may not work
@@ -225,6 +248,7 @@ export default function StudentDashboard() {
             attempts={myAttempts}
             doubleXP={doubleXP}
             allStudents={allStudents}
+            onExamStateChange={setIsExamMode}
             onAttemptDone={(attempt, xpData) => {
               setProfile(p => p ? { ...p, xp: xpData.newXP, score: attempt.percent } : p)
               setAttempts(prev => [...prev.filter(a => a.test_id !== attempt.test_id), attempt])
@@ -296,7 +320,10 @@ export default function StudentDashboard() {
 
         {/* ── MESSAGING ── */}
         {tab === 'messaging' && (
-          <MessagingModule profile={profile} contacts={[...allStudents, ...allTeachers]} />
+          <MessagingModule profile={profile} contacts={[
+            ...allStudents.filter(s => peerIds.includes(s.id)),
+            ...allTeachers.filter(t => allCourses.some(c => enrolledIds.includes(c.id) && c.teacher_id === t.id)),
+          ]} />
         )}
 
         {/* ── REPORT CARD ── */}
@@ -345,9 +372,6 @@ export default function StudentDashboard() {
         {tab === 'code' && (
           <CodePlaygroundModule profile={profile} />
         )}
-
-        {/* ── NOTIFICATIONS ── */}
-        {tab === 'notifications' && <NotificationsModule userId={profile.id} />}
 
         {/* ── PROFILE ── */}
         {tab === 'profile' && (

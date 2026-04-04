@@ -92,7 +92,7 @@ export function NotificationsModule({ userId }: { userId: string }) {
   useEffect(() => {
     const channel = supabase.channel('notifs-realtime')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-        (payload) => { setNotifs(prev => [payload.new as Notification, ...prev]) })
+        (payload: { new: Notification }) => { setNotifs(prev => [payload.new, ...prev]) })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [userId])
