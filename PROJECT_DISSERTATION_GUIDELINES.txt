@@ -1,0 +1,959 @@
+﻿DEPARTMENT OF CSE - ARTIFICIAL INTELLIGENCE & MACHINE LEARNING
+ADITYA COLLEGE OF ENGINEERING & TECHNOLOGY(A)
+
+PROJECT DISSERTATION CONTENT (FILLED FROM PROJECT)
+Project Title: QueryGenX - AI Enabled Learning Management System
+
+=====================================================================
+TITLE PAGE CONTENT
+=====================================================================
+
+A Project Report On
+
+QUERYGENX
+
+Submitted in partial fulfillment of the requirements for the award of the degree of
+
+BACHELOR OF TECHNOLOGY
+IN
+CSE - ARTIFICIAL INTELLIGENCE & MACHINE LEARNING
+
+Submitted By
+
+Polisetty Sai Krishna Karthik                      (Reg. No: 22MH1A4254)
+Botla Veerendra                                    (Reg. No: 22MH1A4205)
+Medapati Anjali Devi                               (Reg. No: 22MH1A4242)
+Palepu Stephen                                     (Reg. No: 22MH1A4251)
+
+Under the esteemed supervision of
+
+Mrs. CH.D.V.P. Kumari, M. Tech (Ph.D)
+Assistant Professor
+
+DEPARTMENT OF CSE - ARTIFICIAL INTELLIGENCE & MACHINE LEARNING
+
+ADITYA COLLEGE OF ENGINEERING & TECHNOLOGY(A)
+Permanently Affiliated to JNTUK, Kakinada * Approved by AICTE New Delhi
+Accredited by NBA, Accredited by NAAC ( A+ ) with 3.4 CGPA
+Aditya Nagar, ADB Road, Surampalem, Kakinada District, Andhra Pradesh.
+
+AY: 2025-26
+
+Batch No: C3
+
+
+=====================================================================
+CERTIFICATE PAGE CONTENT
+=====================================================================
+
+ADITYA COLLEGE OF ENGINEERING & TECHNOLOGY(A)
+(An Autonomous Institution)
+Permanently Affiliated to JNTUK, Kakinada * Approved by AICTE New Delhi
+Accredited by NBA, Accredited by NAAC ( A+ ) with 3.4 CGPA
+Aditya Nagar, ADB Road, Surampalem, Kakinada District, Andhra Pradesh.
+
+DEPARTMENT OF CSE - ARTIFICIAL INTELLIGENCE & MACHINE LEARNING
+
+CERTIFICATE
+
+This is to certify that the project work entitled "QueryGenX - AI Enabled
+Learning Management System", is a bonafide work carried out by Polisetty Sai Krishna
+Karthik (Regd. No.: 22MH1A4254), Botla Veerendra (Regd. No.: 22MH1A4205), Medapati
+Anjali Devi (Regd. No.: 22MH1A4242), Palepu Stephen (Regd. No.: 22MH1A4251), in partial
+fulfillment of the requirements for the award of the degree of Bachelor of
+Technology in CSE - Artificial Intelligence & Machine Learning from Aditya College of
+Engineering & Technology during the academic year 2025-2026.
+
+PROJECT GUIDE                                 HEAD OF THE DEPARTMENT
+Mrs. CH.D.V.P. Kumari, M. Tech (Ph.D)         Dr. B. Kiran Kumar M.Tech.,Ph.D
+Assistant Professor                           Professor
+
+EXTERNAL EXAMINER
+
+
+=====================================================================
+DECLARATION PAGE CONTENT
+=====================================================================
+
+DECLARATION
+
+We hereby declare that this project entitled "QueryGenX - AI Enabled
+Learning Management System", has been undertaken by us and this work has been
+submitted to Aditya College of Engineering & Technology affiliated to JNTUK,
+Kakinada, in partial fulfilment of the requirements for the award of the degree
+of Bachelor of Technology in CSE - Artificial Intelligence & Machine Learning.
+
+We further declare that this project work has not been submitted in full or part
+for the award of any degree of this or in any other educational institutions.
+
+PROJECT ASSOCIATES
+
+Polisetty Sai Krishna Karthik (Regd. No.: 22MH1A4254)
+Botla Veerendra (Regd. No.: 22MH1A4205)
+Medapati Anjali Devi (Regd. No.: 22MH1A4242)
+Palepu Stephen (Regd. No.: 22MH1A4251)
+
+
+=====================================================================
+ACKNOWLEDGEMENT PAGE CONTENT
+=====================================================================
+
+ACKNOWLEDGEMENT
+
+It is our privilege to express our sincere gratitude to our project supervisor,
+Mrs. CH.D.V.P. Kumari, M. Tech (Ph.D), for continuous guidance, valuable
+suggestions, and constant encouragement during the development of this project.
+Her support helped us complete each phase of the project in a structured and
+professional manner.
+
+We are grateful to the Head of the Department, Dr. B. Kiran Kumar, for academic
+support and motivation throughout the project period. We also thank all faculty
+members, lab staff, and project coordinator for their technical support and
+constructive feedback.
+
+We sincerely thank the management of Aditya College of Engineering & Technology
+for providing the infrastructure, resources, and environment needed to complete
+this work successfully.
+
+Finally, we express heartfelt thanks to our parents and friends for their
+encouragement and support throughout the project.
+
+
+=====================================================================
+ABSTRACT
+=====================================================================
+
+QueryGenX is a full-stack AI-enabled Learning Management System (LMS)
+designed to improve the digital learning experience for educational institutions.
+The system supports four major user roles: Admin, Teacher, Student, and Parent,
+with role-specific dashboards and workflows. The platform is developed using
+Next.js 14, React 18, TypeScript, Supabase PostgreSQL with Row Level Security,
+and deployed on Vercel.
+
+The project integrates multiple academic and administrative modules including test
+management, assignment management, attendance tracking, timetable planning,
+analytics, notifications, messaging, forum discussions, and report cards. A major
+innovation of the project is the AI-based tutoring and AI-assisted question
+generation layer using GROQ-based large language models. QueryGenX also introduces
+gamification through XP, levels, leaderboards, and activity-based engagement to
+improve student participation.
+
+The testing engine supports objective and semi-objective formats such as MCQ,
+MSQ, True/False, Fill-in-the-Blank, and Match-the-Following. Built-in anti-cheat
+controls such as full-screen checks, tab-switch tracking, question randomization,
+and timer control are provided for fair evaluation.
+
+The project is engineered with production readiness in mind. It includes unit
+tests, linting, type checking, and end-to-end testing workflows. The final system
+achieved stable deployment with all validation checks passing, demonstrating that
+QueryGenX is scalable, modular, and suitable for real-time educational environments.
+
+Keywords: Learning Management System, AI Tutor, Next.js, Supabase, Gamification,
+Online Assessment, Role-Based Access, EdTech Platform.
+
+Department: CSE-AIML
+Academic Year: 2025-26
+Batch No: C3
+Guide Name: Mrs. CH.D.V.P. Kumari, Assistant Professor, M. Tech (Ph.D)
+
+
+=====================================================================
+CONTENTS
+=====================================================================
+
+ABSTRACT
+LIST OF FIGURES
+LIST OF TABLES
+
+CHAPTER 1: INTRODUCTION
+1.1 Purpose of the System
+1.2 Scope of the System
+1.3 Current System
+1.4 Proposed System
+
+CHAPTER 2: REQUIREMENT ANALYSIS
+2.1 Functional Requirements
+2.2 Non-Functional Requirements
+2.2.1 User Interface and Human Factors
+2.2.2 Software Requirements
+2.2.3 Hardware Requirements
+2.2.4 Usability
+2.2.5 Reliability
+2.2.6 Performance
+2.2.7 Supportability
+2.2.8 Physical Environment
+2.2.9 Security Requirements
+2.2.10 Resource Requirements
+
+CHAPTER 3: SYSTEM ANALYSIS
+3.1 Introduction
+3.2 Use Cases
+3.2.1 Actors
+3.2.2 List of Use Cases
+3.2.3 Use Case Diagrams
+
+CHAPTER 4: SYSTEM DESIGN
+4.1 Introduction
+4.2 System Architecture
+4.3 System Object Model
+4.3.1 Introduction
+4.3.2 Subsystems
+4.4 Object Description
+4.4.1 Objects
+4.4.2 Class Diagrams
+4.5 Object Collaboration
+4.5.1 Object Collaboration Diagram
+4.6 Dynamic Model
+4.6.1 Sequence Diagrams
+4.6.2 Activity Diagrams
+4.7 Database Design
+4.7.1 Entity Relationship Diagrams
+4.7.2 Database Tables
+4.8 Static Model
+4.8.1 Component Diagrams
+4.8.2 Deployment Diagrams
+
+CHAPTER 5: IMPLEMENTATION
+5.1 Software Used
+5.2 Source Code
+
+CHAPTER 6: TESTING
+6.1 Introduction
+6.2 Types of Testing
+
+CHAPTER 7: OUTPUT SCREENS
+
+CHAPTER 8: CONCLUSION
+
+BIBLIOGRAPHY
+APPENDIX
+
+
+=====================================================================
+LIST OF FIGURES
+=====================================================================
+
+S.No.   Figure No.   Name of Figure
+1       3.1          Use Case Diagram
+2       4.1          Overall System Architecture
+3       4.2          Role-wise Dashboard Flow
+4       4.3          Database Entity Relationship Diagram
+5       4.4          Test Evaluation Workflow
+6       4.5          Notification and Messaging Flow
+7       7.1          Landing Page
+8       7.2          Admin Dashboard
+9       7.3          Teacher Dashboard
+10      7.4          Student Dashboard
+11      7.5          Parent Dashboard
+
+
+=====================================================================
+LIST OF TABLES
+=====================================================================
+
+S.No.   Table No.    Name of Table
+1       2.1          Functional Requirements Summary
+2       2.2          Software and Hardware Requirements
+3       4.1          Major Database Tables
+4       6.1          Unit Test Report Summary
+5       6.2          End-to-End Test Scenarios
+
+
+=====================================================================
+CHAPTER 1: INTRODUCTION
+=====================================================================
+
+1.1 PURPOSE OF THE SYSTEM
+
+The primary purpose of QGX is to build a smart, scalable, and user-friendly
+Learning Management System that digitizes and automates major academic workflows
+inside educational institutions. Traditional classroom management and assessment
+systems often rely on disconnected tools for attendance, assignments, examinations,
+communication, and analytics. QGX addresses this fragmentation by integrating all
+these services into one centralized platform.
+
+Another purpose is to improve student engagement using AI and gamification.
+Students are more motivated when learning is interactive, feedback is immediate,
+and achievements are visible. Therefore, QGX includes XP progression, level-based
+rewards, AI tutoring support, and personalized learning modules.
+
+1.2 SCOPE OF THE SYSTEM
+
+The project scope includes:
+
+1. Multi-role access for Admin, Teacher, Student, and Parent.
+2. Test and quiz management with AI-assisted question generation.
+3. Assignment, attendance, timetable, and course management.
+4. Student performance analytics and parent monitoring.
+5. Real-time notifications and messaging modules.
+6. Forum and collaboration support.
+7. PWA capability for mobile-friendly access.
+
+The current scope focuses on web-based deployment. Native Android/iOS apps,
+advanced proctoring with camera monitoring, and large-scale analytics forecasting
+are considered future extensions.
+
+1.3 CURRENT SYSTEM
+
+In many institutions, academic management is split across multiple systems:
+manual records, spreadsheets, messaging apps, and separate exam portals. This
+leads to data inconsistency, delayed communication, and limited performance
+tracking. Teachers spend extra effort in repetitive administrative tasks, and
+students lack unified progress visibility.
+
+1.4 PROPOSED SYSTEM
+
+QGX proposes an integrated cloud-based LMS built on modern web technologies.
+The proposed system centralizes all academic operations and provides role-specific
+dashboards. Teachers can create tests and assignments, students can attempt tests
+with anti-cheat controls, parents can monitor progress, and admins can manage
+users and system analytics. AI-powered tutoring and question generation improve
+learning quality and reduce content preparation time.
+
+
+=====================================================================
+CHAPTER 2: REQUIREMENT ANALYSIS
+=====================================================================
+
+2.1 FUNCTIONAL REQUIREMENTS
+
+Table 2.1: Functional Requirements Summary
+
+FR1  User authentication and role-based authorization.
+FR2  Admin can create/delete users and manage institution-wide configuration.
+FR3  Teachers can create tests with MCQ, MSQ, T/F, FIB, and Match formats.
+FR4  Students can attempt tests with timer and anti-cheat enforcement.
+FR5  Auto-scoring and result generation after submission.
+FR6  AI module can generate questions and tutor responses.
+FR7  Assignment and attendance management with status tracking.
+FR8  Parent dashboard can monitor child performance and attendance.
+FR9  Notification system supports real-time updates.
+FR10 Forum, collaboration, and communication tools are available.
+
+2.2 NON-FUNCTIONAL REQUIREMENTS
+
+2.2.1 User Interface and Human Factors
+
+The interface should be simple, responsive, and role-specific. Navigation should
+be clear for first-time users. Dashboards should display only relevant modules
+to reduce clutter.
+
+2.2.2 Software Requirements
+
+- Node.js (18+ recommended)
+- Next.js 14.2.5
+- React 18
+- TypeScript 5.x
+- Supabase client SDK
+- Jest, Playwright, ESLint
+- Browser: Chrome/Edge/Firefox
+
+2.2.3 Hardware Requirements
+
+Minimum development machine:
+- Processor: Intel i5 or equivalent
+- RAM: 8 GB (16 GB recommended)
+- Storage: 10 GB free space
+- Internet: Stable broadband
+
+2.2.4 Usability
+
+Users should perform core actions in minimum clicks. Forms include validation and
+error prompts for better guidance.
+
+2.2.5 Reliability
+
+The system must handle concurrent users and maintain data consistency in testing,
+attendance, and grading modules.
+
+2.2.6 Performance
+
+Pages should render quickly under normal load. API operations should respond in
+acceptable latency for dashboard usage.
+
+2.2.7 Supportability
+
+The modular structure supports easy enhancement and bug fixing.
+
+2.2.8 Physical Environment
+
+The system is cloud hosted and accessible from lab systems, personal laptops,
+and mobile browsers.
+
+2.2.9 Security Requirements
+
+- Role-based access control
+- Supabase Row Level Security
+- Secure API handling
+- Input sanitization
+- Session-based authentication
+
+2.2.10 Resource Requirements
+
+- Supabase project for database and auth
+- Vercel for deployment
+- GROQ API key for AI module
+
+
+=====================================================================
+CHAPTER 3: SYSTEM ANALYSIS
+=====================================================================
+
+3.1 INTRODUCTION
+
+System analysis was performed to identify user interactions, workflows, and data
+movement across modules. Use-case-driven analysis helped map requirements to the
+final implementation.
+
+3.2 USE CASES
+
+3.2.1 ACTORS
+
+1. Admin
+2. Teacher
+3. Student
+4. Parent
+
+3.2.2 LIST OF USE CASES
+
+Admin:
+- Manage users
+- Broadcast announcements
+- View institution analytics
+
+Teacher:
+- Create tests and assignments
+- Manage attendance and timetable
+- Evaluate student performance
+
+Student:
+- Attempt tests
+- Access AI tutor
+- Participate in forum and collaboration modules
+
+Parent:
+- Monitor child grades
+- Track attendance
+- Receive alerts
+
+3.2.3 USE CASE DIAGRAM
+
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 3.1: Use Case Diagram for QGX
+
+
+=====================================================================
+CHAPTER 4: SYSTEM DESIGN
+=====================================================================
+
+4.1 INTRODUCTION
+
+The system is designed using a modular architecture where frontend, backend,
+database, and AI services are loosely coupled and communicate through API layers.
+
+4.2 SYSTEM ARCHITECTURE
+
+QGX follows a full-stack architecture:
+
+- Frontend: Next.js App Router with role-based pages.
+- Backend: API routes for business logic and secure operations.
+- Database: Supabase PostgreSQL with RLS and auth.
+- AI Service: GROQ integration for tutoring and question generation.
+- Deployment: Vercel for frontend/backend hosting.
+
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 4.1: System Architecture
+
+4.3 SYSTEM OBJECT MODEL
+
+4.3.1 Introduction
+
+Major entities include User, Profile, Course, Test, Question, Attempt,
+Assignment, Attendance, Notification, and Message.
+
+4.3.2 Subsystems
+
+1. Authentication subsystem
+2. Assessment subsystem
+3. Academic operations subsystem
+4. Communication subsystem
+5. Analytics and reporting subsystem
+
+4.4 OBJECT DESCRIPTION
+
+4.4.1 Objects
+
+- User: credentials and role
+- Profile: personal metadata
+- Test: test metadata and rules
+- Attempt: student answers and score
+- Notification: event-based alerts
+
+4.4.2 CLASS DIAGRAMS
+
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 4.2: Class Diagram
+
+4.5 OBJECT COLLABORATION
+
+4.5.1 Object Collaboration Diagram
+
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 4.3: Collaboration Diagram
+
+4.6 DYNAMIC MODEL
+
+4.6.1 Sequence Diagrams
+
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 4.4: Sequence Diagram - Test Submission Flow
+
+4.6.2 Activity Diagrams
+
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 4.5: Activity Diagram - Assignment Workflow
+
+4.7 DATABASE DESIGN
+
+4.7.1 Entity Relationship Diagram
+
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 4.6: ER Diagram
+
+4.7.2 Database Tables
+
+Table 4.1: Major Tables
+
+1. users
+2. profiles
+3. courses
+4. tests
+5. questions
+6. attempts
+7. assignments
+8. attendance
+9. notifications
+10. messages
+
+4.8 STATIC MODEL
+
+4.8.1 Component Diagram
+
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 4.7: Component Diagram
+
+4.8.2 Deployment Diagram
+
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 4.8: Deployment Diagram
+
+
+=====================================================================
+CHAPTER 5: IMPLEMENTATION
+=====================================================================
+
+5.1 SOFTWARE USED
+
+Frontend:
+- Next.js 14.2.5
+- React 18
+- TypeScript
+
+Backend:
+- Next.js API routes
+- Supabase SDK
+
+Database and Auth:
+- Supabase PostgreSQL
+- Supabase Authentication
+
+Testing and Quality:
+- Jest
+- Playwright
+- ESLint
+- TypeScript compiler
+
+Deployment:
+- Vercel
+
+5.2 SOURCE CODE (MODULE-WISE)
+
+1. Authentication and session handling.
+2. Dashboard layout and role routing.
+3. Test module with question types and scoring logic.
+4. Quest module and XP engine.
+5. Attendance and timetable modules.
+6. Forum and messaging modules.
+7. AI tutor and AI question generation API.
+8. Parent analytics and predictive alert module.
+
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 5.1: Source Module Organization
+
+
+=====================================================================
+CHAPTER 6: TESTING
+=====================================================================
+
+6.1 INTRODUCTION
+
+A layered validation approach was used, including unit testing, type checking,
+linting, and end-to-end scenarios.
+
+6.2 TYPES OF TESTING
+
+1. Unit Testing (Jest)
+- 64 tests passed across utility, constants, and scoring logic suites.
+
+2. Static Quality Checks
+- ESLint passed with no warnings or errors.
+- TypeScript type check passed with no errors.
+
+3. Build Validation
+- Production build succeeded with route generation and optimization.
+
+4. Deployment Validation
+- Deployment to Vercel completed successfully with status Ready.
+
+Table 6.1: Unit Test Report Summary
+
+Test Suites: 3 passed
+Total Tests: 64 passed
+Failed: 0
+
+Table 6.2: Deployment and Quality Report
+
+Type Check: Passed
+Lint: Passed
+Build: Passed
+Deployment: Ready
+
+
+=====================================================================
+CHAPTER 7: OUTPUT SCREENS
+=====================================================================
+
+7.1 Landing Page
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 7.1: Landing Page
+
+7.2 Login and Registration
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 7.2: Authentication Pages
+
+7.3 Admin Dashboard
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 7.3: Admin Dashboard
+
+7.4 Teacher Dashboard
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 7.4: Teacher Dashboard
+
+7.5 Student Dashboard
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 7.5: Student Dashboard
+
+7.6 Parent Dashboard
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 7.6: Parent Dashboard
+
+7.7 Test Attempt and Result Screen
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 7.7: Test Flow
+
+7.8 Notification and Messaging Screens
++--------------------------------------------------------------+
+|                                                              |
+|                  INSERT IMAGE / SCREENSHOT                   |
+|                         (CENTER ALIGN)                       |
+|                                                              |
++--------------------------------------------------------------+
+Figure 7.8: Notifications and Messaging
+
+
+=====================================================================
+CHAPTER 8: CONCLUSION
+=====================================================================
+
+QueryGenX successfully demonstrates the implementation of an AI-enabled,
+role-based Learning Management System with practical institutional relevance.
+The platform integrates examination, attendance, assignment, communication,
+analytics, and AI tutoring workflows in a unified architecture.
+
+The project achieved all major functional objectives, including role-specific
+operations, secure authentication, automated scoring, anti-cheat controls,
+gamified engagement, and real-time notifications. Quality validation through
+tests, linting, type checks, and deployment confirms production readiness.
+
+Future enhancements may include native mobile applications, advanced proctoring,
+AI-based recommendation pipelines, and deeper learning analytics with predictive
+interventions.
+
+
+=====================================================================
+BIBLIOGRAPHY
+=====================================================================
+
+[1] Jest Team, "Jest Documentation - Getting Started," [Online]. Available:
+https://jestjs.io/docs/getting-started. [Accessed: Apr. 05, 2026].
+
+[2] Microsoft, "TypeScript Documentation," [Online]. Available:
+https://www.typescriptlang.org/docs. [Accessed: Apr. 05, 2026].
+
+[3] Next.js Team, "Next.js Documentation - App Router and Deployment," [Online].
+Available: https://nextjs.org/docs. [Accessed: Apr. 05, 2026].
+
+[4] Playwright Team, "Playwright Documentation," [Online]. Available:
+https://playwright.dev/docs/intro. [Accessed: Apr. 05, 2026].
+
+[5] React Team, "React 18 API Reference," [Online]. Available:
+https://react.dev. [Accessed: Apr. 05, 2026].
+
+[6] Supabase, "Supabase Documentation - Authentication and PostgreSQL RLS," [Online].
+Available: https://supabase.com/docs. [Accessed: Apr. 05, 2026].
+
+[7] Vercel, "Deploying Next.js Applications," [Online]. Available:
+https://vercel.com/docs. [Accessed: Apr. 05, 2026].
+
+
+=====================================================================
+APPENDIX
+=====================================================================
+
+APPENDIX A: ENVIRONMENT VARIABLES
+
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+GROQ_API_KEY=your_groq_api_key
+
+APPENDIX B: RUN COMMANDS
+
+npm install
+npm run dev
+npm run test
+npm run lint
+npx tsc --noEmit
+npm run build
+
+APPENDIX C: PROJECT MODULE LIST (REFERENCE)
+
+1. AdminTestModule
+2. AiTutorModule
+3. AssignmentModule
+4. AttendanceModule
+5. BatchModule
+6. CalendarModule
+7. CertificateModule
+8. CodePlaygroundModule
+9. CollaborationModule
+10. CourseModule
+11. ForumModule
+12. GradesModule
+13. LiveClassModule
+14. MeetingSchedulerModule
+15. MessagingModule
+16. NotificationsModule
+17. PlagiarismModule
+18. PredictiveAlertsModule
+19. QuestModule
+20. ReportCardModule
+21. StudentAnalyticsModule
+22. TeacherTestModule
+23. TestModule
+24. TimetableModule
+25. XPEngine
+
+
+=====================================================================
+LIST OF SYMBOLS (OPTIONAL)
+=====================================================================
+
+LMS        Learning Management System
+RBAC       Role-Based Access Control
+RLS        Row Level Security
+API        Application Programming Interface
+PWA        Progressive Web Application
+XP         Experience Points
+
+
+=====================================================================
+MANDATORY FORMAT COMPLIANCE CHECKLIST
+=====================================================================
+
+1. Paper and Print
+   - A4 size Executive Bond 100 GSM white paper
+   - Laser/Inkjet printout
+
+2. Page Setup (Word)
+   - Left margin: 1.5 inch (3.81 cm)
+   - Right margin: 1.0 inch (2.54 cm)
+   - Top margin: 1.0 inch (2.54 cm)
+   - Bottom margin: 1.0 inch (2.54 cm)
+   - Gutter: 0 cm
+   - Gutter position: Left
+   - Orientation: Portrait
+
+3. Font and Paragraph
+   - Entire document: Times New Roman
+   - Chapter headings: 16 pt, Bold
+   - Side headings: 14 pt, Bold
+   - Side sub-headings: 12 pt, Bold
+   - Running text: 12 pt, Regular
+   - Line spacing: 1.5
+   - Alignment: Justify
+   - First line indentation: 0.38 inch (0.9 cm)
+
+4. Numbering and Captions
+   - Front pages (Title, Certificate, Declaration, Acknowledgement, Contents):
+     Roman page numbers (i, ii, iii, ...) at bottom-center
+   - Chapters: Numeric page numbers (1, 2, 3, ...) at bottom-right
+   - Figure captions: Bottom of figure, 12 pt Bold
+   - Table captions: Top of table, 12 pt Bold
+   - Tables and figures: Center-aligned
+   - Recommended numbering style:
+     Figures: Chapter.FigureNo (Example: Figure 4.2)
+     Tables: Chapter.TableNo (Example: Table 6.1)
+
+5. Header Requirement
+   - Chapter caption should be shown at top-left in each chapter page
+
+6. Output Formats
+   - Final soft copy in both .docx and .pdf
+
+
+=====================================================================
+BINDING AND SUBMISSION CHECKLIST
+=====================================================================
+
+Binding:
+- Hard cover: Black color
+- Title text on hard cover: Gold color letters
+- Two blank pages at beginning and end
+- If any paper is published from the project, include at end of dissertation
+
+Submission:
+- Hard copies:
+  2 color printed copies (Department and Guide)
+  4 or 5 B/W copies (project team members)
+- Soft copy contents:
+  1. Final presentation PPT
+  2. Final dissertation (.docx)
+  3. Final dissertation (.pdf)
+  4. Literature survey/base papers
+  5. Project source code
+  6. Dataset(s) and input images (if any)
+
+
+=====================================================================
+REFERENCE STYLE NOTE
+=====================================================================
+
+- References must be sequentially numbered and ordered alphabetically by author name.
+- Use IEEE/ASME/ASCE style consistently.
+- For research-oriented writing, cite references in paragraph text using [n] format.
+- Mathematical symbols/equations in chapter content should be italic in Word using
+  Insert Equation wherever needed.
+
+
+=====================================================================
+COPY-TO-WORD INSTRUCTIONS
+=====================================================================
+
+1. Copy this entire content into MS Word.
+2. Apply Times New Roman font globally.
+3. Set margins: Left 1.5 inch, Right 1 inch, Top 1 inch, Bottom 1 inch.
+4. Set font sizes by level:
+   Chapter heading 16 Bold, Side heading 14 Bold, Sub-heading 12 Bold, Body 12 Regular.
+5. Set paragraph alignment to Justify, line spacing to 1.5, and first-line indent to 0.38 inch.
+6. Insert screenshots and diagrams in each boxed image area and keep them center-aligned.
+7. Add captions exactly below figures and above tables, both in 12 Bold.
+8. Set page numbers:
+   Roman at bottom-center for front pages, Arabic at bottom-right for chapter pages.
+9. Add chapter caption in the top-left header area for each chapter.
+10. Export final document in both .docx and .pdf formats before print.
+
