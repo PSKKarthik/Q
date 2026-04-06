@@ -149,7 +149,7 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
             )}
           </div>
         </div>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', height: 'calc(100vh - 200px)', minHeight: 400 }}>
+        <div style={{ border: '1px solid var(--border)', borderRadius: 0, overflow: 'hidden', height: 'calc(100vh - 200px)', minHeight: 400 }}>
           <iframe
             src={jitsiUrl}
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"

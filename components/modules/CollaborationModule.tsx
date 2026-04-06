@@ -259,7 +259,7 @@ export function CollaborationModule({ profile }: Props) {
         {onlineUsers.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
             {onlineUsers.map((u, i) => (
-              <span key={i} style={{ fontFamily: 'var(--mono)', fontSize: 10, padding: '2px 8px', background: 'var(--surface)', borderRadius: 4, color: 'var(--fg-dim)' }}>{u}</span>
+              <span key={i} style={{ fontFamily: 'var(--mono)', fontSize: 10, padding: '2px 8px', background: 'var(--surface)', borderRadius: 0, color: 'var(--fg-dim)' }}>{u}</span>
             ))}
           </div>
         )}
@@ -273,7 +273,7 @@ export function CollaborationModule({ profile }: Props) {
             alignItems: 'stretch',
           }}
         >
-          <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', display: 'flex', flexDirection: 'column', minHeight: isMobile ? '52vh' : 'calc(100vh - 250px)' }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 0, background: 'var(--surface)', display: 'flex', flexDirection: 'column', minHeight: isMobile ? '52vh' : 'calc(100vh - 250px)' }}>
             <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
               {messages.map(m => (
                 <div key={m.id} style={{ marginBottom: 10, textAlign: m.user_id === profile.id ? 'right' : 'left' }}>
@@ -281,7 +281,7 @@ export function CollaborationModule({ profile }: Props) {
                     {m.user_name} · {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                   <div style={{
-                    display: 'inline-block', maxWidth: isMobile ? '88%' : '70%', padding: '8px 12px', borderRadius: 8,
+                    display: 'inline-block', maxWidth: isMobile ? '88%' : '70%', padding: '8px 12px', borderRadius: 0,
                     background: m.user_id === profile.id ? 'var(--accent)' : 'var(--bg)',
                     color: m.user_id === profile.id ? '#000' : 'var(--fg)',
                     fontFamily: 'var(--sans)', fontSize: 13, textAlign: 'left',
@@ -308,7 +308,7 @@ export function CollaborationModule({ profile }: Props) {
           </div>
 
           {showVideo && (
-            <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface)', minHeight: isMobile ? '45vh' : 'calc(100vh - 250px)' }}>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 0, overflow: 'hidden', background: 'var(--surface)', minHeight: isMobile ? '45vh' : 'calc(100vh - 250px)' }}>
               <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)' }}>
                 Jitsi Room: {jitsiRoom}
               </div>

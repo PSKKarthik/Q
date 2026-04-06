@@ -281,7 +281,7 @@ export function NotificationsModule({ userId }: { userId: string }) {
               const meta = getCategoryMeta(n.type)
               return (
                 <div key={n.id} className="card" style={{ marginBottom: 6, display: 'flex', gap: 12, alignItems: 'flex-start', opacity: n.read ? 0.6 : 1 }}>
-                  <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, background: `${meta.color}18`, color: meta.color, fontSize: 16, flexShrink: 0, marginTop: 2 }}>
+                  <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 0, background: `${meta.color}18`, color: meta.color, fontSize: 16, flexShrink: 0, marginTop: 2 }}>
                     {meta.icon}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>

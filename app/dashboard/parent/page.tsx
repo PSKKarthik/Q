@@ -381,8 +381,8 @@ function ParentDashboardContent() {
               { label: 'Absent', value: attendance.filter(a => a.status === 'absent').length },
             ]} columns={4} />
             <div style={{ marginBottom: 16 }}>
-              <div style={{ height: 8, background: 'var(--border)', borderRadius: 4 }}>
-                <div style={{ height: '100%', width: `${attRate}%`, background: attRate >= 80 ? 'var(--success)' : attRate >= 60 ? 'var(--warn)' : 'var(--danger)', borderRadius: 4, transition: 'width 0.8s ease' }} />
+              <div style={{ height: 8, background: 'var(--border)', borderRadius: 0 }}>
+                <div style={{ height: '100%', width: `${attRate}%`, background: attRate >= 80 ? 'var(--success)' : attRate >= 60 ? 'var(--warn)' : 'var(--danger)', borderRadius: 0, transition: 'width 0.8s ease' }} />
               </div>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginTop: 4, textAlign: 'right' }}>{attRate}% attendance</div>
             </div>

@@ -371,7 +371,7 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
             {pType === 'image' && file.url && (
               <Image src={file.url} alt={file.name} width={1200} height={800} unoptimized
                 className="course-inline-preview-tall"
-                style={{ width: '100%', objectFit: 'contain', borderRadius: 8 }} />
+                style={{ width: '100%', objectFit: 'contain', borderRadius: 0 }} />
             )}
             {pType === 'video' && file.url && (
               <div>
@@ -379,7 +379,7 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
                   src={file.url}
                   controls
                   className="course-inline-preview-tall"
-                  style={{ width: '100%', borderRadius: 8 }}
+                  style={{ width: '100%', borderRadius: 0 }}
                   onTimeUpdate={(e) => {
                     const vid = e.currentTarget
                     if (vid.duration && vid.currentTime / vid.duration >= 0.8 && !isFileCompleted(file.id)) {
@@ -1021,8 +1021,8 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
                   return (
                     <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <span style={{ fontFamily: 'var(--mono)', fontSize: 11, width: 20, textAlign: 'right' }}>{n}★</span>
-                      <div style={{ flex: 1, height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-                        <div style={{ width: `${pct}%`, height: '100%', background: '#f59e0b', borderRadius: 4, transition: 'width .3s' }} />
+                      <div style={{ flex: 1, height: 8, background: 'var(--border)', borderRadius: 0, overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: '#f59e0b', borderRadius: 0, transition: 'width .3s' }} />
                       </div>
                       <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', width: 20 }}>{count}</span>
                     </div>

@@ -537,7 +537,7 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
       </div>
 
       {conflicts.length > 0 && (
-        <div className="fade-up-1" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+        <div className="fade-up-1" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', borderRadius: 0, padding: 12, marginBottom: 16 }}>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--danger)', fontWeight: 600, marginBottom: 4 }}>
             {conflicts.length} Schedule Conflict{conflicts.length !== 1 ? 's' : ''} Detected
           </div>
@@ -557,7 +557,7 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
           { color: '#3b82f6', label: 'Personal' },
         ].map(({ color, label }) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />
+            <div style={{ width: 10, height: 10, borderRadius: 0, background: color }} />
             <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)' }}>{label}</span>
           </div>
         ))}
@@ -690,7 +690,7 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
             const urgency = urgencyLabel(e)
             return (
               <div key={e.id} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
-                <div style={{ width: 4, height: 32, borderRadius: 2, background: e.color, flexShrink: 0 }} />
+                <div style={{ width: 4, height: 32, borderRadius: 0, background: e.color, flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>{e.title}</div>

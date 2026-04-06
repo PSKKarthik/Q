@@ -48,7 +48,7 @@ export function ProfileTab({ profile, onUpdate, extraFields = [] }: ProfileTabPr
       <div className="card" style={{ padding: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 24 }}>
           {avatarSrc ? (
-            <Image src={avatarSrc} alt="Avatar" width={72} height={72} unoptimized style={{ width: 72, height: 72, border: '1px solid var(--border)', objectFit: 'cover', borderRadius: 8 }} />
+            <Image src={avatarSrc} alt="Avatar" width={72} height={72} unoptimized style={{ width: 72, height: 72, border: '1px solid var(--border)', objectFit: 'cover', borderRadius: 0 }} />
           ) : (
             <div style={{ width: 72, height: 72, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--display)', fontSize: 28 }}>
               {profile.avatar}

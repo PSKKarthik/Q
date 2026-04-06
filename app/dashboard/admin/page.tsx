@@ -840,8 +840,8 @@ function AdminDashboardContent() {
                         <span>{subject}</span>
                         <span style={{ color: 'var(--fg-dim)' }}>{p}/{total} ({pct}%)</span>
                       </div>
-                      <div style={{ height: 6, background: 'var(--border)', borderRadius: 2 }}>
-                        <div style={{ height: '100%', width: `${pct}%`, background: pct >= 80 ? 'var(--success)' : pct >= 60 ? 'var(--warn)' : 'var(--danger)', borderRadius: 2, transition: 'width 0.8s ease' }} />
+                      <div style={{ height: 6, background: 'var(--border)', borderRadius: 0 }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: pct >= 80 ? 'var(--success)' : pct >= 60 ? 'var(--warn)' : 'var(--danger)', borderRadius: 0, transition: 'width 0.8s ease' }} />
                       </div>
                     </div>
                   )
@@ -913,8 +913,8 @@ function AdminDashboardContent() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 3 }}>
                         <span>{grade}</span><span style={{ color: 'var(--fg-dim)' }}>{count} ({pct}%)</span>
                       </div>
-                      <div style={{ height: 6, background: 'var(--border)', borderRadius: 2 }}>
-                        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 2, transition: 'width 0.8s ease' }} />
+                      <div style={{ height: 6, background: 'var(--border)', borderRadius: 0 }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 0, transition: 'width 0.8s ease' }} />
                       </div>
                     </div>
                   )
@@ -965,8 +965,8 @@ function AdminDashboardContent() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 4 }}>
                     <span>{String(label)}</span><span style={{ color: 'var(--fg-dim)' }}>{count} ({users.length ? Math.round((Number(count)/users.length)*100) : 0}%)</span>
                   </div>
-                  <div style={{ height: 6, background: 'var(--border)', borderRadius: 2 }}>
-                    <div style={{ height: '100%', width: `${users.length ? (Number(count)/users.length)*100 : 0}%`, background: String(color), borderRadius: 2, transition: 'width 0.8s ease' }} />
+                  <div style={{ height: 6, background: 'var(--border)', borderRadius: 0 }}>
+                    <div style={{ height: '100%', width: `${users.length ? (Number(count)/users.length)*100 : 0}%`, background: String(color), borderRadius: 0, transition: 'width 0.8s ease' }} />
                   </div>
                 </div>
               ))}

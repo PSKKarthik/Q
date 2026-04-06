@@ -209,10 +209,10 @@ export function PlagiarismModule({ profile, assignments }: Props) {
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', padding: 8, background: 'var(--bg)', borderRadius: 4 }}>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', padding: 8, background: 'var(--bg)', borderRadius: 0 }}>
                     {r.submissionA}...
                   </div>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', padding: 8, background: 'var(--bg)', borderRadius: 4 }}>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', padding: 8, background: 'var(--bg)', borderRadius: 0 }}>
                     {r.submissionB}...
                   </div>
                 </div>
@@ -220,7 +220,7 @@ export function PlagiarismModule({ profile, assignments }: Props) {
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 10 }}>
                     <span style={{ color: 'var(--fg-dim)' }}>Shared phrases: </span>
                     {r.sharedPhrases.map((p, j) => (
-                      <span key={j} style={{ background: 'var(--warn)', color: '#000', padding: '1px 4px', borderRadius: 2, marginRight: 4, fontSize: 9 }}>{p}</span>
+                      <span key={j} style={{ background: 'var(--warn)', color: '#000', padding: '1px 4px', borderRadius: 0, marginRight: 4, fontSize: 9 }}>{p}</span>
                     ))}
                   </div>
                 )}

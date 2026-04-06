@@ -233,7 +233,7 @@ export function CodePlaygroundModule({ profile }: Props) {
             style={{
               flex: 1, fontFamily: 'var(--mono)', fontSize: 13, lineHeight: 1.6,
               background: 'var(--surface)', color: 'var(--fg)', border: '1px solid var(--border)',
-              borderRadius: 8, padding: 16, resize: 'none', outline: 'none',
+              borderRadius: 0, padding: 16, resize: 'none', outline: 'none',
               tabSize: 2,
             }}
             onKeyDown={e => {
@@ -262,13 +262,13 @@ export function CodePlaygroundModule({ profile }: Props) {
             <iframe
               srcDoc={htmlPreview}
               sandbox="allow-scripts"
-              style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 8, background: '#fff' }}
+              style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 0, background: '#fff' }}
             />
           ) : (
             <div style={{
               flex: 1, fontFamily: 'var(--mono)', fontSize: 12, lineHeight: 1.6,
               background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 8, padding: 16, overflowY: 'auto', color: 'var(--fg)',
+              borderRadius: 0, padding: 16, overflowY: 'auto', color: 'var(--fg)',
             }}>
               {output.map((line, i) => (
                 <div key={i} style={{ color: line.startsWith('Error') ? 'var(--danger)' : line.startsWith('Warning') ? 'var(--warn)' : 'var(--fg)' }}>

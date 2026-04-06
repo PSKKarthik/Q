@@ -1,6 +1,6 @@
 'use client'
 
-const SHIMMER: React.CSSProperties = { background: 'rgba(255,255,255,0.07)', animation: 'pulse 1.3s ease-in-out infinite', borderRadius: 6 }
+const SHIMMER: React.CSSProperties = { background: 'rgba(255,255,255,0.07)', animation: 'pulse 1.3s ease-in-out infinite', borderRadius: 0 }
 
 export function DashboardSkeleton({ label = 'Loading dashboard...' }: { label?: string }) {
   return (
@@ -29,14 +29,14 @@ export function DashboardSkeleton({ label = 'Loading dashboard...' }: { label?: 
           {/* Stat cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 10 }}>
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} style={{ ...SHIMMER, height: 72, borderRadius: 10 }} />
+              <div key={i} style={{ ...SHIMMER, height: 72, borderRadius: 0 }} />
             ))}
           </div>
           {/* Content blocks */}
-          <div style={{ ...SHIMMER, height: 130, borderRadius: 10 }} />
+          <div style={{ ...SHIMMER, height: 130, borderRadius: 0 }} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div style={{ ...SHIMMER, height: 180, borderRadius: 10 }} />
-            <div style={{ ...SHIMMER, height: 180, borderRadius: 10 }} />
+            <div style={{ ...SHIMMER, height: 180, borderRadius: 0 }} />
+            <div style={{ ...SHIMMER, height: 180, borderRadius: 0 }} />
           </div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', letterSpacing: '0.1em', marginTop: 4 }}>
             {label.toUpperCase()}

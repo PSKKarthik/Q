@@ -184,7 +184,7 @@ export function PredictiveAlertsModule({ profile }: Props) {
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
               {r.flags.map((f, i) => (
                 <span key={i} style={{
-                  fontFamily: 'var(--mono)', fontSize: 9, padding: '2px 6px', borderRadius: 2,
+                  fontFamily: 'var(--mono)', fontSize: 9, padding: '2px 6px', borderRadius: 0,
                   background: f.includes('Very low') || f.includes('Low attendance') || f.includes('Declining') ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
                   color: f.includes('Very low') || f.includes('Low attendance') || f.includes('Declining') ? 'var(--danger)' : 'var(--warn)',
                 }}>

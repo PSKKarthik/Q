@@ -24,7 +24,7 @@ export function AnnouncementCard({ a, canDelete, onDelete, canEdit, onEdit, canP
             {a.pinned && '● PINNED · '}
             <span style={{ textTransform: 'uppercase' }}>{a.role}</span> · {a.author_name} · {dateLabel}
           </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 8px', marginBottom: 8 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', border: '1px solid var(--border)', borderRadius: 0, padding: '2px 8px', marginBottom: 8 }}>
             <Icon name="bell" size={10} />
             For {targetLabel}
           </div>

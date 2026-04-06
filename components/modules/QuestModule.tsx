@@ -176,8 +176,8 @@ function QuestCard({ quest, progress, onClaim }: { quest: Quest; progress?: Ques
           <span>{progress?.progress || 0}/{quest.target_count}</span>
           <span>{pct}%</span>
         </div>
-        <div style={{ height: 6, background: 'var(--border)', borderRadius: 3 }}>
-          <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? 'var(--success)' : 'var(--accent)', borderRadius: 3, transition: 'width 0.5s ease' }} />
+        <div style={{ height: 6, background: 'var(--border)', borderRadius: 0 }}>
+          <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? 'var(--success)' : 'var(--accent)', borderRadius: 0, transition: 'width 0.5s ease' }} />
         </div>
       </div>
 

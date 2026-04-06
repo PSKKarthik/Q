@@ -398,7 +398,7 @@ export function MessagingModule({ profile, contacts }: Props) {
         </div>
         <div style={{ marginBottom: 14 }}>
           <label className="label">Members</label>
-          <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: 8 }}>
+          <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 0, padding: 8 }}>
             {contacts.filter(c => c.id !== profile.id).map(c => (
               <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: 'pointer', fontSize: 12 }}>
                 <input type="checkbox" checked={groupMembers.includes(c.id)}

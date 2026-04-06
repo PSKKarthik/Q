@@ -216,7 +216,7 @@ function StudentDashboardContent() {
             {(() => {
               const lvl = getLevel(profile.xp || 0, xpLevels)
               return (
-                <div className="fade-up-1" style={{ marginBottom: 20, padding: 20, border: `1px solid ${lvl.color}40`, borderRadius: 12, background: `${lvl.color}08`, position: 'relative', overflow: 'hidden' }}>
+                <div className="fade-up-1" style={{ marginBottom: 20, padding: 20, border: `1px solid ${lvl.color}40`, borderRadius: 0, background: `${lvl.color}08`, position: 'relative', overflow: 'hidden' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     <div style={{ fontSize: 40, lineHeight: 1 }}>{lvl.icon}</div>
                     <div style={{ flex: 1 }}>
@@ -227,8 +227,8 @@ function StudentDashboardContent() {
                       <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', marginBottom: 8 }}>
                         {(profile.xp || 0).toLocaleString()} XP{lvl.next ? ` · ${lvl.xpToNext.toLocaleString()} XP to Level ${lvl.next.level}` : ' · MAX LEVEL'}
                       </div>
-                      <div style={{ height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', borderRadius: 4, background: `linear-gradient(90deg, ${lvl.color}99, ${lvl.color})`, width: `${lvl.progress}%`, transition: 'width 0.5s ease' }} />
+                      <div style={{ height: 8, borderRadius: 0, background: 'var(--border)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', borderRadius: 0, background: `linear-gradient(90deg, ${lvl.color}99, ${lvl.color})`, width: `${lvl.progress}%`, transition: 'width 0.5s ease' }} />
                       </div>
                       {lvl.next && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--fg-dim)' }}>

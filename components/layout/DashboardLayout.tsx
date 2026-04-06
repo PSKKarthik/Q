@@ -105,7 +105,8 @@ export default function DashboardLayout({ profile, navItems, activeTab, onTabCha
       </aside>
 
       {/* Main */}
-      <main className="main-content">
+      <main className="main-content" style={{ position: 'relative' }}>
+        <div className="grid-bg" />
         <div className="topbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button className="btn btn-sm hamburger-btn" disabled={locked} onClick={() => setSidebarOpen(o => !o)}>

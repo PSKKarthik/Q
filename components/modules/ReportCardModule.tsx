@@ -337,7 +337,7 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
 
             {/* Term comparison */}
             {report.prevTermAvg !== null && (
-              <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)' }}>vs Previous Term:</span>
                 {(() => {
                   const diff = report.weightedAvg - report.prevTermAvg!
@@ -455,7 +455,7 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
           <div className="card fade-up-4" style={{ marginBottom: 16 }}>
             <h2 style={{ fontFamily: 'var(--display)', fontSize: 18, letterSpacing: '0.08em', marginBottom: 12 }}>TEACHER COMMENTS</h2>
             {report.comments.length > 0 ? report.comments.map(c => (
-              <div key={c.id} style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, marginBottom: 8, borderLeft: '3px solid var(--accent)' }}>
+              <div key={c.id} style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 0, marginBottom: 8, borderLeft: '3px solid var(--accent)' }}>
                 <div style={{ fontSize: 13, marginBottom: 4 }}>{c.comment}</div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', display: 'flex', gap: 12 }}>
                   <span>{c.teacher_name}</span>

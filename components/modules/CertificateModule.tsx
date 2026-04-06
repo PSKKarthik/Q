@@ -442,7 +442,7 @@ export function CertificateModule({ profile, courses, enrolledIds }: Props) {
                   </div>
                 </div>
                 {cert.credential_id && (
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--accent)', padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, marginBottom: 10, textAlign: 'center', letterSpacing: '0.05em' }}>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--accent)', padding: '6px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 0, marginBottom: 10, textAlign: 'center', letterSpacing: '0.05em' }}>
                     ◈ {cert.credential_id}
                   </div>
                 )}
@@ -468,8 +468,8 @@ export function CertificateModule({ profile, courses, enrolledIds }: Props) {
               <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginBottom: 12 }}>
                 {completedCount}/{fileCount} files · {pct}% complete
               </div>
-              <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, marginBottom: 12 }}>
-                <div style={{ height: '100%', width: `${pct}%`, background: isComplete ? 'var(--success)' : 'var(--warn)', borderRadius: 3, transition: 'width 0.5s ease' }} />
+              <div style={{ height: 6, background: 'var(--border)', borderRadius: 0, marginBottom: 12 }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: isComplete ? 'var(--success)' : 'var(--warn)', borderRadius: 0, transition: 'width 0.5s ease' }} />
               </div>
               {isComplete && !hasCert && (
                 <button className="btn btn-primary btn-sm" onClick={() => generateCertificate(course)} disabled={busy === course.id} style={{ width: '100%', justifyContent: 'center' }}>

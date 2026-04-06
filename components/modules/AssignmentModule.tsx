@@ -256,7 +256,7 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
                   </div>
                 </div>
                 {sub?.feedback && (
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 6 }}>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 0 }}>
                     ◇ {sub.feedback}
                   </div>
                 )}
@@ -896,8 +896,8 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--fg-dim)', marginBottom: 3 }}>
                   <span>{subs.length}/{students.length} submitted</span><span>{rate}%</span>
                 </div>
-                <div style={{ height: 4, background: 'var(--border)', borderRadius: 2 }}>
-                  <div style={{ height: '100%', width: `${rate}%`, borderRadius: 2, transition: 'width 0.6s ease',
+                <div style={{ height: 4, background: 'var(--border)', borderRadius: 0 }}>
+                  <div style={{ height: '100%', width: `${rate}%`, borderRadius: 0, transition: 'width 0.6s ease',
                     background: rate >= 80 ? 'var(--success)' : rate >= 50 ? 'var(--warn)' : 'var(--danger)' }} />
                 </div>
               </div>

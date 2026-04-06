@@ -33,7 +33,7 @@ function renderInline(str: string): JSX.Element {
     <>
       {segs.map((seg, i) => {
         if (seg.startsWith('`') && seg.endsWith('`') && seg.length > 2)
-          return <code key={i} style={{ background: 'rgba(0,0,0,0.4)', padding: '1px 5px', borderRadius: 3, fontSize: '0.85em', fontFamily: 'var(--mono)' }}>{seg.slice(1, -1)}</code>
+          return <code key={i} style={{ background: 'rgba(0,0,0,0.4)', padding: '1px 5px', borderRadius: 0, fontSize: '0.85em', fontFamily: 'var(--mono)' }}>{seg.slice(1, -1)}</code>
         const parts = seg.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*)/g)
         if (parts.length === 1) return seg
         return (
@@ -59,7 +59,7 @@ function MarkdownContent({ text }: { text: string }) {
     if (cb) {
       const lang = cb[1]; const code = cb[2].replace(/\n$/, '')
       nodes.push(
-        <pre key={k++} style={{ background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.08)', padding: '10px 14px', borderRadius: 6, overflowX: 'auto', margin: '8px 0' }}>
+        <pre key={k++} style={{ background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.08)', padding: '10px 14px', borderRadius: 0, overflowX: 'auto', margin: '8px 0' }}>
           {lang && <div style={{ color: 'var(--fg-dim)', fontFamily: 'var(--mono)', fontSize: 9, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>{lang}</div>}
           <code style={{ fontFamily: 'var(--mono)', fontSize: 11, whiteSpace: 'pre', lineHeight: 1.6 }}>{code}</code>
         </pre>
@@ -272,7 +272,7 @@ export function AiTutorModule({ profile, courses, enrolledIds }: Props) {
               <div style={{
                 maxWidth: '75%',
                 padding: '10px 14px',
-                borderRadius: 12,
+                borderRadius: 0,
                 background: msg.role === 'user' ? 'var(--accent)' : 'rgba(255,255,255,0.05)',
                 color: msg.role === 'user' ? '#000' : 'var(--fg)',
               }}>
@@ -296,7 +296,7 @@ export function AiTutorModule({ profile, courses, enrolledIds }: Props) {
           ))}
           {loading && !isStreaming && (
             <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 12 }}>
-              <div style={{ padding: '10px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.05)' }}>
+              <div style={{ padding: '10px 16px', borderRadius: 0, background: 'rgba(255,255,255,0.05)' }}>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 18, color: 'var(--fg-dim)', letterSpacing: 4, lineHeight: 1 }}>···</div>
               </div>
             </div>
@@ -311,7 +311,7 @@ export function AiTutorModule({ profile, courses, enrolledIds }: Props) {
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '4px 10px', background: 'rgba(128,128,128,0.12)',
-                borderRadius: 6, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)',
+                borderRadius: 0, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)',
               }}>
                 <Icon name="upload" size={10} />
                 {attachedFile.name}

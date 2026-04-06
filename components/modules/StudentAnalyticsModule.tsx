@@ -162,8 +162,8 @@ export function StudentAnalyticsModule({ profile, attempts, assignments, courses
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 3 }}>
                   <span>{label}</span><span style={{ color: 'var(--fg-dim)' }}>{count} ({pct}%)</span>
                 </div>
-                <div style={{ height: 6, background: 'var(--border)', borderRadius: 2 }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 2, transition: 'width 0.8s ease' }} />
+                <div style={{ height: 6, background: 'var(--border)', borderRadius: 0 }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 0, transition: 'width 0.8s ease' }} />
                 </div>
               </div>
             )
@@ -186,8 +186,8 @@ export function StudentAnalyticsModule({ profile, attempts, assignments, courses
                   <span style={{ fontWeight: 600 }}>{subject}</span>
                   <span style={{ color: 'var(--fg-dim)' }}>Avg: {avg}% | Best: {best}% | {data.count} test{data.count !== 1 ? 's' : ''}</span>
                 </div>
-                <div style={{ height: 6, background: 'var(--border)', borderRadius: 2 }}>
-                  <div style={{ height: '100%', width: `${avg}%`, background: color, borderRadius: 2, transition: 'width 0.8s ease' }} />
+                <div style={{ height: 6, background: 'var(--border)', borderRadius: 0 }}>
+                  <div style={{ height: '100%', width: `${avg}%`, background: color, borderRadius: 0, transition: 'width 0.8s ease' }} />
                 </div>
               </div>
             )

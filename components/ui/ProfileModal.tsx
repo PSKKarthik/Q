@@ -75,7 +75,7 @@ export function ProfileModal({ profile, onClose, onUpdate }: {
         </div>
         <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'center' }}>
           {avatarPreviewSrc ? (
-            <Image src={avatarPreviewSrc} alt="Avatar" width={64} height={64} unoptimized style={{ width: 64, height: 64, border: '1px solid var(--border)', objectFit: 'cover', borderRadius: 6 }} />
+            <Image src={avatarPreviewSrc} alt="Avatar" width={64} height={64} unoptimized style={{ width: 64, height: 64, border: '1px solid var(--border)', objectFit: 'cover', borderRadius: 0 }} />
           ) : (
             <div style={{ width: 64, height: 64, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--display)', fontSize: 24 }}>
               {form.avatar}

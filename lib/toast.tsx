@@ -32,7 +32,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           {toasts.map(t => (
             <div key={t.id} className="toast-item" style={{
               padding: '12px 18px',
-              borderRadius: 8,
+              borderRadius: 0,
               fontFamily: 'var(--mono)',
               fontSize: 12,
               lineHeight: 1.5,
