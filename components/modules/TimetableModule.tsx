@@ -305,7 +305,9 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
 
   /* ── Open Jitsi in new tab (iframe embed blocked by meet.jit.si) ── */
   const openJitsi = (slot: TimetableSlot) => {
-    const url = `https://meet.jit.si/${encodeURIComponent(slot.room)}#userInfo.displayName="${encodeURIComponent(profile.name)}"`
+    // Generate a Jitsi-safe room slug from subject + room + teacher
+    const slug = `qgx-${slot.subject}-${slot.room}-${slot.day}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    const url = `https://meet.jit.si/${slug}#userInfo.displayName="${encodeURIComponent(profile.name)}"`
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 

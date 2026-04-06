@@ -131,10 +131,9 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
 
   /* ── Open Jitsi in new tab (iframe embed blocked by meet.jit.si) ── */
   const openJitsi = (cls: LiveClass) => {
-    if (!/^qgx-[a-z0-9]+-[a-z0-9]+$/i.test(cls.room_id)) {
-      toast('Invalid class room', 'error'); return
-    }
-    const url = `https://meet.jit.si/${encodeURIComponent(cls.room_id)}#userInfo.displayName="${encodeURIComponent(profile.name)}"`
+    // room_id is already qgx-prefixed from creation; fallback to slug from title
+    const roomSlug = cls.room_id || `qgx-${cls.title}-${cls.subject}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    const url = `https://meet.jit.si/${roomSlug}#userInfo.displayName="${encodeURIComponent(profile.name)}"`
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
