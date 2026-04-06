@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Icon } from '@/components/ui/Icon'
 import { Modal } from '@/components/ui/Modal'
 import { SectionLabel } from '@/components/ui/SectionLabel'
+import { JitsiMeet } from '@/components/ui/JitsiMeet'
 
 interface Props {
   profile: Profile
@@ -85,7 +86,6 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
         await pushNotificationBatch(studentIds, `● Class is live: ${cls.title} (${cls.subject}) by ${cls.teacher_name}`, 'live_class')
       }
       joinClass(liveClass)
-      openJitsi(liveClass)
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Failed to start class', 'error')
     }
@@ -129,50 +129,28 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
 
   if (loading) return <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>Loading live classes...</div>
 
-  /* ── Open Jitsi in new tab (iframe embed blocked by meet.jit.si) ── */
-  const openJitsi = (cls: LiveClass) => {
-    // room_id is already qgx-prefixed from creation; fallback to slug from title
-    const roomSlug = cls.room_id || `qgx-${cls.title}-${cls.subject}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
-    const url = `https://meet.jit.si/${roomSlug}#userInfo.displayName="${encodeURIComponent(profile.name)}"`
-    window.open(url, '_blank', 'noopener,noreferrer')
-  }
+  /* ── Jitsi room slug helper ── */
+  const getJitsiSlug = (cls: LiveClass) =>
+    (cls.room_id || `qgx-${cls.title}-${cls.subject}`).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
 
-  // Active class status view
+  // Active class — embedded Jitsi view
   if (activeClass) {
     return (
       <>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div>
-            <div style={{ fontFamily: 'var(--display)', fontSize: 22, letterSpacing: '0.08em' }}>{activeClass.title}</div>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)' }}>
-              {activeClass.subject} · {activeClass.teacher_name}
-            </div>
-          </div>
+          <div />
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-sm" onClick={() => setActiveClass(null)}>
-              <Icon name="back" size={11} /> Back
-            </button>
             {isTeacher && activeClass.status === 'live' && (
               <button className="btn btn-sm btn-danger" onClick={() => endClass(activeClass)} disabled={busy === activeClass.id}>{busy === activeClass.id ? 'Ending...' : 'End Class'}</button>
             )}
           </div>
         </div>
-        <div className="card" style={{ padding: 32, textAlign: 'center' }}>
-          <div style={{ fontFamily: 'var(--display)', fontSize: 48, letterSpacing: '0.1em', marginBottom: 8 }}>●</div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            {activeClass.status === 'live' ? 'Class is live' : activeClass.status}
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{activeClass.title}</div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', marginBottom: 20 }}>
-            {activeClass.subject} · {activeClass.duration}min · Room: {activeClass.room_id}
-          </div>
-          <button className="btn btn-primary" onClick={() => openJitsi(activeClass)} style={{ margin: '0 auto' }}>
-            <Icon name="video" size={12} /> Open in Jitsi Meet ↗
-          </button>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginTop: 12 }}>
-            Opens in a new tab with camera &amp; mic access
-          </div>
-        </div>
+        <JitsiMeet
+          roomName={getJitsiSlug(activeClass)}
+          displayName={profile.name}
+          subject={`${activeClass.title} · ${activeClass.subject}`}
+          onClose={() => setActiveClass(null)}
+        />
       </>
     )
   }
@@ -215,8 +193,8 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
                   {cls.subject} · {cls.teacher_name} · {cls.duration}min
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-primary btn-sm" onClick={() => { joinClass(cls); openJitsi(cls) }} style={{ flex: 1, justifyContent: 'center' }}>
-                    Join Class ↗
+                  <button className="btn btn-primary btn-sm" onClick={() => joinClass(cls)} style={{ flex: 1, justifyContent: 'center' }}>
+                    Join Class
                   </button>
                   {isTeacher && cls.teacher_id === profile.id && (
                     <button className="btn btn-sm btn-danger" onClick={() => endClass(cls)} disabled={busy === cls.id}>{busy === cls.id ? 'Ending...' : 'End'}</button>

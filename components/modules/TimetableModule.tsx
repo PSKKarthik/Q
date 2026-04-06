@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { SectionLabel } from '@/components/ui/SectionLabel'
 import { useToast } from '@/lib/toast'
 import { supabase } from '@/lib/supabase'
+import { JitsiMeet } from '@/components/ui/JitsiMeet'
 
 /* ── constants ── */
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const
@@ -120,6 +121,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
     (() => { const d = new Date().getDay(); return DAYS[d === 0 ? 5 : d - 1] })()
   )
   const [slotModal, setSlotModal] = useState(false)
+  const [jitsiRoom, setJitsiRoom] = useState<TimetableSlot | null>(null)
   const [editSlot, setEditSlot] = useState<TimetableSlot | null>(null)
   const [form, setForm] = useState({ subject: '', day: 'Monday', time: '', room: '' })
   const [searchQ, setSearchQ] = useState('')
@@ -303,12 +305,20 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
     timetable.reduce((sum, s) => sum + getDurationMins(s.time), 0)
   , [timetable])
 
-  /* ── Open Jitsi in new tab (iframe embed blocked by meet.jit.si) ── */
-  const openJitsi = (slot: TimetableSlot) => {
-    // Generate a Jitsi-safe room slug from subject + room + teacher
-    const slug = `qgx-${slot.subject}-${slot.room}-${slot.day}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
-    const url = `https://meet.jit.si/${slug}#userInfo.displayName="${encodeURIComponent(profile.name)}"`
-    window.open(url, '_blank', 'noopener,noreferrer')
+  /* ── Jitsi room slug helper ── */
+  const getJitsiSlug = (slot: TimetableSlot) =>
+    `qgx-${slot.subject}-${slot.room}-${slot.day}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+
+  /* ── Embedded Jitsi view ── */
+  if (jitsiRoom) {
+    return (
+      <JitsiMeet
+        roomName={getJitsiSlug(jitsiRoom)}
+        displayName={profile.name}
+        subject={jitsiRoom.subject}
+        onClose={() => setJitsiRoom(null)}
+      />
+    )
   }
 
   /* ── render slot card ── */
@@ -349,7 +359,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
         )}
         <div className="tt-slot-actions">
           <button className="btn btn-xs" style={{ borderColor: color, color }}
-            onClick={e => { e.stopPropagation(); openJitsi(slot) }}>
+            onClick={e => { e.stopPropagation(); setJitsiRoom(slot) }}>
             <Icon name="video" size={10} /> Join
           </button>
           {isStudent && live && !didCheckIn && (
@@ -432,7 +442,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
                             background: `${color}18`, borderLeft: `3px solid ${color}`,
                             height: `${Math.max(duration * 100, 100)}%`,
                           }}
-                          onClick={e => { e.stopPropagation(); openJitsi(slot) }}>
+                          onClick={e => { e.stopPropagation(); setJitsiRoom(slot) }}>
                           {live && <span className="tt-live-dot-sm" />}
                           <div className="tt-week-slot-subject" style={{ color }}>{slot.subject}</div>
                           <div className="tt-week-slot-time">{slot.time}</div>
@@ -601,7 +611,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
                 <span>{formatDuration(getDurationMins(liveSlot.time))}</span>
               </div>
               <div className="tt-next-up-actions">
-                <button className="btn btn-sm btn-primary" onClick={() => openJitsi(liveSlot)}>
+                <button className="btn btn-sm btn-primary" onClick={() => setJitsiRoom(liveSlot)}>
                   <Icon name="video" size={11} /> Join Class
                 </button>
                 {isStudent && !checkedIn.has(liveSlot.id) && (
@@ -690,7 +700,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
               return (
                 <div key={slot.id} className={`tt-today-chip ${live ? 'tt-today-chip-live' : ''} ${done ? 'tt-today-chip-done' : ''}`}
                   style={{ borderColor: live ? 'var(--success)' : color }}
-                  onClick={() => live ? openJitsi(slot) : undefined}>
+                  onClick={() => live ? setJitsiRoom(slot) : undefined}>
                   {live && <span className="tt-live-dot" />}
                   <span className="tt-today-chip-period">P{i + 1}</span>
                   <span className="tt-today-chip-subject" style={{ color: done ? 'var(--fg-dim)' : color }}>{slot.subject}</span>
