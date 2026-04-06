@@ -1,0 +1,33 @@
+%% QGX LMS - UML Sequence Diagram (Mermaid)
+%% Student test attempt and submission flow with auth, API, DB, and audit logging
+sequenceDiagram
+    actor Student
+    participant UI as Next.js UI
+    participant API as API Route
+    participant Auth as Supabase Auth
+    participant DB as PostgreSQL (Supabase)
+    participant Log as Activity Logger
+
+    Student->>UI: Open test page
+    UI->>API: GET /api/tests/{id}
+    API->>Auth: Validate session token
+    Auth-->>API: Session valid
+
+    API->>DB: Fetch test and questions
+    DB-->>API: Return test payload
+    API-->>UI: 200 OK + test data
+    UI-->>Student: Render test interface
+
+    Student->>UI: Submit answers
+    UI->>API: POST /api/attempts
+    API->>Auth: Re-validate session and role
+    Auth-->>API: Authorized
+
+    API->>DB: Store attempt and compute score
+    DB-->>API: Persisted attempt + score
+
+    API->>Log: Record submission event
+    Log-->>API: Log written
+
+    API-->>UI: 201 Created + score
+    UI-->>Student: Show result and feedback

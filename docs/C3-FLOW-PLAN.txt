@@ -1,0 +1,1428 @@
+================================================================================
+QGX LMS — COMPLETE NAVIGATION, FLOW & STATE SPECIFICATION
+================================================================================
+Version: 1.0
+Date: 2026-04-06
+Scope: Every page, every user path, every conditional branch, every forbidden path.
+Roles: Admin, Super Admin (NEW), Teacher, Student, Parent
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+  1. ENTRY POINTS
+  2. PAGE INVENTORY (All Screens — No Exceptions)
+  3. NAVIGATION FLOWS (Core Section — Exact User Journeys)
+  4. CONDITIONAL FLOWS (What-If Cases)
+  5. ROLE-BASED FLOWS (Per-Role Access Matrix)
+  6. STATE TRANSITIONS (How States Change)
+  7. FORBIDDEN PATHS (Explicitly Blocked Routes)
+  8. SUPER ADMIN — NEW ROLE SPECIFICATION
+
+================================================================================
+1. ENTRY POINTS
+================================================================================
+
+There are exactly 6 entry points into the QGX platform:
+
+  EP-1  Landing Page         GET /
+        Who: Anyone (unauthenticated).
+        What: Marketing hero, feature grid, stats, CTA buttons.
+        Exits: → /login, → /register
+
+  EP-2  Login Page           GET /login
+        Who: Anyone (unauthenticated or expired session).
+        What: Email OR QGX-ID + password form.
+        Exits: → /dashboard/{role}, → /forgot-password, → /register
+
+  EP-3  Registration Page    GET /register
+        Who: Anyone without an account.
+        What: Self-service signup (student, teacher, parent).
+        Exits: → /dashboard/{role} (if auto-confirmed),
+               → /login (if email confirmation required)
+
+  EP-4  Forgot Password      GET /forgot-password
+        Who: Anyone who needs to reset credentials.
+        What: Email input → sends magic link via Supabase.
+        Exits: → /login (after sending link)
+
+  EP-5  Password Reset       GET /reset-password
+        Who: User clicking Supabase recovery email link.
+        What: New password input (activated by #access_token hash).
+        Exits: → /login?reset=success
+
+  EP-6  Auth Callback        GET /auth/callback?code=...&next=...
+        Who: Supabase OAuth/recovery redirect.
+        What: Exchanges code for session silently.
+        Exits: → /reset-password, → /dashboard/{role}, → /login,
+               → /forgot-password?error=expired (on failure)
+
+  EP-7  Direct URL           GET /dashboard/{role}
+        Who: Authenticated user typing URL or bookmark.
+        What: Middleware intercepts, validates session + role.
+        Exits: → Dashboard (if valid), → /login (if no session),
+               → /dashboard/{actual_role} (if role mismatch)
+
+--------------------------------------------------------------------------------
+DEEP LINKS (Bookmarkable):
+  - /login?redirect=/dashboard/teacher  (safe redirect post-login)
+  - /forgot-password?error=expired      (callback failure state)
+  - /login?reset=success                (password was just reset)
+  - /register                           (direct registration)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+2. PAGE INVENTORY (All Screens — No Exceptions)
+================================================================================
+
+A "screen" includes standalone pages AND dashboard tabs (each tab renders
+a distinct module with its own UI, data, and interactions).
+
+ID     | Route / Tab               | Type       | Auth? | Role(s)
+-------|---------------------------|------------|-------|------------------
+PG-01  | /                         | Page       | No    | Public
+PG-02  | /login                    | Page       | No    | Public
+PG-03  | /register                 | Page       | No    | Public
+PG-04  | /forgot-password          | Page       | No    | Public
+PG-05  | /reset-password           | Page       | No*   | Public (token req)
+PG-06  | /auth/callback            | API Route  | No    | System
+PG-07  | /not-found (404)          | Page       | No    | Public
+PG-08  | Global Error Boundary     | Page       | N/A   | Any
+-------|---------------------------|------------|-------|------------------
+       | ADMIN DASHBOARD           |            |       |
+       | /dashboard/admin          |            |       |
+-------|---------------------------|------------|-------|------------------
+AD-01  | Tab: home                 | Overview   | Yes   | Admin
+AD-02  | Tab: users                | User Mgmt  | Yes   | Admin
+AD-03  | Tab: announcements        | Broadcasts | Yes   | Admin
+AD-04  | Tab: tests                | All Tests  | Yes   | Admin
+AD-05  | Tab: courses              | All Courses| Yes   | Admin
+AD-06  | Tab: assignments          | All Assign.| Yes   | Admin
+AD-07  | Tab: attendance           | All Attend.| Yes   | Admin
+AD-08  | Tab: forums               | Forums     | Yes   | Admin
+AD-09  | Tab: analytics            | Platform   | Yes   | Admin
+AD-10  | Tab: activity             | Audit Log  | Yes   | Admin
+AD-11  | Tab: settings             | Platform   | Yes   | Admin
+AD-12  | Tab: batch                | Batch Ops  | Yes   | Admin
+AD-13  | Tab: calendar             | Calendar   | Yes   | Admin
+AD-14  | Tab: profile              | Admin Prof | Yes   | Admin
+-------|---------------------------|------------|-------|------------------
+       | STUDENT DASHBOARD         |            |       |
+       | /dashboard/student        |            |       |
+-------|---------------------------|------------|-------|------------------
+ST-01  | Tab: home                 | Overview   | Yes   | Student
+       | --- Section: Learning --- |            |       |
+ST-02  | Tab: tests                | Take Tests | Yes   | Student
+ST-03  | Tab: courses              | Enrollment | Yes   | Student
+ST-04  | Tab: assignments          | Submit Work| Yes   | Student
+ST-05  | Tab: attendance           | View Record| Yes   | Student
+ST-06  | Tab: grades               | View Marks | Yes   | Student
+ST-07  | Tab: timetable            | Schedule   | Yes   | Student
+ST-08  | Tab: xp                   | XP Hub     | Yes   | Student
+ST-09  | Tab: forums               | Forums     | Yes   | Student
+ST-10  | Tab: calendar             | Calendar   | Yes   | Student
+ST-11  | Tab: live-classes         | Live Stream| Yes   | Student
+ST-12  | Tab: quests               | Challenges | Yes   | Student
+ST-13  | Tab: collab               | Study Rooms| Yes   | Student
+       | --- Section: Tools ---    |            |       |
+ST-14  | Tab: ai-tutor             | AI Chat    | Yes   | Student
+ST-15  | Tab: code                 | Code Lab   | Yes   | Student
+ST-16  | Tab: messaging            | Messages   | Yes   | Student
+ST-17  | Tab: report-card          | Report Card| Yes   | Student
+ST-18  | Tab: my-analytics         | Analytics  | Yes   | Student
+ST-19  | Tab: certificates         | Certs      | Yes   | Student
+       | --- Section: Account ---  |            |       |
+ST-20  | Tab: profile              | My Profile | Yes   | Student
+-------|---------------------------|------------|-------|------------------
+       | TEACHER DASHBOARD         |            |       |
+       | /dashboard/teacher        |            |       |
+-------|---------------------------|------------|-------|------------------
+TC-01  | Tab: home                 | Overview   | Yes   | Teacher
+       | --- Section: Teaching --- |            |       |
+TC-02  | Tab: tests                | Create/Mgmt| Yes   | Teacher
+TC-03  | Tab: timetable            | Schedule   | Yes   | Teacher
+TC-04  | Tab: courses              | Create/Mgmt| Yes   | Teacher
+TC-05  | Tab: assignments          | Create/Mgmt| Yes   | Teacher
+TC-06  | Tab: attendance           | Mark Attend| Yes   | Teacher
+TC-07  | Tab: grades               | Grade Book | Yes   | Teacher
+TC-08  | Tab: analytics            | Class Stats| Yes   | Teacher
+TC-09  | Tab: quests               | Quest Mgmt | Yes   | Teacher
+TC-10  | Tab: calendar             | Calendar   | Yes   | Teacher
+TC-11  | Tab: live-classes         | Host Live  | Yes   | Teacher
+TC-12  | Tab: announcements        | Post Announ| Yes   | Teacher
+TC-13  | Tab: forums               | Forums     | Yes   | Teacher
+       | --- Section: Tools ---    |            |       |
+TC-14  | Tab: plagiarism           | Plag. Check| Yes   | Teacher
+TC-15  | Tab: meetings             | Schedule   | Yes   | Teacher
+TC-16  | Tab: pred-alerts          | Risk Alerts| Yes   | Teacher
+TC-17  | Tab: messaging            | Messages   | Yes   | Teacher
+TC-18  | Tab: report-card          | Write Cards| Yes   | Teacher
+TC-19  | Tab: batch-grades         | Bulk Grade | Yes   | Teacher
+       | --- Section: Account ---  |            |       |
+TC-20  | Tab: profile              | My Profile | Yes   | Teacher
+-------|---------------------------|------------|-------|------------------
+       | PARENT DASHBOARD          |            |       |
+       | /dashboard/parent         |            |       |
+-------|---------------------------|------------|-------|------------------
+PA-01  | Tab: home                 | Overview   | Yes   | Parent
+       | --- Section: Monitor ---  |            |       |
+PA-02  | Tab: grades               | Child Marks| Yes   | Parent
+PA-03  | Tab: attendance           | Child Attnd| Yes   | Parent
+PA-04  | Tab: timetable            | Child Sched| Yes   | Parent
+PA-05  | Tab: report               | Report Card| Yes   | Parent
+       | --- Section: Communic. ---|            |       |
+PA-06  | Tab: excuses              | Abs. Excuse| Yes   | Parent
+PA-07  | Tab: meetings             | Book Meet  | Yes   | Parent
+PA-08  | Tab: messaging            | Msg Teacher| Yes   | Parent
+PA-09  | Tab: alerts               | Acad. Alert| Yes   | Parent
+       | --- Section: Account ---  |            |       |
+PA-10  | Tab: profile              | My Profile | Yes   | Parent
+
+-------|---------------------------|------------|-------|------------------
+       | API ENDPOINTS             |            |       |
+-------|---------------------------|------------|-------|------------------
+API-01 | POST /api/ai              | AI Gen     | Yes   | Teacher
+API-02 | POST /api/submit-test     | Test Submit| Yes   | Student
+API-03 | POST /api/batch-create-user| User Create| Yes  | Admin
+API-04 | POST /api/delete-user     | User Delete| Yes   | Admin
+API-05 | GET/POST /api/quests      | Quest CRUD | Yes   | Admin
+
+TOTAL SCREENS: 8 public + 14 admin + 20 student + 20 teacher + 10 parent
+             = 72 distinct screens/views
+TOTAL API ENDPOINTS: 5 + 1 auth callback = 6
+
+
+================================================================================
+3. NAVIGATION FLOWS (Core Section — Exact User Journeys)
+================================================================================
+
+Each flow is written as a step-by-step path with exact page/tab references.
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-01: First-Time Student Registration
+────────────────────────────────────────────────────────────────────────────────
+
+  1. User lands on / (PG-01)
+  2. Clicks "Get Started" or "Sign Up" → /register (PG-03)
+  3. Fills: name, email, password (min 8 chars, 1 letter + 1 number), phone (opt)
+  4. Selects role: "Student" from dropdown
+  5. Clicks Register
+     5a. System creates Supabase Auth user
+     5b. System generates QGX ID via RPC `generate_qgx_id('student')`
+     5c. System creates profile row: xp=0, score=0, ghost_wins=0
+  6. IF email confirmation required:
+     → Redirect to /login (PG-02) with "Check your email" message
+     → User clicks email link → /auth/callback (PG-06)
+     → Callback exchanges code → /dashboard/student (ST-01)
+  7. IF email confirmation NOT required (auto-confirmed):
+     → Direct redirect to /dashboard/student (ST-01)
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-02: Returning User Login (Email)
+────────────────────────────────────────────────────────────────────────────────
+
+  1. User navigates to /login (PG-02)
+  2. Enters email + password
+  3. Clicks "Sign In"
+  4. System calls supabase.auth.signInWithPassword(email, password)
+  5. System fetches profile → determines role
+  6. System checks ?redirect= query param
+     6a. IF redirect starts with /dashboard/ AND matches user's role → go there
+     6b. ELSE → /dashboard/{role}
+  7. Middleware validates session + role on arrival
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-03: Returning User Login (QGX ID)
+────────────────────────────────────────────────────────────────────────────────
+
+  1. User navigates to /login (PG-02)
+  2. Enters QGX ID (e.g., "QGX-ABC123") in email field + password
+  3. System detects QGX-* pattern
+  4. System queries: profiles WHERE qgx_id = 'QGX-ABC123' → resolves to email
+  5. System calls signInWithPassword(resolved_email, password)
+  6. Continue from FLOW-02 step 5
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-04: Password Recovery
+────────────────────────────────────────────────────────────────────────────────
+
+  1. User on /login (PG-02) → clicks "Forgot Password?"
+  2. → /forgot-password (PG-04)
+  3. Enters email → clicks "Send Reset Link"
+  4. System calls resetPasswordForEmail(email, { redirectTo: '/reset-password' })
+  5. User receives email with Supabase recovery link
+  6. User clicks link in email
+  7. → /auth/callback?code=...&next=/reset-password (PG-06)
+  8. Callback exchanges code → /reset-password (PG-05)
+  9. Page listens for PASSWORD_RECOVERY auth event
+  10. User enters new password (min 8 chars) + confirm
+  11. System calls updateUser({ password })
+  12. → /login?reset=success (PG-02) with success toast
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-05: Admin Creates a New User
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Admin on /dashboard/admin (AD-01)
+  2. Clicks "Users" tab → (AD-02)
+  3. Clicks "Create User" button → opens modal
+  4. Fills: name, email, role (admin/teacher/student/parent)
+  5. System sends POST /api/batch-create-user
+     5a. Validates all fields server-side
+     5b. Creates auth user + profile
+     5c. Returns generated QGX ID
+  6. Modal closes → user list refreshes with new entry
+  7. Activity logged: "User {name} created by admin"
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-06: Admin Batch Creates Users
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Admin on /dashboard/admin → clicks "Batch Create" tab (AD-12)
+  2. Enters user data (CSV-style or form repeater)
+  3. Each row: name, email, role
+  4. System iterates, calling POST /api/batch-create-user per user
+  5. Success/failure summary displayed per row
+  6. All successful users appear in Users tab (AD-02)
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-07: Admin Deletes a User
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Admin on Users tab (AD-02)
+  2. Locates user via search/filter (role, XP, join date)
+  3. Clicks "Delete" on user row
+  4. Confirmation dialog appears
+  5. System sends POST /api/delete-user { userId }
+     5a. Guard: cannot delete yourself
+     5b. Guard: cannot delete last admin
+     5c. Cascades deletion of user data
+  6. User removed from list → activity logged
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-08: Teacher Creates and Publishes a Test
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Teacher on /dashboard/teacher → "Tests & Quizzes" tab (TC-02)
+  2. Clicks "Create Test"
+  3. Fills: title, subject, duration, type (test/quiz), scheduled date/time
+  4. Configures anti-cheat settings:
+     - Tab switch detection (on/off)
+     - Copy-paste prevention (on/off)
+     - Random question order (on/off)
+     - Random option order (on/off)
+     - Fullscreen enforcement (on/off)
+     - Time per question limit (seconds)
+     - Max attempts allowed
+  5. Adds questions:
+     - MCQ (1 correct), MSQ (multiple correct), True/False, Fill-in-blank, Matching
+     - Each question: text, options, correct answer, marks
+  6. [Optional] Uses AI generation:
+     - Uploads PDF/document → POST /api/ai
+     - AI generates questions from content (rate limited: 10/min)
+     - Teacher reviews, edits, accepts/rejects generated questions
+  7. Saves test (status: draft → published)
+  8. Activity logged, students can now see the test
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-09: Student Takes a Test
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Student on /dashboard/student → "Tests" tab (ST-02)
+  2. Sees list of available tests (published, within schedule)
+  3. Clicks "Start Test" on a specific test
+  4. IF anti-cheat fullscreen enabled → enters fullscreen mode
+  5. IF exam mode → top bar shows "EXAM MODE" indicator
+  6. Answers questions (MCQ, MSQ, TF, FIB, Match)
+  7. Timer counts down (duration or per-question)
+  8. Clicks "Submit"
+  9. System sends POST /api/submit-test
+     9a. Validates student role
+     9b. Checks enrollment
+     9c. Auto-grades answers
+     9d. Calculates XP reward (max 500 per test)
+     9e. IF double-XP active → multiplied reward
+     9f. Updates student.xp, student.score
+  10. Score + breakdown displayed
+  11. Attempt recorded with full answer_map
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-10: Student Uses AI Tutor
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Student on /dashboard/student → "AI Tutor" tab (ST-14)
+  2. Selects a course context (determines AI knowledge scope)
+  3. Types question in chat interface
+  4. System sends to GROQ API with course context
+  5. AI responds with explanation
+  6. Conversation persisted in ai_chats table
+  7. Student can continue conversation or start new topic
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-11: Parent Links Child and Monitors Progress
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Parent on /dashboard/parent → "Overview" (PA-01)
+  2. Clicks "Link Student" button
+  3. Enters student's link code
+  4. System creates parent_student relationship
+  5. Parent can now switch between linked children
+  6. Clicks "Grades & Tests" (PA-02) → sees child's test attempts, scores
+  7. Clicks "Attendance" (PA-03) → sees attendance history
+  8. Clicks "Report Card" (PA-05) → sees teacher comments, conduct, grades
+  9. Can link MULTIPLE children and switch between them
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-12: Parent Submits Absence Excuse
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Parent on /dashboard/parent → "Absence Excuses" (PA-06)
+  2. Selects linked child
+  3. Picks date of absence
+  4. Writes reason text
+  5. Submits form
+  6. Excuse status = "pending"
+  7. Teacher/admin reviews → approves or rejects
+  8. Status updates to "approved" or "rejected"
+  9. Parent sees updated status on same tab
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-13: Teacher Marks Attendance
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Teacher on /dashboard/teacher → "Attendance" (TC-06)
+  2. Selects subject and date
+  3. Student list populated
+  4. For each student: marks Present / Absent / Late / Excused
+  5. Optional: adds note per student
+  6. Saves batch → records created in attendance table
+  7. Students see their updated attendance immediately
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-14: Teacher Creates Course with Materials
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Teacher on /dashboard/teacher → "Courses" (TC-04)
+  2. Clicks "Create Course"
+  3. Fills: title, subject, description
+  4. Saves as draft
+  5. Uploads materials: files up to 50MB each
+     - Files stored with: name, type, storage_path, section, order
+  6. Publishes course (draft → published)
+  7. Students can now enroll via their Courses tab (ST-03)
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-15: Student Enrolls in Course
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Student on /dashboard/student → "Courses" (ST-03)
+  2. Browses published courses
+  3. Clicks "Enroll" on a course
+  4. System adds student_id to course.enrolled array
+  5. Student can now:
+     - Access course materials
+     - Track progress per file (course_progress)
+     - Rate and review the course
+     - Use AI Tutor scoped to this course
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-16: Teacher Creates Assignment
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Teacher on /dashboard/teacher → "Assignments" (TC-05)
+  2. Clicks "Create Assignment"
+  3. Fills: title, description, course, due date, priority, max points
+  4. Optional: attaches reference file
+  5. Saves → status: active
+  6. Students in that course see assignment on their tab
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-17: Student Submits Assignment
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Student on /dashboard/student → "Assignments" (ST-04)
+  2. Views active assignments
+  3. Clicks assignment → sees details
+  4. Writes text response and/or uploads file
+  5. Can save as draft first
+  6. Clicks "Submit"
+  7. IF past due date → is_late = true
+  8. Teacher receives submission for review
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-18: Teacher Grades Submissions
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Teacher on "Grades" (TC-07) or "Assignments" (TC-05)
+  2. Views student submissions list
+  3. For each submission: reviews text/file
+  4. Enters score + feedback text
+  5. Saves grade
+  6. Student sees grade + feedback on their Grades tab (ST-06)
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-19: Admin Creates Quest
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Admin on /dashboard/admin → navigates to Quests area
+  2. Clicks "Create Quest"
+  3. Fills: title, description, type (daily/weekly/special)
+  4. Sets target: target_type (e.g., test-based), target_count
+  5. Sets XP reward
+  6. Toggles active=true
+  7. System sends POST /api/quests
+  8. Students see quest on their "Quests" tab (ST-12)
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-20: Admin Activates Double XP
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Admin on /dashboard/admin → Settings tab (AD-11) or home
+  2. Clicks "Activate Double XP"
+  3. System sets double_xp flag with expiry = now + 1 hour
+  4. All test submissions during window receive 2x XP
+  5. Students see "Double XP Active" indicator
+  6. After 1 hour → auto-expires
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-21: Messaging Between Users
+────────────────────────────────────────────────────────────────────────────────
+
+  1. User navigates to their Messages tab (ST-16 / TC-17 / PA-08)
+  2. Selects recipient or group
+     - Students ↔ Teachers
+     - Parents ↔ Teachers
+     - Teachers ↔ Teachers
+     - Group messages (MessageGroup)
+  3. Types message, optional attachment
+  4. Sends → persisted in messages table
+  5. Recipient sees unread indicator
+  6. Messages can be edited (edited_at) or soft-deleted (deleted=true)
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-22: Forum Post and Discussion
+────────────────────────────────────────────────────────────────────────────────
+
+  1. User goes to Forums tab (AD-08 / ST-09 / TC-13)
+  2. Browses posts by flair: question, discussion, announcement, resource, help, showcase
+  3. Clicks "New Post" → fills title, body, flair, tags, optional attachment
+  4. Posts appear with like/bookmark buttons, view count
+  5. Users comment on posts (threaded via parent_id)
+  6. Post author can mark a comment as "best answer" (best_answer_id)
+  7. Posts can be pinned (by admin/teacher)
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-23: Live Class Session
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Teacher on "Live Classes" (TC-11) → creates session
+     - Title, course, scheduled_at, duration
+     - System generates room_id and room_url
+  2. Status: scheduled → live → ended
+  3. Students see scheduled class on "Live Classes" (ST-11)
+  4. At scheduled time: teacher starts → status = live
+  5. Students join via room_url
+  6. After duration/manual end → status = ended
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-24: Teacher Meeting Scheduler
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Teacher on "Meetings" (TC-15) → creates available slots
+  2. Parent on "Book Meeting" (PA-07) → sees available slots
+  3. Parent selects slot → books meeting
+  4. Both parties see confirmed meeting
+  5. Notifications sent to both
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-25: Predictive Risk Alerts
+────────────────────────────────────────────────────────────────────────────────
+
+  1. Teacher on "Risk Alerts" (TC-16)
+  2. System analyzes student data: grades, attendance, submission patterns
+  3. Flags at-risk students with alert indicators
+  4. Teacher can review and take action (message student/parent)
+
+────────────────────────────────────────────────────────────────────────────────
+FLOW-26: Logout
+────────────────────────────────────────────────────────────────────────────────
+
+  1. User clicks "Logout" in sidebar (all dashboards)
+  2. System calls supabase.auth.signOut()
+  3. Session cookie cleared
+  4. → /login (PG-02)
+  5. Any subsequent /dashboard/* access redirected to /login by middleware
+
+
+================================================================================
+4. CONDITIONAL FLOWS (What-If Cases)
+================================================================================
+
+These cover the branching logic that AI often misses.
+
+────────────────────────────────────────────────────────────────────────────────
+CF-01: What if user enters wrong password?
+────────────────────────────────────────────────────────────────────────────────
+  - signInWithPassword returns error
+  - Error message displayed on /login: "Invalid credentials"
+  - User stays on /login
+  - No redirect. No session created.
+
+────────────────────────────────────────────────────────────────────────────────
+CF-02: What if user enters a QGX ID that doesn't exist?
+────────────────────────────────────────────────────────────────────────────────
+  - Profile query returns null
+  - Fallback: system attempts login with the QGX ID as-is (will fail)
+  - Error: "Invalid credentials"
+  - User stays on /login
+
+────────────────────────────────────────────────────────────────────────────────
+CF-03: What if session expires while on dashboard?
+────────────────────────────────────────────────────────────────────────────────
+  - Next API call or navigation triggers middleware check
+  - getUser() returns null
+  - Redirect to /login?redirect={current_path}
+  - After re-login, user returns to exact tab they were on
+
+────────────────────────────────────────────────────────────────────────────────
+CF-04: What if student tries to submit test twice (maxAttempts=1)?
+────────────────────────────────────────────────────────────────────────────────
+  - POST /api/submit-test checks existing attempts for (student_id, test_id)
+  - If attempts >= maxAttempts → 403 "Maximum attempts exceeded"
+  - Test shows as "completed" in student's list → no "Start" button
+
+────────────────────────────────────────────────────────────────────────────────
+CF-05: What if student is not enrolled but tries to submit test?
+────────────────────────────────────────────────────────────────────────────────
+  - POST /api/submit-test checks enrollment
+  - If not enrolled → rejects submission
+  - Student must enroll first via Courses tab
+
+────────────────────────────────────────────────────────────────────────────────
+CF-06: What if admin tries to delete themselves?
+────────────────────────────────────────────────────────────────────────────────
+  - POST /api/delete-user checks: userId !== currentUserId
+  - If self-deletion → 403 "Cannot delete your own account"
+  - No deletion occurs
+
+────────────────────────────────────────────────────────────────────────────────
+CF-07: What if admin tries to delete the last admin?
+────────────────────────────────────────────────────────────────────────────────
+  - POST /api/delete-user counts admin profiles
+  - If only 1 admin left → 403 "Cannot delete the last administrator"
+  - No deletion occurs
+
+────────────────────────────────────────────────────────────────────────────────
+CF-08: What if password reset link expires?
+────────────────────────────────────────────────────────────────────────────────
+  - /auth/callback receives code → exchangeCodeForSession fails
+  - Redirect to /forgot-password?error=expired
+  - User sees "Link expired" message, can request new one
+
+────────────────────────────────────────────────────────────────────────────────
+CF-09: What if user navigates to /reset-password without a token?
+────────────────────────────────────────────────────────────────────────────────
+  - Page listens for PASSWORD_RECOVERY event
+  - Without #access_token hash → event never fires
+  - Page shows waiting state or redirects to /forgot-password
+
+────────────────────────────────────────────────────────────────────────────────
+CF-10: What if teacher tries AI generation and hits rate limit?
+────────────────────────────────────────────────────────────────────────────────
+  - POST /api/ai enforces 10 requests per minute per user
+  - If exceeded → 429 "Rate limit exceeded"
+  - Teacher sees error, must wait before retrying
+
+────────────────────────────────────────────────────────────────────────────────
+CF-11: What if file upload exceeds 50MB?
+────────────────────────────────────────────────────────────────────────────────
+  - Client-side validation: MAX_FILE_SIZE = 50 * 1024 * 1024
+  - File rejected before upload with error message
+  - User must choose smaller file
+
+────────────────────────────────────────────────────────────────────────────────
+CF-12: What if anti-cheat detects tab switch during test?
+────────────────────────────────────────────────────────────────────────────────
+  - If tabSwitch=true on test config:
+  - Browser visibilitychange event detected
+  - Warning shown to student
+  - Event logged (potential flag for teacher review)
+  - Test may auto-submit depending on implementation
+
+────────────────────────────────────────────────────────────────────────────────
+CF-13: What if parent has no linked children?
+────────────────────────────────────────────────────────────────────────────────
+  - Dashboard shows empty state on all monitor tabs
+  - Prominent "Link a Student" CTA displayed
+  - No grade/attendance/report data available until child linked
+
+────────────────────────────────────────────────────────────────────────────────
+CF-14: What if registration email already exists?
+────────────────────────────────────────────────────────────────────────────────
+  - Supabase signUp returns error for duplicate email
+  - Error displayed on /register
+  - User prompted to login instead
+
+────────────────────────────────────────────────────────────────────────────────
+CF-15: What if the ?redirect= param is a malicious URL?
+────────────────────────────────────────────────────────────────────────────────
+  - Login page validates: redirect must start with "/dashboard/"
+  - Auth callback validates against SAFE_PATHS whitelist
+  - Any non-matching value → ignored, default redirect used
+  - Open redirect attack: BLOCKED
+
+────────────────────────────────────────────────────────────────────────────────
+CF-16: What if profile fetch fails in middleware?
+────────────────────────────────────────────────────────────────────────────────
+  - try/catch wraps profile query
+  - On any error → redirect to /login for safety
+  - User must re-authenticate
+
+────────────────────────────────────────────────────────────────────────────────
+CF-17: What if user registers with invalid password?
+────────────────────────────────────────────────────────────────────────────────
+  - Client-side validation: min 8 characters, at least 1 letter + 1 number
+  - Form prevents submission until criteria met
+  - Error message shown inline
+
+────────────────────────────────────────────────────────────────────────────────
+CF-18: What if Double XP is active when student submits test?
+────────────────────────────────────────────────────────────────────────────────
+  - POST /api/submit-test checks double_xp flag and expiry
+  - If active: xp_reward * 2 (capped at MAX_XP_PER_TEST * 2 = 1000)
+  - Student sees "Double XP!" indicator on result screen
+
+
+================================================================================
+5. ROLE-BASED FLOWS (Per-Role Access Matrix)
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+5A. FULL ACCESS MATRIX
+────────────────────────────────────────────────────────────────────────────────
+
+Feature/Action                 | Admin | SuperAdmin | Teacher | Student | Parent
+-------------------------------|-------|------------|---------|---------|-------
+View Platform Analytics        |  YES  |    YES     |   NO    |   NO    |  NO
+Manage All Users (CRUD)        |  YES  |    YES     |   NO    |   NO    |  NO
+Delete Users                   |  YES  |    YES     |   NO    |   NO    |  NO
+Batch Create Users             |  YES  |    YES     |   NO    |   NO    |  NO
+View Activity Audit Log        |  YES  |    YES     |   NO    |   NO    |  NO
+Manage Platform Settings       |  YES  |    YES     |   NO    |   NO    |  NO
+Create Announcements           |  YES  |    YES     |  YES    |   NO    |  NO
+Create/Edit Tests              |  NO   |    YES*    |  YES    |   NO    |  NO
+Take Tests                     |  NO   |    NO      |   NO    |  YES    |  NO
+Submit Test Answers             |  NO   |    NO      |   NO    |  YES    |  NO
+View Own Grades                |  NO   |    NO      |   NO    |  YES    |  NO
+View Child's Grades            |  NO   |    NO      |   NO    |   NO    | YES
+Create Courses                 |  NO   |    YES*    |  YES    |   NO    |  NO
+Enroll in Courses              |  NO   |    NO      |   NO    |  YES    |  NO
+Create Assignments             |  NO   |    YES*    |  YES    |   NO    |  NO
+Submit Assignments             |  NO   |    NO      |   NO    |  YES    |  NO
+Grade Submissions              |  NO   |    YES*    |  YES    |   NO    |  NO
+Mark Attendance                |  NO   |    NO      |  YES    |   NO    |  NO
+View Own Attendance            |  NO   |    NO      |   NO    |  YES    |  NO
+View Child's Attendance        |  NO   |    NO      |   NO    |   NO    | YES
+AI Question Generation         |  NO   |    YES*    |  YES    |   NO    |  NO
+AI Tutor Chat                  |  NO   |    NO      |   NO    |  YES    |  NO
+Plagiarism Detection           |  NO   |    NO      |  YES    |   NO    |  NO
+Predictive Risk Alerts         |  NO   |    NO      |  YES    |   NO    |  NO
+Create/Manage Quests           |  YES  |    YES     |  YES    |   NO    |  NO
+Complete Quests (earn XP)      |  NO   |    NO      |   NO    |  YES    |  NO
+Activate Double XP             |  YES  |    YES     |   NO    |   NO    |  NO
+Host Live Classes              |  NO   |    YES*    |  YES    |   NO    |  NO
+Join Live Classes              |  NO   |    NO      |   NO    |  YES    |  NO
+Submit Absence Excuses         |  NO   |    NO      |   NO    |   NO    | YES
+Review Absence Excuses         |  YES  |    YES     |  YES    |   NO    |  NO
+Book Meetings                  |  NO   |    NO      |   NO    |   NO    | YES
+Offer Meeting Slots            |  NO   |    YES*    |  YES    |   NO    |  NO
+Send Messages                  |  NO   |    YES*    |  YES    |  YES    | YES
+Code Playground                |  NO   |    NO      |   NO    |  YES    |  NO
+Study Rooms (Collaboration)    |  NO   |    NO      |   NO    |  YES    |  NO
+View Certificates              |  NO   |    NO      |   NO    |  YES    |  NO
+Write Report Cards             |  NO   |    YES*    |  YES    |   NO    |  NO
+View Own Report Card           |  NO   |    NO      |   NO    |  YES    |  NO
+View Child's Report Card       |  NO   |    NO      |   NO    |   NO    | YES
+Forum Post/Comment             |  YES  |    YES     |  YES    |  YES    |  NO
+Pin Forum Posts                |  YES  |    YES     |  YES    |   NO    |  NO
+Link Children                  |  NO   |    NO      |   NO    |   NO    | YES
+Academic Alerts (receive)      |  NO   |    NO      |   NO    |   NO    | YES
+XP Tracking                    |  NO   |    NO      |   NO    |  YES    |  NO
+Batch Grade                    |  NO   |    YES*    |  YES    |   NO    |  NO
+Manage Calendar                |  YES  |    YES     |  YES    |  YES    |  NO
+View Timetable                 |  NO   |    YES*    |  YES    |  YES    | YES
+---                            |       |            |         |         |
+*** Super Admin NEW features   |       |            |         |         |
+(see Section 8)                |       |            |         |         |
+Promote/Demote Admins          |  NO   |    YES     |   NO    |   NO    |  NO
+System-Wide Data Export        |  NO   |    YES     |   NO    |   NO    |  NO
+Impersonate Any User           |  NO   |    YES     |   NO    |   NO    |  NO
+Manage Role Permissions        |  NO   |    YES     |   NO    |   NO    |  NO
+Access System Diagnostics      |  NO   |    YES     |   NO    |   NO    |  NO
+Override Any Guard             |  NO   |    YES     |   NO    |   NO    |  NO
+View All API Logs              |  NO   |    YES     |   NO    |   NO    |  NO
+Force Password Reset Any User  |  NO   |    YES     |   NO    |   NO    |  NO
+Platform Maintenance Mode      |  NO   |    YES     |   NO    |   NO    |  NO
+Audit Trail Export             |  NO   |    YES     |   NO    |   NO    |  NO
+
+* SuperAdmin has all Teacher capabilities when acting in teacher-context
+
+
+────────────────────────────────────────────────────────────────────────────────
+5B. ROLE-SPECIFIC NAVIGATION ITEMS (Exact Sidebar)
+────────────────────────────────────────────────────────────────────────────────
+
+ADMIN SIDEBAR:
+  Overview → Users → Announcements → Tests → Courses → Assignments →
+  Attendance → Forums → Analytics → Activity Log → Settings →
+  Batch Create → Calendar → Profile → [Logout]
+
+STUDENT SIDEBAR:
+  Overview → [Learning] Tests → Courses → Assignments → Attendance →
+  Grades → Timetable → XP Hub → Forums → Calendar → Live Classes →
+  Quests → Study Rooms → [Tools] AI Tutor → Code Lab → Messages →
+  Report Card → My Analytics → Certificates → [Account] My Profile
+  → [Logout]
+
+TEACHER SIDEBAR:
+  Overview → [Teaching] Tests & Quizzes → Timetable → Courses →
+  Assignments → Attendance → Grades → Analytics → Quests → Calendar →
+  Live Classes → Announcements → Forums → [Tools] Plagiarism Check →
+  Meetings → Risk Alerts → Messages → Report Cards → Batch Grades
+  → [Account] My Profile → [Logout]
+
+PARENT SIDEBAR:
+  Overview → [Monitor] Grades & Tests → Attendance → Timetable →
+  Report Card → [Communication] Absence Excuses → Book Meeting →
+  Teacher Messages → Academic Alerts → [Account] My Profile → [Logout]
+
+
+================================================================================
+6. STATE TRANSITIONS (How States Change)
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+6A. USER AUTHENTICATION STATES
+────────────────────────────────────────────────────────────────────────────────
+
+  [Anonymous] ──register──→ [Unconfirmed] ──verify email──→ [Authenticated]
+  [Anonymous] ──login──→ [Authenticated]
+  [Authenticated] ──logout──→ [Anonymous]
+  [Authenticated] ──session expires──→ [Anonymous]
+  [Authenticated] ──navigate /dashboard/*──→ [Middleware Check]
+  [Middleware Check] ──valid session + role match──→ [Dashboard Active]
+  [Middleware Check] ──no session──→ [Anonymous] → /login
+  [Middleware Check] ──role mismatch──→ [Dashboard Active] → /dashboard/{actual_role}
+
+────────────────────────────────────────────────────────────────────────────────
+6B. TEST LIFECYCLE STATES
+────────────────────────────────────────────────────────────────────────────────
+
+  [Not Created]
+      │
+      ▼  (Teacher creates)
+  [Draft]
+      │
+      ▼  (Teacher publishes)
+  [Published]
+      │
+      ├──→ [Scheduled] (has future scheduled_date)
+      │        │
+      │        ▼ (date arrives)
+      │    [Available]
+      │
+      └──→ [Available] (no schedule, immediate)
+               │
+               ▼ (Student starts)
+           [In Progress] (per student)
+               │
+               ▼ (Student submits OR timer expires)
+           [Submitted] (per student)
+               │
+               ▼ (Auto-graded)
+           [Graded] (attempt with score)
+
+────────────────────────────────────────────────────────────────────────────────
+6C. COURSE LIFECYCLE STATES
+────────────────────────────────────────────────────────────────────────────────
+
+  [Not Created]
+      │
+      ▼  (Teacher creates)
+  [Draft]
+      │
+      ▼  (Teacher publishes)
+  [Published]
+      │
+      ├──→ Student Enrollment ──→ [Enrolled]
+      │                               │
+      │                               ▼ (completes all files)
+      │                           [Completed] → Certificate eligible
+      │
+      └──→ Student Rating ──→ [Rated] (1-5 + review)
+
+────────────────────────────────────────────────────────────────────────────────
+6D. ASSIGNMENT LIFECYCLE STATES
+────────────────────────────────────────────────────────────────────────────────
+
+  [Not Created]
+      │
+      ▼  (Teacher creates)
+  [Active]
+      │
+      ├──→ Student saves ──→ [Draft Submission] (is_draft=true)
+      │                           │
+      │                           ▼ (Student finalizes)
+      │                       [Submitted] (is_draft=false)
+      │                           │
+      │                           ├──→ [Late] (is_late=true, past due_date)
+      │                           │
+      │                           ▼ (Teacher grades)
+      │                       [Graded] (score + feedback)
+      │
+      ▼  (Teacher closes)
+  [Closed]
+
+────────────────────────────────────────────────────────────────────────────────
+6E. ABSENCE EXCUSE STATES
+────────────────────────────────────────────────────────────────────────────────
+
+  [Not Submitted]
+      │
+      ▼  (Parent submits)
+  [Pending]
+      │
+      ├──→ (Approved by teacher/admin) ──→ [Approved]
+      │                                        │
+      │                                        ▼
+      │                                    Attendance → status: "excused"
+      │
+      └──→ (Rejected by teacher/admin) ──→ [Rejected]
+
+────────────────────────────────────────────────────────────────────────────────
+6F. LIVE CLASS STATES
+────────────────────────────────────────────────────────────────────────────────
+
+  [Not Created]
+      │
+      ▼  (Teacher creates)
+  [Scheduled]
+      │
+      ▼  (Teacher starts)
+  [Live]
+      │
+      ▼  (Time up or teacher ends)
+  [Ended]
+
+────────────────────────────────────────────────────────────────────────────────
+6G. MESSAGE STATES
+────────────────────────────────────────────────────────────────────────────────
+
+  [Composed]
+      │
+      ▼  (Sent)
+  [Unread]
+      │
+      ├──→ (Recipient reads) ──→ [Read]
+      │
+      ├──→ (Sender edits) ──→ [Edited] (edited_at set)
+      │
+      └──→ (Sender deletes) ──→ [Soft Deleted] (deleted=true, hidden from UI)
+
+────────────────────────────────────────────────────────────────────────────────
+6H. ATTENDANCE STATES (per student per day)
+────────────────────────────────────────────────────────────────────────────────
+
+  [Not Marked]
+      │
+      ▼  (Teacher marks)
+  [Present] OR [Absent] OR [Late]
+      │
+      ▼  (Excuse approved)
+  [Excused] (overrides Absent/Late)
+
+────────────────────────────────────────────────────────────────────────────────
+6I. FORUM POST STATES
+────────────────────────────────────────────────────────────────────────────────
+
+  [Created]
+      │
+      ├──→ (Receives comments) ──→ [Active Discussion]
+      │         │
+      │         └──→ (Author marks best answer) ──→ [Resolved]
+      │
+      ├──→ (Admin/Teacher pins) ──→ [Pinned]
+      │
+      └──→ (Inactive) ──→ [Archived] (view_count stale)
+
+────────────────────────────────────────────────────────────────────────────────
+6J. QUEST STATES
+────────────────────────────────────────────────────────────────────────────────
+
+  [Created by Admin]
+      │
+      ├──→ active=true ──→ [Active]
+      │                       │
+      │                       ├──→ (Student completes target) ──→ [Completed]
+      │                       │                                     │
+      │                       │                                     ▼
+      │                       │                                 XP Awarded
+      │                       │
+      │                       └──→ (Time expires: daily/weekly) ──→ [Expired]
+      │
+      └──→ active=false ──→ [Inactive]
+
+────────────────────────────────────────────────────────────────────────────────
+6K. XP & LEVEL PROGRESSION
+────────────────────────────────────────────────────────────────────────────────
+
+  [Level 1, XP=0]
+      │
+      ├──→ Complete test ──→ +XP (max 500, or 1000 during 2x)
+      ├──→ Complete quest ──→ +XP (quest.xp_reward)
+      │
+      ▼  (XP crosses threshold)
+  [Level N] → getLevel(xp) calculates current level
+      │
+      ▼  (Achievements unlocked)
+  [Badges awarded] (stored in profile.badges[])
+
+
+================================================================================
+7. FORBIDDEN PATHS (Explicitly Blocked Routes)
+================================================================================
+
+These are routes/actions that are INTENTIONALLY PREVENTED by the system.
+
+────────────────────────────────────────────────────────────────────────────────
+7A. MIDDLEWARE-ENFORCED FORBIDDEN PATHS
+────────────────────────────────────────────────────────────────────────────────
+
+  FP-01  Student → /dashboard/admin      BLOCKED (redirect → /dashboard/student)
+  FP-02  Student → /dashboard/teacher    BLOCKED (redirect → /dashboard/student)
+  FP-03  Student → /dashboard/parent     BLOCKED (redirect → /dashboard/student)
+  FP-04  Teacher → /dashboard/admin      BLOCKED (redirect → /dashboard/teacher)
+  FP-05  Teacher → /dashboard/student    BLOCKED (redirect → /dashboard/teacher)
+  FP-06  Teacher → /dashboard/parent     BLOCKED (redirect → /dashboard/teacher)
+  FP-07  Parent  → /dashboard/admin      BLOCKED (redirect → /dashboard/parent)
+  FP-08  Parent  → /dashboard/student    BLOCKED (redirect → /dashboard/parent)
+  FP-09  Parent  → /dashboard/teacher    BLOCKED (redirect → /dashboard/parent)
+  FP-10  Admin   → /dashboard/student    BLOCKED (redirect → /dashboard/admin)
+  FP-11  Admin   → /dashboard/teacher    BLOCKED (redirect → /dashboard/admin)
+  FP-12  Admin   → /dashboard/parent     BLOCKED (redirect → /dashboard/admin)
+  FP-13  Anonymous → /dashboard/*        BLOCKED (redirect → /login?redirect=...)
+  FP-14  Invalid role in DB → /dashboard/* BLOCKED (redirect → /login)
+
+  ENFORCEMENT: middleware.ts with matcher ['/dashboard/:path*']
+
+────────────────────────────────────────────────────────────────────────────────
+7B. API-ENFORCED FORBIDDEN ACTIONS
+────────────────────────────────────────────────────────────────────────────────
+
+  FP-20  Non-admin → POST /api/batch-create-user  → 403 Forbidden
+  FP-21  Non-admin → POST /api/delete-user         → 403 Forbidden
+  FP-22  Non-admin → POST /api/quests              → 403 Forbidden
+  FP-23  Non-student → POST /api/submit-test       → 403 Forbidden
+  FP-24  Non-teacher → POST /api/ai (question gen) → 403 Forbidden (implicit)
+  FP-25  Admin → self-delete via /api/delete-user   → 403 "Cannot delete yourself"
+  FP-26  Admin → delete last admin                  → 403 "Cannot delete last admin"
+  FP-27  Student → submit test w/o enrollment       → Rejected
+  FP-28  Student → exceed max attempts              → 403 "Max attempts exceeded"
+  FP-29  Any → exceed AI rate limit (10/min)        → 429 Rate Limited
+
+────────────────────────────────────────────────────────────────────────────────
+7C. REDIRECT-BASED FORBIDDEN PATHS
+────────────────────────────────────────────────────────────────────────────────
+
+  FP-30  /login?redirect=https://evil.com   → IGNORED (must start with /dashboard/)
+  FP-31  /auth/callback?next=/admin/secret  → IGNORED (not in SAFE_PATHS whitelist)
+  FP-32  /auth/callback with invalid code   → /forgot-password?error=expired
+
+  SAFE_PATHS whitelist:
+    /reset-password
+    /dashboard/student
+    /dashboard/teacher
+    /dashboard/parent
+    /dashboard/admin
+    /login
+
+────────────────────────────────────────────────────────────────────────────────
+7D. BUSINESS-LOGIC FORBIDDEN PATHS
+────────────────────────────────────────────────────────────────────────────────
+
+  FP-40  Admin self-registration via /register       → Not allowed (admins
+         created only by existing admins via Create User modal)
+  FP-41  Student → access teacher-only modules       → Tab not in navItems
+  FP-42  Parent → access any module outside their set→ Tab not in navItems
+  FP-43  Teacher → submit tests                      → No submit endpoint access
+  FP-44  Parent → post in forums                     → No forum tab in parent nav
+  FP-45  Anonymous → any API endpoint (except callback) → Auth check fails
+  FP-46  Student → grade other students              → No access to grade endpoints
+  FP-47  Parent → create courses/tests               → No access to creation endpoints
+  FP-48  Student → create announcements              → No announcements tab
+  FP-49  Student → view activity audit logs           → Tab not available
+  FP-50  Parent → manage platform settings            → Tab not available
+
+
+================================================================================
+8. SUPER ADMIN — NEW ROLE SPECIFICATION
+================================================================================
+
+The Super Admin is an ELEVATED admin role that does NOT currently exist in the
+QGX codebase. This section specifies the full design for implementation.
+
+────────────────────────────────────────────────────────────────────────────────
+8A. ROLE DEFINITION
+────────────────────────────────────────────────────────────────────────────────
+
+  Name:           super_admin
+  Inherits From:  admin (all admin capabilities included)
+  Database Value: role = 'super_admin' in profiles table
+  Type Update:    Role = 'admin' | 'super_admin' | 'teacher' | 'student' | 'parent'
+
+  CORE PRINCIPLE: A Super Admin can do everything an Admin can, PLUS system-
+  level operations that no regular Admin should perform. There is exactly
+  ONE Super Admin account (or a controlled few). Regular Admins cannot
+  promote themselves.
+
+────────────────────────────────────────────────────────────────────────────────
+8B. SUPER ADMIN DASHBOARD — NEW TAB INVENTORY
+────────────────────────────────────────────────────────────────────────────────
+
+  Route: /dashboard/super_admin
+
+  Tab Array (proposed navItems):
+
+    { id: 'home',            label: 'Command Center',     icon: 'home'     }
+
+    --- Section: Administration ---
+    { id: 'users',           label: 'User Management',    icon: 'users'    }
+    { id: 'role-manager',    label: 'Role & Permissions', icon: 'shield'   }
+    { id: 'announcements',   label: 'Announcements',      icon: 'bell'     }
+    { id: 'batch',           label: 'Batch Operations',   icon: 'plus'     }
+
+    --- Section: Academic ---
+    { id: 'tests',           label: 'All Tests',          icon: 'test'     }
+    { id: 'courses',         label: 'All Courses',        icon: 'book'     }
+    { id: 'assignments',     label: 'All Assignments',    icon: 'task'     }
+    { id: 'attendance',      label: 'Attendance',         icon: 'check'    }
+    { id: 'quests',          label: 'Quests',             icon: 'trophy'   }
+    { id: 'forums',          label: 'Forums',             icon: 'chat'     }
+    { id: 'calendar',        label: 'Calendar',           icon: 'calendar' }
+
+    --- Section: System (NEW — Super Admin Only) ---
+    { id: 'impersonate',     label: 'Impersonate User',   icon: 'eye'      }
+    { id: 'data-export',     label: 'Data Export',        icon: 'download' }
+    { id: 'api-logs',        label: 'API Request Logs',   icon: 'code'     }
+    { id: 'diagnostics',     label: 'System Diagnostics', icon: 'gear'     }
+    { id: 'maintenance',     label: 'Maintenance Mode',   icon: 'lock'     }
+    { id: 'audit-export',    label: 'Audit Trail Export', icon: 'download' }
+    { id: 'force-reset',     label: 'Force Password Reset', icon: 'key'   }
+
+    --- Section: Monitoring ---
+    { id: 'analytics',       label: 'Platform Analytics', icon: 'chart'    }
+    { id: 'activity',        label: 'Activity Log',       icon: 'clock'    }
+    { id: 'settings',        label: 'Platform Settings',  icon: 'gear'     }
+
+    --- Section: Account ---
+    { id: 'profile',         label: 'My Profile',         icon: 'user'     }
+
+────────────────────────────────────────────────────────────────────────────────
+8C. NEW SUPER ADMIN FEATURES (Detailed Specifications)
+────────────────────────────────────────────────────────────────────────────────
+
+  SA-FEAT-01: IMPERSONATE USER
+  ─────────────────────────────
+  Purpose:  View the platform exactly as any user sees it, for debugging
+            and support purposes.
+  Flow:
+    1. Super Admin → "Impersonate User" tab
+    2. Search for user by name, email, or QGX ID
+    3. Click "Impersonate"
+    4. System creates a temporary read-only session scoped to target user
+    5. Super Admin sees the target user's dashboard with their data
+    6. Banner at top: "IMPERSONATING: {user.name} ({user.role}) — Exit"
+    7. Click "Exit" → returns to Super Admin dashboard
+  Guards:
+    - Read-only mode: cannot submit tests, post messages, etc.
+    - Actions logged: "Super Admin impersonated {user}" in activity log
+    - Cannot impersonate another Super Admin
+  Implementation:
+    - New API: POST /api/super-admin/impersonate { targetUserId }
+    - Session stores: impersonating_user_id in cookie/header
+    - Middleware detects impersonation flag and overrides profile context
+
+  SA-FEAT-02: PROMOTE / DEMOTE ADMINS
+  ────────────────────────────────────
+  Purpose:  Elevate users to Admin or demote Admins to other roles.
+            Regular Admins can only create users — they cannot change
+            an existing user's role.
+  Flow:
+    1. Super Admin → "Role & Permissions" tab
+    2. View all users with current roles
+    3. Select user → click "Change Role"
+    4. Choose new role from dropdown (admin, teacher, student, parent)
+    5. Confirmation dialog: "Change {user.name} from {old_role} to {new_role}?"
+    6. System updates profiles.role
+    7. Activity logged: "Role changed: {user} from {old} to {new} by Super Admin"
+  Guards:
+    - Cannot demote yourself
+    - Cannot change role of another Super Admin
+    - Only Super Admin can promote someone to Admin
+  Implementation:
+    - New API: POST /api/super-admin/change-role { userId, newRole }
+    - RLS policy: only super_admin can UPDATE profiles.role
+
+  SA-FEAT-03: SYSTEM-WIDE DATA EXPORT
+  ────────────────────────────────────
+  Purpose:  Export platform data for compliance, migration, or analysis.
+  Flow:
+    1. Super Admin → "Data Export" tab
+    2. Select data type(s):
+       - All Users (profiles)
+       - All Tests + Questions
+       - All Attempts + Scores
+       - All Courses + Enrollments
+       - All Assignments + Submissions
+       - All Attendance Records
+       - All Messages
+       - All Activity Logs
+    3. Select format: CSV or JSON
+    4. Click "Generate Export"
+    5. System creates export job (background)
+    6. Download link provided when ready
+  Guards:
+    - Exports strip sensitive data (password hashes, auth tokens)
+    - Export action logged in audit trail
+    - Rate limited: max 1 export per 10 minutes
+  Implementation:
+    - New API: POST /api/super-admin/export { tables[], format }
+    - Background job with progress tracking
+
+  SA-FEAT-04: API REQUEST LOGS
+  ────────────────────────────
+  Purpose:  View all API calls made to the platform, including errors
+            and response times.
+  Flow:
+    1. Super Admin → "API Request Logs" tab
+    2. View table: timestamp, endpoint, method, userId, statusCode, duration
+    3. Filter by: endpoint, status (2xx/4xx/5xx), user, date range
+    4. Click row → detailed view with request/response metadata
+  Implementation:
+    - New table: api_logs (endpoint, method, user_id, status, duration_ms,
+      metadata JSONB, created_at)
+    - Logging middleware wraps all /api/* routes
+
+  SA-FEAT-05: SYSTEM DIAGNOSTICS
+  ──────────────────────────────
+  Purpose:  Health check dashboard showing system status.
+  Flow:
+    1. Super Admin → "System Diagnostics" tab
+    2. View live dashboard:
+       - Database connection status (green/red)
+       - Supabase Auth service status
+       - GROQ API connectivity
+       - Active user sessions count
+       - Database row counts per table
+       - Storage usage
+       - Average API response time (last 1h)
+       - Error rate (last 1h)
+    3. Click "Run Health Check" → tests all connections
+  Implementation:
+    - New API: GET /api/super-admin/diagnostics
+    - Pings DB, Auth, external APIs, aggregates metrics
+
+  SA-FEAT-06: MAINTENANCE MODE
+  ────────────────────────────
+  Purpose:  Temporarily disable platform access for deployments or
+            emergency maintenance.
+  Flow:
+    1. Super Admin → "Maintenance Mode" tab
+    2. Toggle "Enable Maintenance Mode"
+    3. Enter optional message: "Platform upgrading, back in 30 minutes"
+    4. Click "Activate"
+    5. ALL non-super-admin users see maintenance page on any route
+    6. Super Admin can still navigate normally
+    7. Toggle off → platform resumes normal operation
+  Guards:
+    - Only Super Admin can activate/deactivate
+    - Logged in activity: "Maintenance mode ON/OFF by {super_admin}"
+  Implementation:
+    - New table field: platform_settings.maintenance_mode (boolean)
+    - New field: platform_settings.maintenance_message (text)
+    - Middleware check: if maintenance_mode AND user.role !== 'super_admin'
+      → render /offline.html with custom message
+
+  SA-FEAT-07: FORCE PASSWORD RESET
+  ────────────────────────────────
+  Purpose:  Force any user to reset their password on next login.
+            For security incidents or compromised accounts.
+  Flow:
+    1. Super Admin → "Force Password Reset" tab
+    2. Search for user
+    3. Click "Force Reset"
+    4. System sends password reset email to user
+    5. Optionally: invalidate all existing sessions for that user
+    6. User must reset password before accessing dashboard
+  Guards:
+    - Cannot force-reset another Super Admin
+    - Action logged with reason field
+  Implementation:
+    - New API: POST /api/super-admin/force-reset { userId, invalidateSessions }
+    - Calls Supabase admin API: resetPasswordForEmail()
+    - If invalidateSessions: calls Supabase admin signOut(userId)
+
+  SA-FEAT-08: AUDIT TRAIL EXPORT
+  ──────────────────────────────
+  Purpose:  Download complete audit trail for compliance/legal review.
+  Flow:
+    1. Super Admin → "Audit Trail Export" tab
+    2. Select date range
+    3. Select event types (login, CRUD, role change, deletion, etc.)
+    4. Click "Export"
+    5. Download CSV with: timestamp, actor, action, target, metadata
+  Implementation:
+    - Queries activity_logs with filters
+    - Generates CSV server-side, returns as download
+
+  SA-FEAT-09: MANAGE ROLE PERMISSIONS (Future-Proof)
+  ──────────────────────────────────────────────────
+  Purpose:  Configure what each role can access without code changes.
+  Flow:
+    1. Super Admin → "Role & Permissions" tab → "Permissions" sub-tab
+    2. Matrix view: roles (rows) × features (columns)
+    3. Toggle checkboxes to enable/disable features per role
+    4. Save → stored in platform_settings or role_permissions table
+    5. Middleware and API checks read from this config
+  Implementation:
+    - New table: role_permissions (role, feature, allowed BOOLEAN)
+    - Feature flags checked at middleware and component level
+
+────────────────────────────────────────────────────────────────────────────────
+8D. SUPER ADMIN MIDDLEWARE CHANGES
+────────────────────────────────────────────────────────────────────────────────
+
+  Current VALID_ROLES = ['admin', 'teacher', 'student', 'parent']
+
+  Updated: VALID_ROLES = ['super_admin', 'admin', 'teacher', 'student', 'parent']
+
+  Middleware logic update:
+    - /dashboard/super_admin → requires role = 'super_admin'
+    - Super Admin accessing /dashboard/admin → redirect to /dashboard/super_admin
+    - Maintenance mode check: if maintenance_mode=true AND role !== 'super_admin'
+      → serve maintenance page
+
+────────────────────────────────────────────────────────────────────────────────
+8E. SUPER ADMIN FORBIDDEN PATHS
+────────────────────────────────────────────────────────────────────────────────
+
+  SFP-01  Regular Admin → /dashboard/super_admin           BLOCKED
+  SFP-02  Regular Admin → POST /api/super-admin/*          403 Forbidden
+  SFP-03  Teacher/Student/Parent → Super Admin routes      BLOCKED
+  SFP-04  Super Admin → self-demote                        BLOCKED
+  SFP-05  Super Admin → impersonate another Super Admin    BLOCKED
+  SFP-06  Super Admin → delete themselves                  BLOCKED
+  SFP-07  Non-Super Admin → activate maintenance mode      BLOCKED
+  SFP-08  Non-Super Admin → force password reset           BLOCKED
+  SFP-09  Non-Super Admin → change user roles              BLOCKED
+  SFP-10  Non-Super Admin → access system diagnostics      BLOCKED
+
+────────────────────────────────────────────────────────────────────────────────
+8F. SUPER ADMIN CONDITIONAL FLOWS
+────────────────────────────────────────────────────────────────────────────────
+
+  SCF-01: What if Super Admin enables maintenance mode while users are active?
+    - All active sessions continue until next navigation/API call
+    - On next request: middleware intercepts → maintenance page shown
+    - Super Admin sees normal dashboard + "MAINTENANCE ACTIVE" banner
+
+  SCF-02: What if Super Admin impersonates a user and tries to take an action?
+    - Read-only mode enforced: all POST/PUT/DELETE blocked
+    - Toast: "Read-only impersonation mode. Cannot modify data."
+
+  SCF-03: What if Super Admin promotes a user to Admin and there are already 5?
+    - No hard limit on admin count (but warning shown)
+    - Activity logged for audit trail
+
+  SCF-04: What if Super Admin force-resets a user who is currently logged in?
+    - If invalidateSessions=true: user's next API call fails auth
+    - User redirected to /login with "Password reset required" message
+    - If invalidateSessions=false: current session continues but
+      user must reset on next login
+
+  SCF-05: What if the only Super Admin tries to demote themselves?
+    - System prevents: "Cannot demote the last Super Admin"
+    - Must promote another user to Super Admin first
+
+  SCF-06: What if data export is requested during peak hours?
+    - Export runs as background job
+    - Does not block UI
+    - Rate limited: 1 per 10 minutes
+
+
+================================================================================
+9. COMPLETE USER JOURNEY MAP (End-to-End Paths)
+================================================================================
+
+Every possible path from entry to exit:
+
+  PATH A (New Student):
+    / → /register → /login (or /dashboard/student) → ST-01..ST-20 → Logout → /login
+
+  PATH B (New Teacher):
+    / → /register → /login (or /dashboard/teacher) → TC-01..TC-20 → Logout → /login
+
+  PATH C (New Parent):
+    / → /register → /login (or /dashboard/parent) → PA-01..PA-10 → Logout → /login
+
+  PATH D (Admin creates user):
+    /login → /dashboard/admin → AD-02 (Users) → Create Modal → AD-02
+
+  PATH E (Password Recovery):
+    /login → /forgot-password → [email] → /auth/callback → /reset-password → /login
+
+  PATH F (Direct bookmark):
+    /dashboard/teacher (bookmarked) → Middleware → /dashboard/teacher (if valid)
+                                                 → /login (if expired)
+                                                 → /dashboard/{actual_role} (if wrong role)
+
+  PATH G (404):
+    /nonexistent → /not-found (PG-07)
+
+  PATH H (Error):
+    Any page crash → Global Error Boundary (PG-08) → "Try Again" or "Home"
+
+  PATH I (Super Admin):
+    /login → /dashboard/super_admin → SA tabs + all Admin tabs → Logout → /login
+
+  PATH J (Impersonation):
+    /dashboard/super_admin → Impersonate tab → Select user → View as user (read-only)
+    → Exit → /dashboard/super_admin
+
+  PATH K (Maintenance):
+    /dashboard/super_admin → Maintenance tab → Activate → All others see offline page
+    → Deactivate → Normal operation resumes
+
+
+================================================================================
+10. SUMMARY STATISTICS
+================================================================================
+
+  Total Roles:             5 (Super Admin, Admin, Teacher, Student, Parent)
+  Total Public Pages:      8 (landing, login, register, forgot, reset, callback, 404, error)
+  Total Admin Tabs:        14
+  Total Super Admin Tabs:  21 (14 admin + 7 new system tabs)
+  Total Student Tabs:      20
+  Total Teacher Tabs:      20
+  Total Parent Tabs:       10
+  Total API Endpoints:     6 existing + 6 new Super Admin APIs = 12
+  Total Forbidden Paths:   50+ explicitly defined
+  Total State Machines:    11 (auth, test, course, assignment, excuse, live class,
+                               message, attendance, forum, quest, XP)
+  Total User Flows:        26+ documented step-by-step
+  Total Conditional Flows: 24+ "what-if" branches
+
+================================================================================
+END OF DOCUMENT
+================================================================================

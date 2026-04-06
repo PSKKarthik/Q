@@ -1,7 +1,9 @@
 'use client'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { useTheme } from '@/lib/theme'
+import { supabase } from '@/lib/supabase'
 
 function AnimatedCounter({ end, label, suffix = '' }: { end: number; label: string; suffix?: string }) {
   const [count, setCount] = useState(0)
@@ -98,9 +100,32 @@ export default function Home() {
   const [hover, setHover] = useState<string | null>(null)
   const [visible, setVisible] = useState<Set<string>>(new Set())
   const [mounted, setMounted] = useState(false)
+  const [installPrompt, setInstallPrompt] = useState<any>(null)
+  const [loggingIn, setLoggingIn] = useState<string | null>(null)
+  const [loginError, setLoginError] = useState<string | null>(null)
   const { theme, toggleTheme } = useTheme()
+  const router = useRouter()
+
+  const loginAs = async (email: string, password: string, role: string) => {
+    setLoggingIn(role); setLoginError(null)
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) { setLoginError(error.message); setLoggingIn(null); return }
+    router.push(`/dashboard/${role.toLowerCase()}`)
+  }
 
   useEffect(() => { setMounted(true) }, [])
+
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(console.error)
+    }
+    const handler = (e: Event) => {
+      e.preventDefault()
+      setInstallPrompt(e)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
 
   useEffect(() => {
     const obs = new IntersectionObserver((entries) => {
@@ -137,17 +162,29 @@ export default function Home() {
           </button>
           <Link href="/login" className="btn btn-sm">Login</Link>
           <Link href="/register" className="btn btn-primary btn-sm">Register</Link>
+          {installPrompt && (
+            <button
+              className="btn btn-sm"
+              title="Install QGX as an app"
+              onClick={() => {
+                installPrompt.prompt()
+                installPrompt.userChoice.then(() => setInstallPrompt(null))
+              }}
+            >
+              ↓ Install
+            </button>
+          )}
         </div>
       </nav>
 
       {/* ─── HERO ─── */}
       <section style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 'clamp(60px, 12vw, 120px) clamp(16px, 4vw, 48px) clamp(40px, 8vw, 80px)', position: 'relative', zIndex: 5 }}>
-        <div className="fade-up" style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.3em', textTransform: 'uppercase', color: 'var(--fg-dim)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 24, height: 1, background: 'var(--fg-dim)', display: 'inline-block' }} />
+        <div className="fade-up" style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.3em', textTransform: 'uppercase', color: 'var(--fg-dim)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12, width: '100%', maxWidth: 700 }}>
+          <span style={{ flex: 1, height: 1, background: 'var(--fg-dim)', display: 'inline-block' }} />
           Query Gen X — Learning Management System
-          <span style={{ width: 24, height: 1, background: 'var(--fg-dim)', display: 'inline-block' }} />
+          <span style={{ flex: 1, height: 1, background: 'var(--fg-dim)', display: 'inline-block' }} />
         </div>
-        <h1 className="fade-up-1" style={{ fontFamily: 'var(--display)', fontSize: 'clamp(80px,14vw,160px)', letterSpacing: '0.1em', lineHeight: 0.85, marginBottom: 32 }}>
+        <h1 className="fade-up-1" style={{ fontFamily: 'var(--display)', fontSize: 'clamp(80px,14vw,160px)', letterSpacing: '0.1em', lineHeight: 0.85, marginBottom: 32, WebkitTextStroke: '1.5px currentColor', paintOrder: 'stroke fill' }}>
           QGX
         </h1>
         <p className="fade-up-2" style={{ fontFamily: 'var(--sans)', fontSize: 'clamp(16px, 2.5vw, 20px)', color: 'var(--fg-dim)', maxWidth: 560, lineHeight: 1.7, marginBottom: 48 }}>
@@ -178,7 +215,7 @@ export default function Home() {
       <section id="features" data-animate style={{ padding: 'clamp(60px, 10vw, 100px) clamp(16px, 4vw, 48px)', position: 'relative', zIndex: 5 }}>
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.2em', color: 'var(--fg-dim)', textTransform: 'uppercase', marginBottom: 12 }}>What&apos;s Inside</div>
-          <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(36px, 6vw, 56px)', letterSpacing: '0.06em' }}>FEATURES</h2>
+          <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(36px, 6vw, 56px)', letterSpacing: '0.06em', WebkitTextStroke: '0.8px currentColor', paintOrder: 'stroke fill' }}>FEATURES</h2>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, maxWidth: 1100, margin: '0 auto' }}>
           {FEATURES.map((f, i) => (
@@ -205,7 +242,7 @@ export default function Home() {
       <section id="roles" data-animate style={{ padding: 'clamp(60px, 10vw, 100px) clamp(16px, 4vw, 48px)', borderTop: '1px solid var(--border)', position: 'relative', zIndex: 5 }}>
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.2em', color: 'var(--fg-dim)', textTransform: 'uppercase', marginBottom: 12 }}>For Everyone</div>
-          <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(36px, 6vw, 56px)', letterSpacing: '0.06em' }}>BUILT FOR EVERY ROLE</h2>
+          <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(36px, 6vw, 56px)', letterSpacing: '0.06em', WebkitTextStroke: '0.8px currentColor', paintOrder: 'stroke fill' }}>BUILT FOR EVERY ROLE</h2>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 16, maxWidth: 1100, margin: '0 auto' }}>
           {ROLES.map((r) => (
@@ -244,7 +281,7 @@ export default function Home() {
       <section data-animate id="how" style={{ padding: 'clamp(60px, 10vw, 100px) clamp(16px, 4vw, 48px)', borderTop: '1px solid var(--border)', position: 'relative', zIndex: 5 }}>
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.2em', color: 'var(--fg-dim)', textTransform: 'uppercase', marginBottom: 12 }}>Quick Start</div>
-          <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(36px, 6vw, 56px)', letterSpacing: '0.06em' }}>HOW IT WORKS</h2>
+          <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(36px, 6vw, 56px)', letterSpacing: '0.06em', WebkitTextStroke: '0.8px currentColor', paintOrder: 'stroke fill' }}>HOW IT WORKS</h2>
         </div>
         <div style={{ display: 'flex', gap: 0, maxWidth: 900, margin: '0 auto', flexWrap: 'wrap', justifyContent: 'center' }}>
           {[
@@ -271,7 +308,7 @@ export default function Home() {
 
       {/* ─── CTA ─── */}
       <section style={{ padding: 'clamp(60px, 10vw, 100px) clamp(16px, 4vw, 48px)', borderTop: '1px solid var(--border)', textAlign: 'center', position: 'relative', zIndex: 5 }}>
-        <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(36px, 6vw, 56px)', letterSpacing: '0.06em', marginBottom: 16 }}>READY TO START?</h2>
+        <h2 style={{ fontFamily: 'var(--display)', fontSize: 'clamp(36px, 6vw, 56px)', letterSpacing: '0.06em', marginBottom: 16, WebkitTextStroke: '0.8px currentColor', paintOrder: 'stroke fill' }}>READY TO START?</h2>
         <p style={{ fontFamily: 'var(--sans)', fontSize: 16, color: 'var(--fg-dim)', maxWidth: 400, margin: '0 auto 32px', lineHeight: 1.6 }}>
           Join QGX and transform how your classroom learns, teaches, and grows.
         </p>
@@ -292,6 +329,38 @@ export default function Home() {
             <span key={t} style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.1em', color: 'var(--fg-muted)', textTransform: 'uppercase' }}>{t}</span>
           ))}
         </div>
+      </section>
+
+      {/* ─── TEST ACCOUNTS ─── */}
+      <section style={{ borderTop: '1px solid var(--border)', padding: '40px clamp(16px, 4vw, 48px)', position: 'relative', zIndex: 5, background: 'rgba(128,128,128,0.03)' }}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.2em', color: 'var(--fg-muted)', textTransform: 'uppercase', marginBottom: 6 }}>◈ Demo Access</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', letterSpacing: '0.08em' }}>One-click login with seeded test accounts</div>
+        </div>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', maxWidth: 900, margin: '0 auto' }}>
+          {([
+            { role: 'Admin',   email: 'admin@qgx.demo',    password: 'QGX@admin2024',   name: 'Dr. Sarah Mitchell',  color: 'var(--danger)' },
+            { role: 'Teacher', email: 'teacher1@qgx.demo', password: 'QGX@teacher2024', name: 'Prof. James Carter',  color: 'rgba(100,180,255,0.9)' },
+            { role: 'Student', email: 'student1@qgx.demo', password: 'QGX@student2024', name: 'Alex Johnson',        color: 'var(--success)' },
+            { role: 'Parent',  email: 'parent1@qgx.demo',  password: 'QGX@parent2024',  name: 'David Johnson',       color: 'var(--warn)' },
+          ] as const).map(acc => (
+            <div key={acc.role} style={{ flex: '1 1 180px', maxWidth: 210, border: '1px solid var(--border)', background: 'var(--card)', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                <span style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.15em', color: acc.color, border: `1px solid ${acc.color}`, padding: '2px 7px', textTransform: 'uppercase' }}>{acc.role}</span>
+              </div>
+              <div style={{ fontFamily: 'var(--sans)', fontSize: 12, color: 'var(--fg)' }}>{acc.name}</div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', wordBreak: 'break-all' }}>{acc.email}</div>
+              <button
+                disabled={loggingIn === acc.role}
+                onClick={() => loginAs(acc.email, acc.password, acc.role)}
+                style={{ marginTop: 4, fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.1em', cursor: loggingIn === acc.role ? 'not-allowed' : 'pointer', padding: '7px 12px', border: `1px solid ${acc.color}`, background: 'transparent', color: acc.color, textTransform: 'uppercase', opacity: loggingIn && loggingIn !== acc.role ? 0.4 : 1, transition: 'opacity 0.2s' }}
+              >
+                {loggingIn === acc.role ? '▷ Signing in…' : '→ Login as ' + acc.role}
+              </button>
+            </div>
+          ))}
+        </div>
+        {loginError && <div style={{ textAlign: 'center', marginTop: 16, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--danger)' }}>{loginError}</div>}
       </section>
 
       {/* ─── FOOTER ─── */}

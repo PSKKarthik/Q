@@ -1,0 +1,85 @@
+%% QGX LMS - System Architecture Diagram (Mermaid)
+%% Layered cloud-native architecture with role-based access and managed services
+flowchart TB
+    %% Users
+    subgraph U[Client Layer]
+        A1[Admin]
+        A2[Teacher]
+        A3[Student]
+        A4[Parent]
+        B[Browser / PWA]
+    end
+
+    %% Frontend
+    subgraph F[Presentation Layer - Next.js 14]
+        F1[Role-Based Dashboards]
+        F2[UI Components]
+        F3[Route Guards / Middleware]
+        F4[Offline Support - Service Worker]
+    end
+
+    %% Backend
+    subgraph APP[Application Layer - API and Business Logic]
+        G1[Next.js API Routes]
+        G2[Validation and Sanitization]
+        G3[Authorization Service]
+        G4[AI Orchestration Service]
+        G5[Notification Orchestrator]
+        G6[Activity Logging Service]
+    end
+
+    %% Data and External Services
+    subgraph D[Data and Service Layer]
+        H1[Supabase Auth]
+        H2[PostgreSQL Database]
+        H3[Row Level Security Policies]
+        H4[Supabase Realtime]
+        H5[GROQ API]
+    end
+
+    %% Deployment
+    subgraph DEP[Deployment Layer]
+        I1[Vercel Hosting]
+        I2[Environment Secrets]
+        I3[Monitoring and Error Tracking]
+    end
+
+    %% Client flow
+    A1 --> B
+    A2 --> B
+    A3 --> B
+    A4 --> B
+
+    B --> F1
+    B --> F2
+    B --> F4
+    F3 --> G1
+    F1 --> G1
+    F2 --> G1
+
+    %% App flow
+    G1 --> G2
+    G2 --> G3
+    G3 --> H1
+    G3 --> H3
+
+    G1 --> G4
+    G4 --> H5
+
+    G1 --> G5
+    G5 --> H4
+
+    G1 --> G6
+    G6 --> H2
+
+    G1 --> H2
+    H1 --> H2
+    H3 --> H2
+
+    %% Deployment relationships
+    I1 -.hosts.-> F
+    I1 -.runs.-> APP
+    I2 -.configures.-> APP
+    I2 -.configures.-> D
+    I3 -.observes.-> APP
+    I3 -.observes.-> D

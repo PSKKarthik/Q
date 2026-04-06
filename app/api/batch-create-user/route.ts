@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 export async function POST(req: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -29,6 +30,9 @@ export async function POST(req: Request) {
   // Verify caller is authenticated admin
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { success: rateLimitOk } = await checkRateLimit(`batch-create:${user.id}`)
+  if (!rateLimitOk) return NextResponse.json({ error: 'Too many requests. Please wait a minute.' }, { status: 429 })
 
   const { data: callerProfile } = await supabase
     .from('profiles')

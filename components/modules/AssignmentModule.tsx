@@ -163,10 +163,11 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
       }
       setSubmitStatus(draft ? '▪ Draft saved!' : '✓ Submitted!')
       if (!draft) { setSubmitText(''); setSubmitFile(null); if (submitFileRef.current) submitFileRef.current.value = '' }
-      // Refresh
-      const { data, error: refreshError } = await supabase.from('assignments').select('*, submissions(*)').order('created_at', { ascending: false })
-      if (refreshError) throw refreshError
-      if (data) { onAssignmentsChange(data); const r = data.find((a: any) => a.id === activeAssign.id); if (r) setActiveAssign(r) }
+      // Refresh — non-blocking: submission already saved, never overwrite success with refresh error
+      try {
+        const { data } = await supabase.from('assignments').select('*, submissions(*)').order('created_at', { ascending: false })
+        if (data) { onAssignmentsChange(data); const r = data.find((a: any) => a.id === activeAssign.id); if (r) setActiveAssign(r) }
+      } catch { /* swallow refresh errors */ }
       if (!draft) setTimeout(() => { setSubmitModal(false); setSubmitStatus('') }, 1200)
       else setTimeout(() => setSubmitStatus(''), 2000)
     } catch (e: any) {

@@ -1,0 +1,52 @@
+%% QGX LMS - UML Use Case Diagram (Mermaid)
+%% Render with Mermaid CLI or preview in VS Code Mermaid extension
+flowchart LR
+    %% Actors
+    Admin([Admin])
+    Teacher([Teacher])
+    Student([Student])
+    Parent([Parent])
+
+    %% Use Cases
+    UC1((Manage Users))
+    UC2((Assign Roles))
+    UC3((Create Tests))
+    UC4((Attempt Tests))
+    UC5((View Results))
+    UC6((Generate AI Query))
+    UC7((Publish Announcements))
+    UC8((View Child Progress))
+    UC9((Monitor Activity Logs))
+    UC10((Login / Logout))
+    UC11((Reset Password))
+    UC12((Receive Notifications))
+
+    %% Associations
+    Admin --- UC1
+    Admin --- UC2
+    Admin --- UC7
+    Admin --- UC9
+    Admin --- UC10
+    Admin --- UC11
+    Admin --- UC12
+
+    Teacher --- UC3
+    Teacher --- UC5
+    Teacher --- UC6
+    Teacher --- UC7
+    Teacher --- UC10
+    Teacher --- UC11
+    Teacher --- UC12
+
+    Student --- UC4
+    Student --- UC5
+    Student --- UC6
+    Student --- UC10
+    Student --- UC11
+    Student --- UC12
+
+    Parent --- UC5
+    Parent --- UC8
+    Parent --- UC10
+    Parent --- UC11
+    Parent --- UC12

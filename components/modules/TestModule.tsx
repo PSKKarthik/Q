@@ -74,6 +74,8 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
   const fsHandlerRef = useRef<(() => void) | null>(null)
   const keyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
   const startTimeRef = useRef<number>(0)
+  const isOfflineRef = useRef(false)
+  const pendingSubmitRef = useRef(false)
 
   const attempted = attempts.map(a => a.test_id)
 
@@ -136,12 +138,20 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
 
   /* offline detection */
   useEffect(() => {
-    const on = () => setIsOffline(false)
-    const off = () => setIsOffline(true)
+    const on = () => {
+      isOfflineRef.current = false
+      setIsOffline(false)
+      if (pendingSubmitRef.current) {
+        pendingSubmitRef.current = false
+        toast('◈ Back online — submitting your test…', 'info')
+        setTimeout(() => handleSubmitRef.current(), 300)
+      }
+    }
+    const off = () => { isOfflineRef.current = true; setIsOffline(true) }
     window.addEventListener('online', on)
     window.addEventListener('offline', off)
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
-  }, [])
+  }, [toast])
 
   /* cleanup on unmount */
   useEffect(() => {
@@ -268,6 +278,12 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
   /* ── submit ── */
   const handleSubmit = async () => {
     if (!activeTest || !profile || submittingRef.current) return
+    if (isOfflineRef.current) {
+      pendingSubmitRef.current = true
+      toast("You're offline — answers saved locally. Test will auto-submit when you reconnect.", 'error')
+      setConfirmSubmit(false)
+      return
+    }
     submittingRef.current = true
     clearInterval(timerRef.current); clearInterval(qTimerRef.current)
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})

@@ -15,9 +15,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem('qgx-theme') as 'dark' | 'light' | null
     if (stored) {
       setTheme(stored)
-    } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
-      setTheme('light')
     }
+    // Default is always dark — no system preference override
   }, [])
 
   useEffect(() => {

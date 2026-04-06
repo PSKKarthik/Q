@@ -1290,7 +1290,7 @@ create trigger quests_test_attempt_trigger
 create or replace function public.update_quest_on_assignment_submit()
 returns trigger as $$
 begin
-  if new.status = 'submitted' then
+  if new.is_draft = false then
     update quest_progress
     set progress = progress + 1,
         completed = (progress + 1) >= (select target_count from quests where id = quest_progress.quest_id and target_type = 'course'),
@@ -1450,9 +1450,39 @@ create policy "room_msg_read" on room_messages for select using (true);
 drop policy if exists "room_msg_create" on room_messages;
 create policy "room_msg_create" on room_messages for insert with check (auth.uid() = user_id);
 
--- Enable realtime for collaboration
+-- Enable realtime for collaboration and live features
 do $$ begin
   alter publication supabase_realtime add table room_messages;
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter publication supabase_realtime add table notifications;
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter publication supabase_realtime add table announcements;
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter publication supabase_realtime add table messages;
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter publication supabase_realtime add table attempts;
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter publication supabase_realtime add table activity_log;
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  alter publication supabase_realtime add table platform_settings;
 exception when duplicate_object then null;
 end $$;
 

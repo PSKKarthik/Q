@@ -6,6 +6,17 @@ export function sanitizeText(text: string): string {
   return text.replace(/<[^>]*>/g, '')
 }
 
+/**
+ * Validates that a redirect path is safe for use — prevents open-redirect attacks.
+ * Only allows paths that start with /dashboard/ (never // or external URLs).
+ */
+export function isSafeRedirect(path: string): boolean {
+  if (!path || typeof path !== 'string') return false
+  if (!path.startsWith('/')) return false
+  if (path.startsWith('//')) return false
+  return path.startsWith('/dashboard/')
+}
+
 export function generateQGXId(role: Role, count: number): string {
   const prefix = role === 'admin' ? 'A' : role === 'teacher' ? 'T' : role === 'parent' ? 'P' : 'S'
   return `QGX-${prefix}${String(count + 1).padStart(4, '0')}`

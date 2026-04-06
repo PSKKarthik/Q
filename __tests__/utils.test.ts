@@ -1,4 +1,4 @@
-import { sanitizeText, generateQGXId, fisher_yates, getLevel, getTier, formatSize, getFileIcon, formatTimer, DEFAULT_XP_LEVELS } from '@/lib/utils'
+import { sanitizeText, generateQGXId, fisher_yates, getLevel, getTier, formatSize, getFileIcon, formatTimer, isSafeRedirect, DEFAULT_XP_LEVELS } from '@/lib/utils'
 
 // ─── sanitizeText ───
 describe('sanitizeText', () => {
@@ -203,5 +203,44 @@ describe('formatTimer', () => {
 
   it('handles exact minutes', () => {
     expect(formatTimer(120)).toBe('2 min 00 sec')
+  })
+})
+
+// ─── isSafeRedirect ───
+describe('isSafeRedirect', () => {
+  it('allows /dashboard/* paths', () => {
+    expect(isSafeRedirect('/dashboard/student')).toBe(true)
+    expect(isSafeRedirect('/dashboard/teacher')).toBe(true)
+    expect(isSafeRedirect('/dashboard/admin')).toBe(true)
+    expect(isSafeRedirect('/dashboard/parent')).toBe(true)
+    expect(isSafeRedirect('/dashboard/admin/settings')).toBe(true)
+  })
+
+  it('blocks protocol-relative URLs', () => {
+    expect(isSafeRedirect('//evil.com')).toBe(false)
+    expect(isSafeRedirect('//evil.com/dashboard/student')).toBe(false)
+  })
+
+  it('blocks external http/https URLs', () => {
+    expect(isSafeRedirect('https://evil.com')).toBe(false)
+    expect(isSafeRedirect('http://evil.com/dashboard/student')).toBe(false)
+  })
+
+  it('blocks empty and falsy values', () => {
+    expect(isSafeRedirect('')).toBe(false)
+    expect(isSafeRedirect(null as any)).toBe(false)
+    expect(isSafeRedirect(undefined as any)).toBe(false)
+  })
+
+  it('blocks non-dashboard internal paths', () => {
+    expect(isSafeRedirect('/login')).toBe(false)
+    expect(isSafeRedirect('/register')).toBe(false)
+    expect(isSafeRedirect('/')).toBe(false)
+    expect(isSafeRedirect('/api/ai')).toBe(false)
+  })
+
+  it('blocks javascript: and data: URIs', () => {
+    expect(isSafeRedirect('javascript:alert(1)')).toBe(false)
+    expect(isSafeRedirect('data:text/html,<script>alert(1)</script>')).toBe(false)
   })
 })

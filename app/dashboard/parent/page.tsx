@@ -1,8 +1,8 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import type { Profile, Attempt, AttendanceRecord, Test, Assignment, Submission, TimetableSlot, AbsenceExcuse, MeetingSlot, Message, Announcement } from '@/types'
+import type { Profile, Attempt, AttendanceRecord, Test, Assignment, Submission, TimetableSlot, AbsenceExcuse, MeetingSlot, Message, Announcement, Notification } from '@/types'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatGrid } from '@/components/ui/StatGrid'
@@ -16,8 +16,10 @@ import { Icon } from '@/components/ui/Icon'
 import { useToast } from '@/lib/toast'
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton'
 
-export default function ParentDashboard() {
+function ParentDashboardContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const handledDeepLink = useRef(false)
   const { toast } = useToast()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [tab, setTab] = useState('home')
@@ -38,6 +40,15 @@ export default function ParentDashboard() {
   const [parentMessages, setParentMessages] = useState<Message[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [alerts, setAlerts] = useState<{ type: string; message: string }[]>([])
+  const [notifications, setNotifications] = useState<Notification[]>([])
+
+  useEffect(() => {
+    if (handledDeepLink.current) return
+    const requestedTab = searchParams.get('tab')
+    const allowedTabs = new Set(['home','grades','attendance','timetable','report','excuses','meetings','messaging','alerts','notifications','profile'])
+    if (requestedTab && allowedTabs.has(requestedTab)) setTab(requestedTab)
+    handledDeepLink.current = true
+  }, [searchParams])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -209,6 +220,7 @@ export default function ParentDashboard() {
     { id: 'meetings', label: 'Book Meeting', icon: 'calendar' },
     { id: 'messaging', label: 'Teacher Messages', icon: 'chat' },
     { id: 'alerts', label: 'Academic Alerts', icon: 'zap' },
+    { id: 'notifications', label: 'Notifications', icon: 'bell' },
     { section: 'Account' },
     { id: 'profile', label: 'My Profile', icon: 'user' },
   ]
@@ -498,10 +510,66 @@ export default function ParentDashboard() {
           </>
         )}
 
+        {/* NOTIFICATIONS */}
+        {tab === 'notifications' && (
+          <>
+            <PageHeader title="NOTIFICATIONS" subtitle="Your recent notifications" />
+            <NotificationsTab profile={profile} notifications={notifications} setNotifications={setNotifications} />
+          </>
+        )}
+
         {tab === 'profile' && (
           <ProfileTab profile={profile} onUpdate={p => setProfile(p)} />
         )}
       </div>
     </DashboardLayout>
+  )
+}
+
+function NotificationsTab({ profile, notifications, setNotifications }: { profile: Profile; notifications: Notification[]; setNotifications: (n: Notification[]) => void }) {
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (loaded) return
+    setLoaded(true)
+    supabase.from('notifications').select('*').eq('user_id', profile.id).order('created_at', { ascending: false }).limit(50)
+      .then(({ data }) => { if (data) setNotifications(data as Notification[]) })
+  }, [profile.id, loaded, setNotifications])
+
+  const markAllRead = async () => {
+    await supabase.from('notifications').update({ read: true }).eq('user_id', profile.id).eq('read', false)
+    setNotifications(notifications.map(n => ({ ...n, read: true })))
+  }
+
+  const unreadCount = notifications.filter(n => !n.read).length
+
+  return (
+    <div className="fade-up-2">
+      {unreadCount > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <button className="btn btn-sm" onClick={markAllRead}>Mark all read ({unreadCount})</button>
+        </div>
+      )}
+      {notifications.length === 0 && !loaded && (
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>Loading...</div>
+      )}
+      {notifications.length === 0 && loaded && (
+        <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>No notifications yet.</div>
+      )}
+      {notifications.map(n => (
+        <div key={n.id} className="card" style={{ marginBottom: 8, padding: '12px 16px', opacity: n.read ? 0.6 : 1, borderLeft: `3px solid ${n.type === 'danger' ? 'var(--danger)' : n.type === 'warn' ? 'var(--warn)' : 'var(--accent)'}` }}>
+          <div style={{ fontSize: 13 }}>{n.message}</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginTop: 4 }}>{new Date(n.created_at).toLocaleString()}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function ParentDashboard() {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <ParentDashboardContent />
+    </Suspense>
   )
 }

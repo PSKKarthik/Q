@@ -5,18 +5,13 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Icon } from '@/components/ui/Icon'
+import { isSafeRedirect } from '@/lib/utils'
 
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const resetSuccess = searchParams.get('reset') === 'success'
   const redirectPath = searchParams.get('redirect')
-
-  const isSafeRedirect = (path: string) => {
-    if (!path.startsWith('/')) return false
-    if (path.startsWith('//')) return false
-    return path.startsWith('/dashboard/')
-  }
 
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -77,13 +72,13 @@ function LoginForm() {
           )}
           <div style={{ marginBottom: 18 }}>
             <label className="label">Email or QGX ID</label>
-            <input className="input" type="text" required value={identifier} onChange={e => setIdentifier(e.target.value)}
+            <input className="input" type="text" value={identifier} onChange={e => setIdentifier(e.target.value)}
               placeholder="you@example.com or QGX-S0001-A7F2" autoComplete="username" />
           </div>
           <div style={{ marginBottom: 24 }}>
             <label className="label">Password</label>
             <div style={{ position: 'relative' }}>
-              <input className="input" type={showPw ? 'text' : 'password'} required value={password} onChange={e => setPassword(e.target.value)}
+              <input className="input" type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
                 style={{ paddingRight: 40 }} autoComplete="current-password" />
               <button type="button" onClick={() => setShowPw(!showPw)}
                 style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-dim)', padding: 4, display: 'flex', alignItems: 'center' }}

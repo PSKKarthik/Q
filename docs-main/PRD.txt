@@ -1,0 +1,1788 @@
+================================================================================
+PRODUCT REQUIREMENTS DOCUMENT — QGX LMS (Query Gen X)
+================================================================================
+Version:    1.0
+Date:       2026-04-06
+Status:     FINAL — IMPLEMENTATION-READY
+Authors:    System Architect / Product Manager
+
+This PRD is derived exclusively from the implemented codebase. Every acceptance
+criterion maps directly to verified source code. No feature is assumed.
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+  1.  PRODUCT OVERVIEW
+  2.  USER ROLES & PERMISSIONS
+  3.  FEATURE SPECIFICATIONS (28 features)
+      F-01  Authentication & Identity
+      F-02  User Registration
+      F-03  Password Recovery
+      F-04  Role-Based Dashboards
+      F-05  User Management (Admin)
+      F-06  Announcements
+      F-07  Assessment Engine (Tests & Quizzes)
+      F-08  AI Question Generation
+      F-09  Course Management
+      F-10  Assignment Management
+      F-11  Attendance Tracking
+      F-12  Grading & Report Cards
+      F-13  Messaging (DM & Group Chat)
+      F-14  Forum
+      F-15  AI Tutor
+      F-16  Live Classes
+      F-17  Timetable
+      F-18  XP & Gamification Engine
+      F-19  Quests
+      F-20  Certificates
+      F-21  Calendar
+      F-22  Code Playground
+      F-23  Plagiarism Detection
+      F-24  Predictive Risk Alerts
+      F-25  Meeting Scheduler
+      F-26  Parent Portal
+      F-27  Notifications
+      F-28  PWA & Offline Support
+  4.  FUNCTIONAL REQUIREMENTS
+  5.  NON-FUNCTIONAL REQUIREMENTS
+  6.  EDGE CASES & ERROR HANDLING
+
+================================================================================
+1. PRODUCT OVERVIEW
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+1.1 PRODUCT NAME
+────────────────────────────────────────────────────────────────────────────────
+
+  QGX — Query Gen X
+  Tagline: "The AI-powered academic platform built for modern learners."
+
+────────────────────────────────────────────────────────────────────────────────
+1.2 PROBLEM STATEMENT
+────────────────────────────────────────────────────────────────────────────────
+
+  Educational institutions rely on fragmented tools: one for tests, another for
+  grading, another for communication, and none that connect them. Students lose
+  engagement without feedback loops. Teachers waste hours on manual grading and
+  formatting. Parents have zero visibility into daily academic performance.
+
+  There is no single platform that combines:
+  - AI-assisted content creation
+  - Gamified learning incentives
+  - Real-time communication between all stakeholders
+  - Automated risk detection for struggling students
+
+────────────────────────────────────────────────────────────────────────────────
+1.3 TARGET USERS (PERSONAS)
+────────────────────────────────────────────────────────────────────────────────
+
+  PERSONA 1 — STUDENT (Primary User)
+    Age:         14–22
+    Context:     Enrolled in a school or coaching centre using QGX
+    Goal:        Study, take tests, track grades, earn XP, get AI help
+    Pain Point:  No consolidated view of marks, timetable, assignments, AI help
+    Tech Level:  Medium-high; comfortable with mobile-first apps
+
+  PERSONA 2 — TEACHER
+    Age:         25–55
+    Context:     Educator managing 20–100 students across subjects
+    Goal:        Create and grade tests/assignments, track class performance
+    Pain Point:  Manual grading, no plagiarism tools, no early-risk detection
+    Tech Level:  Medium; needs intuitive UI for complex workflows
+
+  PERSONA 3 — ADMIN
+    Age:         30–60
+    Context:     Academic coordinator or institution IT manager
+    Goal:        Manage all users, announcements, platform health, analytics
+    Pain Point:  No unified admin panel; can't see system-wide activity
+    Tech Level:  Medium; needs control without requiring developer access
+
+  PERSONA 4 — PARENT
+    Age:         35–60
+    Context:     Guardian of 1+ enrolled students
+    Goal:        Monitor child's grades, attendance, communicate with teachers
+    Pain Point:  No visibility into daily academic status; can't contact teachers
+    Tech Level:  Low-medium; needs simple, child-scoped views
+
+────────────────────────────────────────────────────────────────────────────────
+1.4 CORE VALUE PROPOSITION
+────────────────────────────────────────────────────────────────────────────────
+
+  "One platform where students learn with AI assistance, teachers teach with
+  data, admins govern with full visibility, and parents stay informed — all
+  connected in real time."
+
+  Key differentiators:
+  1. AI-generated tests + AI tutor powered by Groq LLM
+  2. Gamification (XP, levels, badges, quests, leaderboard) driving engagement
+  3. End-to-end assessment: create → distribute → submit → grade → certify
+  4. Predictive risk alerts for early intervention on struggling students
+  5. Real-time messaging and forum with persistent chat threads
+
+
+================================================================================
+2. USER ROLES & PERMISSIONS
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+2.1 ROLE DEFINITIONS
+────────────────────────────────────────────────────────────────────────────────
+
+  Four roles exist in the system. Stored as: role = 'admin' | 'teacher' |
+  'student' | 'parent' in the profiles table.
+
+  ADMIN
+    Description: Platform-wide governance. Oversees all content and users.
+    Created by:  Existing admin via Create User modal only.
+                 Cannot self-register via /register.
+    Scope:       All data across all users.
+
+  TEACHER
+    Description: Content creator and student assessor.
+    Created by:  Admin or self-registration via /register.
+    Scope:       Own courses, tests, assignments; students on those items.
+
+  STUDENT
+    Description: Learner and test taker.
+    Created by:  Admin or self-registration via /register.
+    Scope:       Own data only (grades, attendance, submissions).
+
+  PARENT
+    Description: Observer linked to specific children.
+    Created by:  Admin or self-registration via /register.
+    Scope:       Linked children's data only. No academic content creation.
+
+────────────────────────────────────────────────────────────────────────────────
+2.2 PERMISSIONS MATRIX
+────────────────────────────────────────────────────────────────────────────────
+
+  CAPABILITY                        | ADMIN | TEACHER | STUDENT | PARENT
+  ----------------------------------|-------|---------|---------|-------
+  Create/delete users               |  YES  |   NO    |   NO    |   NO
+  Batch-create users (CSV)          |  YES  |   NO    |   NO    |   NO
+  View all platform users           |  YES  |   NO    |   NO    |   NO
+  Publish global announcements      |  YES  |   YES   |   NO    |   NO
+  Create tests / quizzes            |  NO   |   YES   |   NO    |   NO
+  Use AI question generation        |  NO   |   YES   |   NO    |   NO
+  Take tests                        |  NO   |   NO    |   YES   |   NO
+  Submit test answers               |  NO   |   NO    |   YES   |   NO
+  Create courses + upload materials |  NO   |   YES   |   NO    |   NO
+  Enroll in courses                 |  NO   |   NO    |   YES   |   NO
+  Rate courses                      |  NO   |   NO    |   YES   |   NO
+  Create assignments                |  NO   |   YES   |   NO    |   NO
+  Submit assignments                |  NO   |   NO    |   YES   |   NO
+  Grade submissions + feedback      |  NO   |   YES   |   NO    |   NO
+  Mark attendance                   |  NO   |   YES   |   NO    |   NO
+  View own attendance               |  NO   |   NO    |   YES   |   NO
+  View child's attendance           |  NO   |   NO    |   NO    |  YES
+  Use AI tutor chat                 |  NO   |   NO    |   YES   |   NO
+  Run plagiarism detection          |  NO   |   YES   |   NO    |   NO
+  View predictive risk alerts       |  NO   |   YES   |   NO    |   NO
+  Create quests                     |  YES  |   NO    |   NO    |   NO
+  Complete quests / earn XP         |  NO   |   NO    |   YES   |   NO
+  Activate global double XP         |  YES  |   NO    |   NO    |   NO
+  Host live classes                 |  NO   |   YES   |   NO    |   NO
+  Join live classes                 |  NO   |   NO    |   YES   |   NO
+  Write report card comments        |  NO   |   YES   |   NO    |   NO
+  View own report card              |  NO   |   NO    |   YES   |   NO
+  View child's report card          |  NO   |   NO    |   NO    |  YES
+  Send direct messages              |  NO   |   YES   |   YES   |  YES
+  Post in forum                     |  YES  |   YES   |   YES   |   NO
+  Pin forum posts                   |  YES  |   YES   |   NO    |   NO
+  Submit absence excuses            |  NO   |   NO    |   NO    |  YES
+  Review/approve absence excuses    |  YES  |   YES   |   NO    |   NO
+  Book meetings (as parent)         |  NO   |   NO    |   NO    |  YES
+  Offer meeting slots (as teacher)  |  NO   |   YES   |   NO    |   NO
+  Link children                     |  NO   |   NO    |   NO    |  YES
+  Manage platform settings          |  YES  |   NO    |   NO    |   NO
+  View activity audit log           |  YES  |   NO    |   NO    |   NO
+  View platform analytics           |  YES  |   NO    |   NO    |   NO
+  Earn badges, XP, certificates     |  NO   |   NO    |   YES   |   NO
+  Use code playground               |  NO   |   NO    |   YES   |   NO
+  Use study rooms (collaboration)   |  NO   |   NO    |   YES   |   NO
+  View timetable                    |  NO   |   YES   |   YES   |  YES
+  Export CSV (grades, attendance)   |  YES  |   YES   |   YES   |   NO
+
+
+================================================================================
+3. FEATURE SPECIFICATIONS
+================================================================================
+
+Each feature follows this structure:
+  - Description
+  - User Stories
+  - Acceptance Criteria (AC) — all testable
+  - In Scope
+  - Out of Scope
+
+────────────────────────────────────────────────────────────────────────────────
+F-01: AUTHENTICATION & IDENTITY
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Secure login using email/password OR QGX ID. Session managed via Supabase
+  Auth with HTTP-only cookie. Middleware enforces role-based route access.
+
+User Stories:
+  - As a user, I can log in with my email and password.
+  - As a user, I can log in using my QGX ID instead of email.
+  - As a user, I am redirected to my role-specific dashboard after login.
+  - As a user, a deep link with ?redirect=/dashboard/teacher is honored if my
+    role matches.
+
+Acceptance Criteria:
+  AC-01  Login form accepts either email (contains @) or QGX ID (matches
+         /^QGX-/i pattern).
+  AC-02  QGX ID input resolves to the associated email by querying
+         profiles.qgx_id = input.toUpperCase() before calling signInWithPassword.
+  AC-03  Wrong password or non-existent QGX ID displays: "Invalid credentials".
+         User remains on /login. No session is created.
+  AC-04  On success, user is redirected to /dashboard/{role} where role is
+         fetched from profiles.role.
+  AC-05  If ?redirect= parameter is present AND starts with "/dashboard/" AND
+         the role in the URL matches logged-in user's role, redirect to that URL.
+         Otherwise, redirect to /dashboard/{role}.
+  AC-06  Middleware protects all /dashboard/* routes. Unauthenticated requests
+         are redirected to /login?redirect={original_path}.
+  AC-07  Middleware checks profiles.role against URL segment. Mismatch redirects
+         to /dashboard/{actual_role}.
+  AC-08  VALID_ROLES = ['admin', 'teacher', 'student', 'parent']. Any other
+         value in profile.role redirects to /login.
+  AC-09  Logout clears session via supabase.auth.signOut() and redirects to
+         /login.
+  AC-10  Profile fetch failure in middleware redirects to /login (fail-safe).
+
+In Scope:
+  - Email + password login
+  - QGX ID login (resolves via DB query)
+  - Role-based routing post-login
+  - Safe redirect parameter validation
+  - Middleware route protection on /dashboard/*
+  - Logout
+
+Out of Scope:
+  - OAuth providers (Google, GitHub, etc.)
+  - Magic link login
+  - Biometric / passkey authentication
+  - Session timeout warnings / keep-me-alive prompts
+  - Multi-device session management
+
+────────────────────────────────────────────────────────────────────────────────
+F-02: USER REGISTRATION
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Self-service account creation for teachers, students, and parents.
+  Admin accounts cannot be self-registered.
+
+User Stories:
+  - As a new user, I can create an account by providing name, email, password,
+    and selecting my role.
+  - As a new user, I receive a unique QGX ID upon registration.
+
+Acceptance Criteria:
+  AC-01  /register accepts: name (required), email (required), password
+         (required), phone (optional), role (required).
+  AC-02  Role selector offers exactly: student, teacher, parent.
+         Option "admin" does NOT appear.
+  AC-03  Email must match standard email regex. Invalid format shows inline
+         error. Form does not submit.
+  AC-04  Password must be ≥8 characters AND contain ≥1 letter AND ≥1 number.
+         Failure shows inline error per rule violated.
+  AC-05  On submit, system calls supabase.auth.signUp(email, password).
+  AC-06  System generates QGX ID via RPC generate_qgx_id(p_role).
+         Fallback client-side generation: prefix by role (ADM/TCH/STU/PAR) +
+         4-digit padded count + random 4-char suffix.
+  AC-07  Profile row created with fields: name, email, role, phone, avatar
+         (initials), qgx_id, xp=0, score=0, ghost_wins=0, joined=today.
+  AC-08  If email already registered: error "Email already in use. Please log
+         in." User stays on /register.
+  AC-09  If email confirmation is enabled in Supabase: redirect to /login with
+         message "Check your email".
+  AC-10  If email confirmation is disabled (auto-confirm): redirect to
+         /dashboard/{role}.
+  AC-11  /register is accessible even when unauthenticated.
+
+In Scope:
+  - Self-registration for student, teacher, parent
+  - QGX ID generation
+  - Email + password validation
+  - Profile row creation
+
+Out of Scope:
+  - Admin self-registration (Admins are created by existing admins only)
+  - Invitation-based registration flow
+  - Email domain whitelisting
+  - Captcha / bot protection
+
+────────────────────────────────────────────────────────────────────────────────
+F-03: PASSWORD RECOVERY
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Email-based password reset flow via Supabase recovery link.
+
+User Stories:
+  - As a user, I can request a password reset email from /forgot-password.
+  - As a user, clicking the recovery link lets me set a new password.
+
+Acceptance Criteria:
+  AC-01  /forgot-password has a single email input field.
+  AC-02  Submitting a registered email calls resetPasswordForEmail(email,
+         { redirectTo: '/reset-password' }).
+  AC-03  Success: page shows "Reset link sent. Check your inbox." Email input
+         is cleared.
+  AC-04  Any email format is accepted without pre-verification (Supabase handles
+         non-existent email silently).
+  AC-05  /auth/callback receives ?code= parameter, calls exchangeCodeForSession,
+         then redirects to ?next= value.
+  AC-06  SAFE_PATHS whitelist = ['/reset-password', '/dashboard/student',
+         '/dashboard/teacher', '/dashboard/parent', '/dashboard/admin',
+         '/login']. Any ?next= value not in this list defaults to
+         '/reset-password'.
+  AC-07  If code exchange fails: redirect to /forgot-password?error=expired.
+         Page shows "Link expired. Request a new one."
+  AC-08  /reset-password requires a live PASSWORD_RECOVERY auth event (from the
+         hash token). Without a valid token, the reset form does not appear.
+  AC-09  New password on /reset-password: same rules as registration
+         (≥8 chars, ≥1 letter, ≥1 number). Confirm field must match.
+  AC-10  On successful reset: redirect to /login?reset=success. Login page
+         shows "Password updated successfully."
+  AC-11  Token exchange has a 12-second check before giving up.
+
+In Scope:
+  - Forgot password email submission
+  - Auth callback code exchange
+  - /reset-password with token verification
+  - New password validation + confirmation
+
+Out of Scope:
+  - SMS-based reset
+  - Security question recovery
+  - Admin-forced password reset (separate admin feature)
+
+────────────────────────────────────────────────────────────────────────────────
+F-04: ROLE-BASED DASHBOARDS
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Each role has a dedicated, single-page application dashboard at
+  /dashboard/{role} with a sidebar + tab-based module navigation.
+
+User Stories:
+  - As any authenticated user, I see only the tabs relevant to my role.
+  - As any user, I can toggle between dark and light mode.
+  - As any user on mobile, I can open/close the sidebar via hamburger toggle.
+
+Acceptance Criteria:
+  AC-01  Admin dashboard at /dashboard/admin has exactly these tabs:
+         home, users, announcements, tests, courses, assignments, attendance,
+         forums, analytics, activity, settings, batch, calendar, profile.
+  AC-02  Student dashboard at /dashboard/student has exactly these tabs grouped
+         into 3 sections:
+         [root] home
+         [Learning] tests, courses, assignments, attendance, grades, timetable,
+                    xp, forums, calendar, live-classes, quests, collab
+         [Tools] ai-tutor, code, messaging, report-card, my-analytics,
+                 certificates
+         [Account] profile
+  AC-03  Teacher dashboard at /dashboard/teacher has tabs grouped into 3
+         sections:
+         [root] home
+         [Teaching] tests, timetable, courses, assignments, attendance, grades,
+                    analytics, quests, calendar, live-classes, announcements,
+                    forums
+         [Tools] plagiarism, meetings, pred-alerts, messaging, report-card,
+                 batch-grades
+         [Account] profile
+  AC-04  Parent dashboard at /dashboard/parent has tabs grouped into 3
+         sections:
+         [root] home
+         [Monitor] grades, attendance, timetable, report
+         [Communication] excuses, meetings, messaging, alerts
+         [Account] profile
+  AC-05  Sidebar displays: logo, nav items for role, user avatar, name, role
+         badge (color-coded), QGX ID, logout button.
+  AC-06  Role badge colors: Admin = danger, Teacher = warn, Student = success.
+  AC-07  Dark/light theme toggle persists via localStorage. Defaults to system
+         preference if no stored value.
+  AC-08  On viewport <768px, sidebar is hidden behind a hamburger toggle button.
+         Clicking hamburger opens sidebar with overlay. Clicking overlay closes
+         it.
+  AC-09  Active tab is visually highlighted. Switching tabs does not trigger
+         full page reload.
+  AC-10  Each tab mounts its corresponding module component only when first
+         selected (lazy activation).
+
+In Scope:
+  - Sidebar navigation
+  - Role-specific tab sets
+  - Theme toggle (dark/light)
+  - Mobile responsive hamburger menu
+  - Active tab state management
+
+Out of Scope:
+  - Customizable tab order per user
+  - Tab pinning or hiding preferences
+  - Resizable sidebar
+  - Multiple simultaneous tab views
+
+────────────────────────────────────────────────────────────────────────────────
+F-05: USER MANAGEMENT (ADMIN)
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Admin manages all platform users: create, search, filter, and delete.
+
+User Stories:
+  - As an admin, I can create a single user with a generated QGX ID.
+  - As an admin, I can search and filter users by role, XP range, or join date.
+  - As an admin, I can delete a user with appropriate guards.
+  - As an admin, I can batch-create users by submitting a CSV/form.
+
+Acceptance Criteria:
+  AC-01  Users tab displays paginated list (PAGE_SIZE = 20 per page) of all
+         profiles.
+  AC-02  Search filters: name/email text search, role dropdown, XP range,
+         join date range.
+  AC-03  Search input is debounced (300ms).
+  AC-04  Create User modal accepts: name, email, role
+         (admin|teacher|student|parent).
+  AC-05  POST /api/batch-create-user validates email format and role against
+         whitelist. On failure: 400 with specific error message.
+  AC-06  Created user has Supabase Auth account + profiles row. Response
+         includes generated QGX ID.
+  AC-07  Delete User sends POST /api/delete-user { userId }.
+  AC-08  Delete guard: if userId === currentUserId → 403 "Cannot delete your
+         own account".
+  AC-09  Delete guard: if target is admin and admin count ≤ 1 → 403 "Cannot
+         delete the last administrator".
+  AC-10  Successful deletion removes auth user + cascades profile data.
+  AC-11  Batch Create tab (AD-12) accepts multiple user rows. Each row is
+         processed individually via POST /api/batch-create-user. Per-row
+         success/failure is reported.
+  AC-12  All user CRUD actions are logged to activity_log table.
+
+In Scope:
+  - Create single user
+  - Batch-create users
+  - Delete user with guards
+  - Search + filter user list
+  - Pagination
+  - Activity logging
+
+Out of Scope:
+  - Edit user email (locked post-creation, must be done via Supabase console)
+  - Bulk delete
+  - User suspension / temporary disable (no such status field)
+  - Role change via this interface (role is set at creation only)
+
+────────────────────────────────────────────────────────────────────────────────
+F-06: ANNOUNCEMENTS
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Admins and teachers publish targeted announcements visible to specific
+  audience groups.
+
+User Stories:
+  - As an admin, I can create announcements targeting all users, only teachers,
+    only students, or only parents.
+  - As a teacher, I can post announcements to students or parents.
+  - As a student, I see announcements targeted to "all" or "students".
+
+Acceptance Criteria:
+  AC-01  Announcement form requires: title (non-empty), body (non-empty),
+         target (all | teachers | students | parents).
+  AC-02  Optional fields: pinned (boolean), expires_at (datetime).
+  AC-03  target field validated against exact enum values. Invalid target → 400.
+  AC-04  Announcements are displayed on recipient dashboards filtered by target
+         matching the viewer's role or "all".
+  AC-05  Pinned announcements appear at top of the list.
+  AC-06  Announcements past expires_at are not shown to end users.
+  AC-07  Admins can edit and delete any announcement.
+  AC-08  Teachers can edit and delete their own announcements only.
+  AC-09  Realtime updates: Supabase realtime channel surfaces new announcements
+         without page refresh.
+
+In Scope:
+  - Create/edit/delete announcements
+  - Target filtering (all, teachers, students, parents)
+  - Pinning
+  - Expiry
+  - Realtime push
+
+Out of Scope:
+  - Rich text / HTML body formatting
+  - Announcement scheduling (future publish date)
+  - File attachments on announcements
+  - Read receipts per announcement
+
+────────────────────────────────────────────────────────────────────────────────
+F-07: ASSESSMENT ENGINE (TESTS & QUIZZES)
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Teachers create assessments with multiple question types, configurable
+  anti-cheat settings, and XP rewards. Students sit assessments in an
+  enforced exam environment.
+
+User Stories:
+  - As a teacher, I can create a test with a mix of question types.
+  - As a teacher, I can configure per-test anti-cheat rules.
+  - As a student, I can attempt a test within the allowed attempt limit.
+  - As a student, my answers are scored server-side and XP is awarded.
+
+Acceptance Criteria:
+  AC-01  Test form: title (required), subject (required), duration in minutes
+         (required, >0), type ('test' | 'quiz'), scheduled_date, scheduled_time
+         (both optional).
+  AC-02  Supported question types per question row:
+         mcq (1 correct), msq (multiple correct), tf (true/false),
+         fib (fill-in-blank), match (left-right pairs).
+  AC-03  Each question has: text, options (if applicable), correct answer,
+         marks (>0), order_index.
+  AC-04  Anti-cheat settings per test:
+         tabSwitch (bool): Log/warn on tab switch.
+         copyPaste (bool): Disable keyboard copy-paste shortcuts.
+         randomQ (bool): Randomize question order.
+         randomOpts (bool): Randomize option order within MCQ.
+         fullscreen (bool): Enforce fullscreen on entry.
+         timePerQ (int, seconds): Per-question countdown if >0.
+         maxAttempts (int ≥1): Maximum submissions allowed.
+         allowImmediateReview (bool): Show results immediately on submission.
+         requireAllAnswered (bool): Block submit until all questions answered.
+  AC-05  Default anti-cheat: all boolean flags = false, timePerQ = 0,
+         maxAttempts = 1.
+  AC-06  POST /api/submit-test validates: user is authenticated, role = student,
+         test exists, student attempts < test.anti_cheat.maxAttempts.
+         Violations return 403 with specific reason.
+  AC-07  Scoring is performed server-side per question type:
+         MCQ: answer_map[q.id] === q.answer → full marks.
+         MSQ: sorted arrays match exactly → full marks, else 0.
+         TF:  answer_map[q.id] === q.answer (boolean) → full marks.
+         FIB: trimmed, case-insensitive string match → full marks.
+         Match: each pair.right trimmed lowercase === answer pair.right
+                trimmed lowercase → full marks. One wrong pair = 0 total.
+  AC-08  XP awarded = min(Math.round((percent / 100) * test.xp_reward),
+         MAX_XP_PER_TEST). MAX_XP_PER_TEST = 500.
+  AC-09  If double XP is active: xp_earned * 2 (still capped at
+         MAX_XP_PER_TEST constants-wise; hard cap at 500, or 1000 during 2x).
+  AC-10  XP is applied via atomic RPC atomic_xp_update (prevents race
+         condition on concurrent submissions).
+  AC-11  Ghost scoring: student's percent compared to stored profile.score
+         (best ever score). If new > best, ghost_wins incremented by 1.
+  AC-12  Test deadline: If test has scheduled_date + scheduled_time → server
+         computes deadline as scheduled start + duration. Submission after
+         deadline returns 403 "Deadline passed".
+  AC-13  Question ordering: If randomQ=true, questions shuffled via
+         Fisher-Yates algorithm before presenting to student.
+  AC-14  Attempt stored with: student_id, test_id, score, total, percent,
+         answer_map (full map), submitted_at.
+  AC-15  Student can review their answers post-submission only if
+         allowImmediateReview = true.
+  AC-16  XP per test reward is set by teacher at test creation (0–500).
+
+In Scope:
+  - Test/quiz creation by teachers
+  - 5 question types (MCQ, MSQ, TF, FIB, Match)
+  - Anti-cheat configuration
+  - Server-side scoring
+  - XP reward on submission
+  - Double XP multiplier
+  - Attempt tracking with full answer map
+  - Deadline enforcement
+
+Out of Scope:
+  - Partial credit for MSQ
+  - Image/video questions
+  - Audio questions
+  - Peer-reviewed grading
+  - Proctoring (camera/screen recording)
+  - Question banks across tests
+  - Weighted question difficulty
+
+────────────────────────────────────────────────────────────────────────────────
+F-08: AI QUESTION GENERATION
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Teachers upload a document and the system generates structured questions
+  using the Groq LLM API.
+
+User Stories:
+  - As a teacher, I can upload a PDF or document and receive generated questions.
+  - As a teacher, I can review, edit, and import generated questions into a test.
+
+Acceptance Criteria:
+  AC-01  POST /api/ai accepts: file upload OR text prompt.
+  AC-02  Supported file types: PDF, PPT/PPTX, images (jpg, png, webp).
+  AC-03  Maximum file size for AI upload: 5MB (distinct from course file 50MB
+         limit).
+  AC-04  Rate limit: 10 requests per minute per authenticated user.
+         Exceeding returns 429 "Rate limit exceeded. Retry after {N}s."
+  AC-05  Role check: Student role → tutor mode. Teacher role → question
+         generation mode.
+  AC-06  Generated questions are returned as a JSON array. Each item must
+         conform to Question interface: type, text, options (if MCQ/MSQ),
+         answer, marks.
+  AC-07  Teacher reviews generated questions in a preview panel before
+         importing to the active test.
+  AC-08  JSON extraction from LLM response: content between first '[' and last
+         ']' is parsed as array. Invalid JSON returns error toast.
+  AC-09  In-memory rate limiter resets on process restart. Noted as dev-only
+         behavior (non-persistent).
+
+In Scope:
+  - PDF content extraction → question generation
+  - Question preview + selective import
+  - Rate limiting per user
+  - Question type: MCQ, MSQ, TF, FIB, Match
+
+Out of Scope:
+  - Video/audio document upload for AI
+  - Automatic import without teacher review
+  - AI-generated answer explanations
+  - Multi-language question generation
+  - Persistent rate limiting across serverless instances (dev limitation)
+
+────────────────────────────────────────────────────────────────────────────────
+F-09: COURSE MANAGEMENT
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Teachers create and publish courses with sectioned file materials.
+  Students enroll, access materials, track progress, and earn certificates.
+
+User Stories:
+  - As a teacher, I can create a course, upload materials, and publish it.
+  - As a student, I can browse and enroll in published courses.
+  - As a student, I can track my progress through course materials.
+  - As a student, completing all materials awards a certificate.
+
+Acceptance Criteria:
+  AC-01  Teacher creates course with: title, subject, description. Status
+         defaults to 'draft'.
+  AC-02  Teacher uploads materials (files up to MAX_FILE_SIZE = 50MB each).
+         File fields: name, type, section (string), order_index (int).
+  AC-03  Teacher reorders materials via drag-and-drop within sections.
+  AC-04  Teacher publishes course: status changes 'draft' → 'published'.
+  AC-05  Student can enroll in 'published' courses only. Enrollment adds
+         student_id to course.enrolled[].
+  AC-06  Student can unenroll from a course.
+  AC-07  Student marks files as completed. Completion tracked per (student_id,
+         course_id, file_id) in course_progress table.
+  AC-08  Certificate auto-issued when student has course_progress entries for
+         ALL files in the course.
+  AC-09  Student can rate a course 1–5 stars with optional text review.
+         One rating per (student_id, course_id).
+  AC-10  Course list is filterable by subject.
+  AC-11  Teacher can delete a course (cascades: deletes files, assignments
+         linked to the course via ON DELETE CASCADE FK).
+  AC-12  Student can preview files in-app: PDF (viewer), video (player), image
+         (preview). Non-previewable files trigger download.
+
+In Scope:
+  - Course CRUD by teacher
+  - File upload with sections + ordering
+  - Student enrollment / unenrollment
+  - Progress tracking per file
+  - Course rating + review
+  - Certificate on 100% completion
+  - Draft / published status
+
+Out of Scope:
+  - Course categories / tags
+  - Prerequisite courses
+  - Course enrollment approval (open enrollment only)
+  - Discussion specific to a course material (use Forum instead)
+  - Video streaming (files are stored, not streamed via CDN)
+
+────────────────────────────────────────────────────────────────────────────────
+F-10: ASSIGNMENT MANAGEMENT
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Teachers create assignments with deadlines and priority levels. Students
+  submit text or file responses. Teachers grade with feedback.
+
+User Stories:
+  - As a teacher, I can create an assignment with a due date and max points.
+  - As a student, I can submit a text/file response (with draft saving).
+  - As a teacher, I can grade submissions with feedback and a numeric score.
+
+Acceptance Criteria:
+  AC-01  Assignment form: title, description, course_id (required), due_date
+         (required, must be ≥ today), priority (low|medium|high|critical),
+         max_points (>0), optional attachment.
+  AC-02  Due date validation: due_date cannot be set in the past at creation
+         or edit time.
+  AC-03  Assignment default status = 'active'. Teacher can close → 'closed'.
+  AC-04  Student submission accepts: text_response (optional), file upload
+         (optional). At least one must be provided for finalization.
+  AC-05  Student can save as draft (is_draft = true) without deadline impact.
+  AC-06  Student finalizes submission: is_draft = false. Submission time
+         recorded.
+  AC-07  If submission time > due_date → is_late = true (stored on row).
+  AC-08  Teacher grades: sets score (0 to assignment.max_points) and feedback
+         (text). Student cannot see grade until teacher saves.
+  AC-09  Teacher can export all submissions as CSV (filename, student name,
+         score, is_late, submitted_at).
+  AC-10  Batch grading: teacher can upload a CSV (student_id, score, feedback)
+         to bulk-apply grades.
+  AC-11  Admin can view all assignments and all submissions platform-wide.
+
+In Scope:
+  - Assignment CRUD by teacher
+  - Student text + file submission
+  - Draft saving
+  - Late submission flag
+  - Teacher grading + feedback
+  - Batch grade import via CSV
+  - CSV export of submissions
+
+Out of Scope:
+  - Peer submission review
+  - Rubric-based grading
+  - Group submissions
+  - Anonymous grading
+  - Resubmission policy control (currently unlimited before deadline)
+
+────────────────────────────────────────────────────────────────────────────────
+F-11: ATTENDANCE TRACKING
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Teachers record daily attendance per subject. Students and parents view
+  attendance history. Absence excuses are submitted by parents and reviewed.
+
+User Stories:
+  - As a teacher, I can bulk-mark attendance for all students on a given date.
+  - As a student, I see my attendance calendar and overall rate.
+  - As a parent, I can view my child's attendance and submit an excuse.
+
+Acceptance Criteria:
+  AC-01  Attendance statuses: 'present' | 'absent' | 'late' | 'excused'.
+         No other values accepted.
+  AC-02  Teacher selects subject + date, then marks each student's status.
+         Optional note per student.
+  AC-03  Teacher can edit previously entered attendance records.
+  AC-04  Student view: calendar heatmap showing each school day status.
+         Attendance rate = (present + late + excused) / total_days * 100.
+  AC-05  Teacher view: per-student grid for a date range. Shows rate per
+         student. Excel-compatible CSV export.
+  AC-06  Parent submits absence excuse: child (from linked students), date,
+         reason (text). Initial status = 'pending'.
+  AC-07  Teacher/admin reviews excuse: approves → status = 'approved',
+         rejects → status = 'rejected'. reviewed_by = actor's user_id.
+  AC-08  When excuse is approved, attendance record for that date is updated
+         to status = 'excused'.
+  AC-09  Student's timetable check-in: checking in to a timetable slot awards
+         10 XP (tracked per slot per day, no double-claiming).
+
+In Scope:
+  - Bulk attendance marking by teacher
+  - Attendance calendar for student
+  - Absence excuse submission by parent
+  - Excuse review by teacher/admin
+  - Attendance rate calculation
+  - CSV export
+
+Out of Scope:
+  - QR-code based student self-check-in for attendance
+  - GPS-based presence verification
+  - Automated absent notifications to parents
+  - Statistical attendance reports per class cohort
+
+────────────────────────────────────────────────────────────────────────────────
+F-12: GRADING & REPORT CARDS
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Aggregated grade book combining test scores, assignment scores, and
+  attendance. Teachers write term-based report card comments.
+
+User Stories:
+  - As a teacher, I can view per-student grades across all my subjects.
+  - As a student, I can view my grades and GPA.
+  - As a teacher, I can write a per-term report card comment with conduct.
+  - As a parent, I can view my child's report card.
+
+Acceptance Criteria:
+  AC-01  Grade calculation weights (configurable via GradeWeights):
+         Default: tests 50%, assignments 30%, attendance 20%,
+         participation 0% (not actively tracked).
+  AC-02  Letter grade thresholds: A(≥90), B(≥80), C(≥70), D(≥60), F(<60).
+  AC-03  GPA: A=4.0, B=3.0, C=2.0, D=1.0, F=0.0.
+  AC-04  Report card comment fields: student_id, teacher_id, term (string),
+         comment (text), conduct ('excellent'|'good'|'satisfactory'|
+         'needs_improvement'|'poor').
+  AC-05  Teacher can write one comment per (student_id, term). Edit is allowed.
+  AC-06  Student sees their own report card per term with: subject grades,
+         overall GPA, teacher comments, conduct rating.
+  AC-07  Parent sees linked child's report card.
+  AC-08  Report card has print layout (CSS @media print) for physical copies.
+  AC-09  Teacher can filter report by term (term is a free-text string,
+         e.g. "Term 1 2025").
+
+In Scope:
+  - Weighted aggregate grading
+  - Letter grade + GPA
+  - Term-based report card comments + conduct
+  - Print layout
+  - Parent view of child's report card
+
+Out of Scope:
+  - Subject-specific grade weighting per student
+  - Class rank calculation
+  - Predicted grades for future terms
+  - Official transcript generation
+
+────────────────────────────────────────────────────────────────────────────────
+F-13: MESSAGING (DM & GROUP CHAT)
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Real-time direct messaging and group chat between platform users.
+  Messages persist in the database.
+
+User Stories:
+  - As a teacher, I can DM a student or parent.
+  - As a student, I can DM a teacher or join a group chat.
+  - As a parent, I can DM a teacher directly.
+
+Acceptance Criteria:
+  AC-01  DM thread: messages have sender_id, receiver_id, body, read (bool),
+         created_at. group_id is null for DMs.
+  AC-02  Group chat: messages have group_id, sender_id, body. receiver_id
+         is null for group messages.
+  AC-03  Groups: name, created_by, member_ids (array of user IDs).
+  AC-04  Realtime: Messages delivered via Supabase realtime channel without
+         page refresh.
+  AC-05  Unread count shown per thread in inbox sidebar.
+  AC-06  Message soft-delete: deleted = true hides message from UI.
+         Physical row is not deleted.
+  AC-07  Message edit: body updated, edited_at timestamp set.
+  AC-08  File attachments: attachment_url, attachment_name, attachment_type
+         stored. Max file size: MAX_FILE_SIZE = 50MB.
+  AC-09  Voice note recording: audio attachment recorded via browser MediaStream
+         API, uploaded as audio file.
+  AC-10  Typing indicators shown to other participants in thread.
+  AC-11  Mark messages as read: message.read = true when thread is opened.
+
+In Scope:
+  - DM between any two users
+  - Group chat creation and membership
+  - Realtime delivery
+  - Soft delete + edit
+  - File + voice attachments
+  - Unread badges
+  - Read receipts (per message)
+
+Out of Scope:
+  - End-to-end encryption
+  - Message reactions (emoji)
+  - Message threads/replies within DM
+  - Admin message monitoring
+  - Message search / full-text search
+
+────────────────────────────────────────────────────────────────────────────────
+F-14: FORUM
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Platform-wide discussion forum with posts, nested comments, likes,
+  bookmarks, and flair tags. Accessible to admin, teacher, and students.
+
+User Stories:
+  - As any eligible user, I can create a post with a flair and tags.
+  - As a post author, I can mark a comment as the best answer.
+
+Acceptance Criteria:
+  AC-01  Post fields: title (required), body (required), flair (optional),
+         tags (string array), attachment (optional file).
+  AC-02  Flairs: 'question' | 'discussion' | 'announcement' | 'resource' |
+         'help' | 'showcase'.
+  AC-03  Post body supports markdown: bold (**text**), italic (*text*),
+         inline code (`code`), code blocks (```...```), links (https:// only),
+         ordered + unordered lists.
+  AC-04  Markdown rendering: all HTML entities escaped before processing.
+         Only https:// URLs become clickable links. JavaScript: URIs blocked.
+  AC-05  Comments: nested via parent_id. Maximum thread depth not enforced
+         by schema but displayed as indented.
+  AC-06  Post author can mark one comment as best_answer_id per post.
+  AC-07  Like: post.likes is a string[] of user IDs. Toggle add/remove self.
+  AC-08  Bookmark: post.bookmarks is a string[] of user IDs.
+  AC-09  Admin/Teacher can pin posts (pinned = true → shown at top of feed).
+  AC-10  Sort modes: hot (by comment_count), new (by created_at), top (by
+         likes.length).
+  AC-11  Pagination: PAGE_SIZE = 20 posts per page.
+  AC-12  view_count incremented on each post open.
+  AC-13  Attachment types: image, video, PDF. Max 10MB per forum attachment.
+  AC-14  Post edit: body updated, edited_at set.
+  AC-15  Parents do NOT have access to Forum (tab not in parent navItems).
+
+In Scope:
+  - Post creation (admin, teacher, student)
+  - Nested comments
+  - Markdown body with XSS-safe rendering
+  - Flairs + tags
+  - Like + Bookmark
+  - Admin/Teacher pinning
+  - Best answer marking
+  - Sort modes + pagination
+  - File attachments (10MB limit)
+
+Out of Scope:
+  - Private forum subgroups
+  - Moderation queue (admin-only delete is available; no queue)
+  - Post reporting / flagging
+  - Voting (upvote/downvote; only likes exist)
+  - Parent participation in forums
+
+────────────────────────────────────────────────────────────────────────────────
+F-15: AI TUTOR
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Student-facing LLM chat interface connected to Groq API. Students can ask
+  academic questions in the context of a specific enrolled course.
+
+User Stories:
+  - As a student, I can ask the AI tutor questions about a course topic.
+  - As a student, my conversation history is saved and resumable.
+
+Acceptance Criteria:
+  AC-01  Student selects a course context from enrolled courses before chatting.
+  AC-02  System prompt injects course title and subject as context.
+  AC-03  Chat messages persist in ai_chats table as JSON array:
+         [{ role: 'user'|'assistant', content, timestamp }].
+  AC-04  Student can start new chat (clears session, new ai_chats row).
+  AC-05  File attachments: student can attach PDF, PPT, or image in a message.
+         Content extracted and sent as context to LLM.
+  AC-06  Response rendered with markdown code block highlighting.
+  AC-07  Rate limit: same as API route (10/min per user).
+  AC-08  Token handling: large files trimmed to fit prompt token limits.
+  AC-09  Streaming: responses displayed token-by-token as they arrive.
+
+In Scope:
+  - Course-scoped AI chat
+  - Persistent conversation history
+  - File context injection (PDF, PPT, image)
+  - Streaming responses
+  - Rate limiting
+
+Out of Scope:
+  - Multi-course simultaneous chat context
+  - AI tutor for teachers
+  - Voice input to AI tutor
+  - AI-generated study plans
+
+────────────────────────────────────────────────────────────────────────────────
+F-16: LIVE CLASSES
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Teachers schedule and host live video classes via Jitsi Meet integration.
+  Students join via generated room URL.
+
+User Stories:
+  - As a teacher, I can schedule and start a live class.
+  - As a student, I can see scheduled classes and join active ones.
+
+Acceptance Criteria:
+  AC-01  Teacher creates live class: title, course_id (optional), subject,
+         scheduled_at (future datetime required), duration (minutes).
+  AC-02  System generates unique room_id (UUID-based) and room_url
+         (Jitsi domain + room_id).
+  AC-03  Class statuses: 'scheduled' → 'live' → 'ended'.
+         Teacher changes status explicitly. No auto-transition.
+  AC-04  Teacher starts class: status = 'live'. System sends batch notification
+         to enrolled students.
+  AC-05  Teacher ends class: status = 'ended'. Room becomes inaccessible.
+  AC-06  Student join button available only when status = 'live'.
+  AC-07  room_url opens in new browser tab.
+  AC-08  Room ID validated as non-empty before creation.
+
+In Scope:
+  - Schedule/start/end by teacher
+  - Jitsi Meet room generation
+  - Status lifecycle
+  - Batch student notification on class start
+  - Student join flow
+
+Out of Scope:
+  - In-platform video (embedded streaming; Jitsi opens external)
+  - Class recording storage
+  - Chat within live class (Jitsi provides its own)
+  - Live class attendance auto-marking
+  - Capacity limits per class
+
+────────────────────────────────────────────────────────────────────────────────
+F-17: TIMETABLE
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Weekly schedule grid showing subject slots by day and time.
+  Teachers manage slots; students view and check in for XP.
+
+User Stories:
+  - As a teacher, I can set up my weekly timetable with room numbers.
+  - As a student, I can view today's schedule and check in for XP.
+
+Acceptance Criteria:
+  AC-01  DAYS constant = ['Monday', 'Tuesday', 'Wednesday', 'Thursday',
+         'Friday', 'Saturday'].
+  AC-02  Timetable slot fields: subject, teacher_id, teacher_name, day
+         (from DAYS), time (HH:MM format), room (string).
+  AC-03  Time field validated: must match HH:MM format. Invalid format rejected
+         with inline error.
+  AC-04  Teacher can create, edit, delete their own timetable slots.
+  AC-05  Student view: grid layout with day columns and time rows.
+  AC-06  Student check-in: clicking "Check In" on current day's slot awards
+         10 XP. Can only check in once per slot per day.
+  AC-07  Parent view: shows linked child's timetable (read-only).
+  AC-08  Subject color coding applied consistently across timetable grid.
+
+In Scope:
+  - Weekly grid by day + time
+  - Teacher slot CRUD
+  - Student check-in with XP
+  - Parent read-only view
+  - Time format validation
+
+Out of Scope:
+  - Conflict detection (two slots at same time)
+  - Substitute teacher assignment
+  - iCalendar export of timetable
+  - Holiday/exception scheduling
+
+────────────────────────────────────────────────────────────────────────────────
+F-18: XP & GAMIFICATION ENGINE
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Comprehensive XP-based progression system with levels, 28 badges, streaks,
+  daily login bonuses, leaderboard, and Double XP events.
+
+User Stories:
+  - As a student, I earn XP for completing tests, quests, and daily logins.
+  - As a student, I can see my level, badges, and rank on the leaderboard.
+  - As a student, I earn a level-up celebration when progressing a tier.
+
+Acceptance Criteria:
+  AC-01  XP Level tiers (7 levels, xp_threshold):
+         Level 1: 0 XP, Level 2: 500 XP, Level 3: 1500 XP,
+         Level 4: 3000 XP, Level 5: 5000 XP, Level 6: 8000 XP,
+         Level 7: max (∞).
+  AC-02  Progress bar: ((xp - current_tier.xp) / (next_tier.xp - current_tier.xp))
+         * 100, capped at 100%.
+  AC-03  Level-up event: Triggers celebration modal with confetti animation
+         when XP crosses a tier threshold. Toast shown.
+  AC-04  28 badges defined across 7 categories:
+         XP Milestones (5), Test Milestones (4), Score Achievements (4),
+         Ghost Veterans (3), Streak Badges (4), Consistency (2),
+         Community (3), Study Days (3), Combo (1).
+  AC-05  Badge unlock thresholds (exact values):
+         xp_100: 100 XP, xp_500: 500, xp_1000: 1000, xp_2500: 2500,
+         xp_5000: 5000.
+         test_1: 1 test, test_10: 10, test_25: 25, test_50: 50.
+         score_80: avg ≥80% (≥5 tests), score_90: avg ≥90.
+         score_100: any 100% test. perfect_5: 5 perfect tests.
+         ghost_1: 1 ghost win, ghost_5: 5, ghost_15: 15.
+         streak_3: 3-day, streak_7: 7-day, streak_14: 14-day, streak_30: 30-day.
+         forum_1: 1 forum post, forum_10: 10, forum_25: 25.
+         days_7: 7 active days, days_30: 30, days_100: 100.
+         combo_all: ≥2500 XP AND ≥25 tests AND ≥7 streak AND ≥5 ghost wins.
+  AC-06  Badge tiers: bronze, silver, gold, platinum (visual color only).
+  AC-07  Daily login bonus: 10 XP base + min(streak_days * 2, 40) bonus.
+         Maximum 50 XP per day from login. Claimed via RPC claim_daily_login_xp.
+         One claim per calendar date per user.
+  AC-08  Streak calculation: count of consecutive days with ≥1 test attempt.
+         Streak is "active" if last attempt was today or yesterday.
+  AC-09  Activity heatmap: last 84 days (12 weeks). Intensity: 0=none,
+         1=light, 2=medium, 3-4=strong, 5+=darkest.
+  AC-10  XP Spark chart: last 14 days. Daily XP = sum of per-attempt
+         Math.round(percent * 0.5).
+  AC-11  Double XP: Admin activates, duration = DOUBLE_XP_DURATION_MS
+         (3,600,000ms = 1 hour). Banner shown with countdown timer in minutes.
+         Flag stored in platform settings with ends_at field.
+  AC-12  Leaderboard sorted by: XP (default), Score (best test), Ghost Wins.
+         Paginated (PAGE_SIZE = 20). Top 3 shown in podium layout.
+  AC-13  QGX Wrapped: Generates copyable text summary annually including XP,
+         rank, test stats, badges, streaks.
+
+In Scope:
+  - 7-tier level progression
+  - 28 badges with exact thresholds
+  - Daily login bonus with streak multiplier
+  - Streak tracking
+  - Activity heatmap (84 days)
+  - Leaderboard (3 sort modes)
+  - Double XP events (admin-activated, 1 hour)
+  - Level-up celebration modal
+  - QGX Wrapped summary
+
+Out of Scope:
+  - XP decay over time
+  - XP leaderboard by classroom/subject
+  - Badge trading or gifting
+  - Custom leveling curves per institution
+  - XP refund on test invalidation
+
+────────────────────────────────────────────────────────────────────────────────
+F-19: QUESTS
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Admins define time-limited challenges. Students complete quest conditions
+  and claim XP rewards.
+
+User Stories:
+  - As an admin, I can create quests with XP rewards.
+  - As a student, I can view active quests and track my progress.
+  - As a student, completing a quest awards me XP.
+
+Acceptance Criteria:
+  AC-01  Quest fields: title (1–180 chars), description (optional),
+         type ('daily'|'weekly'|'special'), target_type (string),
+         target_count (int), xp_reward (1–5000), active (boolean).
+  AC-02  POST /api/quests validates: title not empty, type in enum,
+         xp_reward 1–5000. Returns 400 with message on failure.
+  AC-03  Admin can toggle quest active = true/false.
+  AC-04  Student view shows only active = true quests.
+  AC-05  Quest progress tracked in quest_progress table:
+         (student_id, quest_id, progress int, completed bool, claimed bool).
+  AC-06  Student can claim XP for completed quest (completed = true,
+         claimed = false → sets claimed = true, awards xp_reward).
+  AC-07  Daily quests seeded deterministically each day (date-based seed,
+         3 quests from 7-quest pool). Same 3 quests shown to all students
+         on the same day.
+  AC-08  GET /api/quests requires admin role. Returns all quests.
+
+In Scope:
+  - Quest CRUD by admin
+  - Quest progress tracking for students
+  - XP claim on completion
+  - Daily deterministic quest rotation
+
+Out of Scope:
+  - Teacher-created quests
+  - Quests with prerequisites
+  - Quest chains / multi-step quests
+  - Expired quest auto-archiving
+
+────────────────────────────────────────────────────────────────────────────────
+F-20: CERTIFICATES
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Auto-generated canvas certificates issued when students complete 100%
+  of a course. Includes QR code and credential ID for verification.
+
+User Stories:
+  - As a student, I receive a certificate when I complete all course materials.
+  - As a student, I can re-download my certificate at any time.
+  - As anyone, I can verify a certificate via credential ID.
+
+Acceptance Criteria:
+  AC-01  Certificate issued when student has course_progress entries for ALL
+         files in the course. One certificate per (student_id, course_id).
+  AC-02  Certificate canvas: 1200×850px. Dark background (#0a0a0a).
+         Contains: student name, course title, issue date, credential_id,
+         QGX branding, school seal (star in top-right), QR code (bottom-left).
+  AC-03  Credential ID format: QGX-XXXX-XXXX-XXXX-XXXX where X is from
+         base-32 character set (A-Z excluding I,O,U + digits 2-9).
+  AC-04  QR code: Version 2 (25×25 modules), Error Correction L (7%),
+         encodes credential_id trimmed to 32 bytes.
+  AC-05  Download: PNG format, filename QGX-Certificate-{CourseTitle}.png.
+  AC-06  Verification: Query certificates table by credential_id
+         (case-insensitive). Returns student name, course, issue date.
+
+In Scope:
+  - Auto-issuance on course completion
+  - Canvas-based PNG certificate
+  - QR code with credential ID
+  - Re-download
+  - Credential verification
+
+Out of Scope:
+  - PDF certificate format
+  - Blockchain-based credential verification
+  - Custom certificate templates per institution
+  - Expiry dates on certificates
+
+────────────────────────────────────────────────────────────────────────────────
+F-21: CALENDAR
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Unified calendar aggregating tests, assignments, live classes, and personal
+  events. Month and week views with color-coded event types.
+
+User Stories:
+  - As any user, I can see all upcoming academic events on a calendar.
+  - As a student/teacher, I can add personal events.
+  - As a user, I can export my calendar as an ICS file.
+
+Acceptance Criteria:
+  AC-01  Event sources aggregated: tests (with scheduled_date), assignments
+         (due_date), live classes (scheduled_at), personal events.
+  AC-02  Views: month view (full month grid), week view (7-day column layout).
+  AC-03  Event color coding by type (4 types: test, assignment, class,
+         personal). User can toggle each type on/off in preferences.
+  AC-04  Urgency labels: 'overdue' (past deadline), 'today', 'due soon'
+         (within 3 days).
+  AC-05  Day detail panel: click any day → side panel listing that day's events.
+  AC-06  Personal events CRUD: title, date, optional note. Stored per user.
+  AC-07  ICS export: generates RFC 5545 iCalendar file. Filename:
+         QGX-Calendar.ics. Opens download prompt.
+  AC-08  Preferences stored per user (localStorage): which event types to show.
+
+In Scope:
+  - Month + week views
+  - Aggregated event types
+  - Personal events CRUD
+  - Color coding by type
+  - Urgency indicators
+  - ICS export
+
+Out of Scope:
+  - Google Calendar sync
+  - Email reminders for calendar events
+  - Shared calendars between users
+  - Recurring personal events
+
+────────────────────────────────────────────────────────────────────────────────
+F-22: CODE PLAYGROUND
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  In-browser code execution sandbox for students. Supports JavaScript,
+  basic Python, and HTML/CSS.
+
+User Stories:
+  - As a student, I can write and run JavaScript/Python/HTML code.
+  - As a student, I see output in a console panel.
+
+Acceptance Criteria:
+  AC-01  Supported modes: JavaScript, Python (basic), HTML/CSS.
+  AC-02  JavaScript execution: Via Web Worker (isolated from DOM).
+         5-second timeout. Captures console.log/error/warn output.
+         Returns each statement output as a line.
+  AC-03  Python execution: Built-in interpreter (no external runtime).
+         Supports: print, variables, arithmetic (+,-,*,/,%), conditionals,
+         for loops, range(), len(), type(), str/int/float, lists, f-strings.
+         Unsupported: def, class, import, while, try/except, lambda.
+         Max iterations: 10,000. Loop/function syntax returns specific error.
+  AC-04  HTML/CSS execution: Rendered in sandboxed iframe
+         (sandbox="allow-scripts"). No external resources.
+  AC-05  Execution timeout: 5 seconds for JS and Python. "Execution timed out"
+         error shown after 5s.
+  AC-06  Keyboard shortcut: Tab inserts 2 spaces. Ctrl+Enter (Cmd+Enter Mac)
+         runs code.
+  AC-07  Starter templates provided per language (cannot be empty on load).
+  AC-08  Error messages shown in red in output panel.
+  AC-09  "(no output)" shown if execution completes with no console output.
+
+In Scope:
+  - JavaScript (Worker-based, 5s timeout)
+  - Python (built-in interpreter, basic subset)
+  - HTML/CSS (sandboxed iframe)
+  - Console output + error display
+  - Keyboard shortcuts
+  - Starter templates
+
+Out of Scope:
+  - Full Python (numpy, requests, etc.)
+  - Server-side code execution
+  - Code persistence / saving programs
+  - TypeScript execution
+  - Multi-file execution
+  - Package installation
+
+────────────────────────────────────────────────────────────────────────────────
+F-23: PLAGIARISM DETECTION
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Teacher-facing tool that scans all assignment submissions for text
+  similarity using n-gram analysis and flags suspicious pairs.
+
+User Stories:
+  - As a teacher, I can scan an assignment's submissions for plagiarism.
+  - As a teacher, I can set a similarity threshold and flag suspicious pairs.
+
+Acceptance Criteria:
+  AC-01  Algorithm: 4-word n-gram comparison between all submission pairs.
+         Similarity = (shared n-grams / min(A ngrams, B ngrams)) * 100.
+  AC-02  Minimum text length: 5 tokens. Shorter submissions return 0%
+         similarity.
+  AC-03  Tokenization: lowercase, strip non-alphanumeric, filter tokens <3
+         characters.
+  AC-04  Threshold: user-adjustable 10–90%. Default: 30%.
+         Only pairs above threshold shown.
+  AC-05  Color coding: ≥70% = red, ≥50% = orange, <50% = blue.
+  AC-06  Shared phrases: up to 5 shared 4-grams per pair, highlighted in
+         results.
+  AC-07  Scan is limited to first 100 submissions. Warning shown if capped.
+  AC-08  Flag statuses: 'open' | 'reviewed' | 'dismissed'. Teacher can update
+         status per flag.
+  AC-09  Scope: only teacher's own assignments and their submissions.
+
+In Scope:
+  - 4-gram n-gram similarity
+  - Adjustable threshold
+  - Per-pair visualization with shared phrases
+  - Flagging workflow (open, reviewed, dismissed)
+  - Teacher-scoped results
+
+Out of Scope:
+  - Cross-internet plagiarism (Turnitin-style)
+  - Code plagiarism detection
+  - Image similarity
+  - Plagiarism report export
+
+────────────────────────────────────────────────────────────────────────────────
+F-24: PREDICTIVE RISK ALERTS
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Automated system that analyzes student data and produces a risk score
+  (0–100) to help teachers identify students needing intervention.
+
+User Stories:
+  - As a teacher, I see a prioritized list of at-risk students with flags.
+
+Acceptance Criteria:
+  AC-01  Risk score components (max 100):
+         - Attendance: <70% = +30, 70-85% = +15, ≥85% = 0.
+         - Test avg: <40% = +30, 40-60% = +15, ≥60% = 0.
+         - Performance trend: If recent 3 tests avg < prior 3 avg by >10% = +15.
+         - Missed assignments: ≥3 overdue = +20, 1-2 = +10, 0 = 0.
+         - Inactivity: No attempts in last 14 days = +10.
+  AC-02  Risk levels: High ≥40, Medium 20-39, Low <20.
+  AC-03  Flags generated per student listing specific reasons with values,
+         e.g. "Low attendance (62%)", "3 missed assignment(s)".
+  AC-04  Trend indicator per student: ▼ Declining | ▲ Improving | — Stable.
+         Calculated from last 3 vs prior 3 test attempts.
+  AC-05  Scope: Teacher sees only students who have attempted teacher's tests
+         or submitted to teacher's assignments.
+  AC-06  List sorted by risk score descending. Paginated (PAGE_SIZE = 20).
+  AC-07  Manual refresh button triggers full data recompute.
+
+In Scope:
+  - 5-component risk scoring
+  - Specific risk flags with values
+  - Trend direction
+  - Teacher-scoped view
+  - Manual refresh
+
+Out of Scope:
+  - Automated alerts/emails sent to parents
+  - ML model-based prediction
+  - Risk history over time
+  - Admin-wide risk view
+
+────────────────────────────────────────────────────────────────────────────────
+F-25: MEETING SCHEDULER
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Teachers offer available meeting slots. Parents book a slot for a
+  parent-teacher meeting.
+
+User Stories:
+  - As a teacher, I can set available meeting time slots.
+  - As a parent, I can book an available slot.
+
+Acceptance Criteria:
+  AC-01  Teacher creates slot: date (required, must be future), time range
+         (start_time + end_time), notes (optional).
+  AC-02  Slot statuses: 'available' → 'booked'.
+  AC-03  Parent sees all available slots for any teacher.
+  AC-04  Parent books slot: slot status → 'booked', parent_id stored.
+  AC-05  Booked slots not shown as available to other parents.
+  AC-06  Both teacher and parent can see confirmed bookings in their
+         respective meeting tabs.
+
+In Scope:
+  - Teacher slot creation
+  - Parent booking
+  - Status tracking (available / booked)
+
+Out of Scope:
+  - Calendar app invites (Google Calendar, Outlook)
+  - Video link auto-generation for meetings
+  - Cancellation flow
+  - Recurring recurring meeting slots
+  - Admin viewing all meetings
+
+────────────────────────────────────────────────────────────────────────────────
+F-26: PARENT PORTAL
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  Parents link to one or more children and access a read-only view of the
+  child's academic data, plus communication tools with teachers.
+
+User Stories:
+  - As a parent, I can link to my child using their QGX ID.
+  - As a parent, I can switch between multiple linked children.
+  - As a parent, I see my child's grades, attendance, report card, timetable.
+
+Acceptance Criteria:
+  AC-01  Parent enters child's QGX ID to link. System looks up student profile
+         by qgx_id, creates row in parent_students (parent_id, student_id).
+  AC-02  Parent can link multiple children. Linked children shown in a
+         selector (header or dropdown).
+  AC-03  All data displayed is scoped to the currently selected child.
+  AC-04  Grades view: child's test attempts, assignment scores, attendance
+         rate, computed GPA.
+  AC-05  Attendance view: child's attendance history + rate.
+  AC-06  Timetable view: child's weekly schedule (read-only).
+  AC-07  Report card view: child's report card per term.
+  AC-08  Academic alerts tab: derived from child's attendance, grades, trends.
+  AC-09  Parent cannot access any data for students they are not linked to.
+  AC-10  Parent has no access to Forum, quests, tests, courses, or any
+         content creation tools.
+
+In Scope:
+  - QGX ID-based child linking
+  - Multiple children support
+  - Grades, attendance, timetable, report card (read-only)
+  - Absence excuse submission
+  - Meeting booking
+  - Teacher messaging
+  - Academic alerts
+
+Out of Scope:
+  - Consent/approval flow for linking (QGX ID knowledge grants access)
+  - Parent-parent messaging
+  - Parent accessing other parents' children
+  - Viewing assignment submission files
+
+────────────────────────────────────────────────────────────────────────────────
+F-27: NOTIFICATIONS
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  In-app notification center receiving system events (test graded, live class
+  started, new announcement, etc.).
+
+User Stories:
+  - As a user, I receive notifications for relevant events.
+  - As a user, I can mark all notifications as read.
+
+Acceptance Criteria:
+  AC-01  Notification fields: user_id, message (string), type (string),
+         read (bool), created_at.
+  AC-02  Notification types include: test submission result, live class start,
+         new announcement, assignment feedback, quest completion.
+  AC-03  Notification bell in sidebar shows unread count badge.
+  AC-04  Notifications tab: filter by type. Filter by read/unread.
+  AC-05  Mark individual notification as read (click).
+  AC-06  Mark all as read (button).
+  AC-07  Mute type preferences: user can suppress specific types.
+         Preference stored in localStorage.
+  AC-08  Grouped by date in feed (Today, Yesterday, Earlier).
+  AC-09  NOTIFICATION_LIMIT constant = 10 (max notifications fetched at once).
+
+In Scope:
+  - Notification record creation via pushNotification()
+  - In-app notification center
+  - Read/unread state
+  - Type filtering
+  - Date grouping
+
+Out of Scope:
+  - Push notifications to mobile device
+  - Email notifications
+  - SMS notifications
+  - Notification preferences stored server-side (localStorage only)
+
+────────────────────────────────────────────────────────────────────────────────
+F-28: PWA & OFFLINE SUPPORT
+────────────────────────────────────────────────────────────────────────────────
+
+Description:
+  The platform functions as an installable Progressive Web App with offline
+  fallback and background sync.
+
+User Stories:
+  - As a student, I can install QGX on my device home screen.
+  - As a student, navigating while offline shows a friendly offline page.
+
+Acceptance Criteria:
+  AC-01  Web app manifest at /manifest.json: name = "QGX — Query Gen X",
+         short_name = "QGX", start_url = "/", display = "standalone".
+  AC-02  Service worker registered from layout.tsx. Cache name: 'qgx-v4'.
+  AC-03  Cache strategy: Network-first for navigation. Stale-while-revalidate
+         for static assets.
+  AC-04  /api/* and /auth/* routes bypass cache (always network).
+  AC-05  /forgot-password and /reset-password routes bypass cache.
+  AC-06  Offline fallback: Navigating while offline serves /offline.html.
+  AC-07  Cache versioning: On service worker activate, caches except 'qgx-v4'
+         are deleted.
+  AC-08  skipWaiting and clients.claim called on install/activate for immediate
+         takeover.
+  AC-09  Background sync registered for 'sync-messages' tag.
+  AC-10  Push notification handler present (handles background push events).
+  AC-11  Student dashboard shows offline banner when navigator.onLine = false.
+
+In Scope:
+  - Installable PWA (manifest)
+  - Service worker (cache + offline fallback)
+  - Offline banner in student dashboard
+  - Background sync registration
+  - Push notification handler skeleton
+
+Out of Scope:
+  - Full offline test-taking (questions not cached by service worker)
+  - Background sync actual implementation (tag registered, handler stub)
+  - iOS push notifications (WKWebView limitation)
+
+
+================================================================================
+4. FUNCTIONAL REQUIREMENTS
+================================================================================
+
+FR-01  All /dashboard/* routes are protected by Next.js middleware. No
+       unauthenticated or mismatched-role access is possible.
+
+FR-02  Role is stored in profiles.role and is the authoritative source.
+       Session token alone is insufficient; profile must be queryable.
+
+FR-03  All destructive actions (delete user, delete course, delete post)
+       require explicit confirmation from the UI before executing.
+
+FR-04  All data-mutating API routes verify authentication via
+       supabase.auth.getUser(). No action proceeds without a valid user.
+
+FR-05  All data-mutating API routes re-verify the caller's role from the
+       profiles table server-side. Client-supplied role claims are ignored.
+
+FR-06  The system generates QGX IDs for all users.
+       Format: QGX-{PREFIX}{NNNN}-{RAND4} where PREFIX = ADM/TCH/STU/PAR.
+
+FR-07  XP updates use atomic database RPC (atomic_xp_update). Client-side
+       XP arithmetic is for display only, not for persistence.
+
+FR-08  File uploads have a hard size limit of MAX_FILE_SIZE = 50MB enforced
+       client-side before upload. API-level file processing (AI) enforces 5MB.
+
+FR-09  Open redirect attacks are prevented. The ?redirect= parameter on
+       /login must start with "/dashboard/". The ?next= parameter on
+       /auth/callback must match the SAFE_PATHS whitelist exactly.
+
+FR-10  All user-generated content displayed in HTML (forum posts, messages)
+       is sanitized: HTML entities escaped, only https:// links rendered,
+       javascript: URIs blocked.
+
+FR-11  Pagination is consistent: PAGE_SIZE = 20 records per page across all
+       lists (users, forum posts, alerts, notifications).
+
+FR-12  CSV export is available on: grades, attendance records, analytics
+       data, assignment submissions. Generated client-side.
+
+FR-13  Debounce of 300ms (DEBOUNCE_MS) applied to all search input fields
+       before triggering DB queries.
+
+FR-14  Activity logging: All admin-initiated user operations (create, delete)
+       are recorded in the activity_log table with actor_id and message.
+
+FR-15  Error boundaries exist at the app level (app/error.tsx). Unhandled
+       module-level errors display the error page with "Try Again" and
+       "Home" actions.
+
+
+================================================================================
+5. NON-FUNCTIONAL REQUIREMENTS
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+5.1 PERFORMANCE
+────────────────────────────────────────────────────────────────────────────────
+
+NFR-P01  Dashboard initial load (first paint): ≤3 seconds on 4G connection.
+NFR-P02  Tab switch within dashboard (no page reload): ≤500ms for data fetch
+         and render.
+NFR-P03  Search results debounced at 300ms. Results returned ≤1s after
+         debounce fires.
+NFR-P04  Test question lazy-load: Questions fetched only when student opens
+         the test (not at dashboard mount).
+NFR-P05  Course data cached per session using useRef to prevent redundant
+         DB queries within the same dashboard session.
+NFR-P06  Student dashboard data: fetched in parallel via Promise.allSettled
+         (minimum 10 concurrent queries on load).
+NFR-P07  AI API response: Groq streaming begins within 2 seconds of request.
+NFR-P08  Build artifact size: First Load JS ≤250kB per dashboard route
+         (current: student 247kB, teacher 236kB, admin 193kB, parent 179kB).
+
+────────────────────────────────────────────────────────────────────────────────
+5.2 SCALABILITY
+────────────────────────────────────────────────────────────────────────────────
+
+NFR-S01  Architecture: Next.js serverless on Vercel. Each API route and
+         page runs as an independent serverless function.
+NFR-S02  Database: Supabase (PostgreSQL). Connection pooling managed by
+         Supabase infrastructure.
+NFR-S03  Realtime: Supabase Realtime used for messaging and announcements.
+         Each client maintains a WebSocket connection per active channel.
+NFR-S04  Pagination enforced at PAGE_SIZE = 20. No unbounded queries.
+NFR-S05  Max concurrent AI requests per user: 10/minute (in-memory limiter;
+         dev-mode only — production requires persistent rate limiting).
+
+────────────────────────────────────────────────────────────────────────────────
+5.3 SECURITY
+────────────────────────────────────────────────────────────────────────────────
+
+NFR-SEC01  Authentication via Supabase Auth (email/password). Passwords hashed
+           by Supabase. Application never stores or transmits plain passwords.
+NFR-SEC02  Session stored in HTTP-only cookies via @supabase/ssr. Not
+           accessible to JavaScript.
+NFR-SEC03  Row Level Security (RLS) enforced on all Supabase tables.
+           Application-level role checks serve as defense-in-depth.
+NFR-SEC04  Service role key (SUPABASE_SERVICE_ROLE_KEY) is used only in
+           server-side API routes. Never exposed to client.
+NFR-SEC05  GROQ_API_KEY is server-only (not prefixed with NEXT_PUBLIC_).
+NFR-SEC06  Anti-cheat measures: Tab switch detection, copy-paste blocking,
+           fullscreen enforcement are client-side. Scoring is always server-side.
+NFR-SEC07  Open redirect protection on all redirect parameters
+           (see FR-09).
+NFR-SEC08  XSS protection: User-generated HTML content is entity-escaped
+           before rendering. Markdown links limited to https:// (see FR-10).
+NFR-SEC09  CSRF: Not applicable (cookie-based auth uses SameSite by default
+           via Supabase SSR).
+NFR-SEC10  Input validation: email format, role enum, date ranges, file size
+           all validated at API and form level.
+NFR-SEC11  Admin self-deletion prevented (FR-02 AC-08).
+           Last-admin deletion prevented (FR-02 AC-09).
+NFR-SEC12  Environment variable validation: Missing NEXT_PUBLIC_SUPABASE_URL
+           or NEXT_PUBLIC_SUPABASE_ANON_KEY throws at runtime startup.
+
+
+================================================================================
+6. EDGE CASES & ERROR HANDLING
+================================================================================
+
+EC-01  LOGIN — Invalid credentials
+       → Response: 401. UI message: "Invalid credentials". No session.
+       User stays on /login.
+
+EC-02  LOGIN — QGX ID not found in profiles table
+       → Profile query returns null. Fallback attempt with raw input fails.
+       UI message: "Invalid credentials".
+
+EC-03  MIDDLEWARE — Profile fetch fails (DB error)
+       → try/catch in middleware. Redirect to /login for safety.
+       No dashboard access without confirmed profile.
+
+EC-04  MIDDLEWARE — role in profile is not a valid Role value
+       → VALID_ROLES check fails. Redirect to /login.
+
+EC-05  REGISTRATION — Duplicate email
+       → Supabase returns error. UI message: "Email already in use."
+       User stays on /register.
+
+EC-06  AUTH CALLBACK — Expired or invalid code
+       → exchangeCodeForSession fails. Redirect to /forgot-password?error=expired.
+       UI message: "Link expired. Please request a new one."
+
+EC-07  TEST SUBMISSION — Student exceeds max attempts
+       → POST /api/submit-test returns 403 "Maximum attempts exceeded".
+       Student sees test as completed, no "Start" button shown.
+
+EC-08  TEST SUBMISSION — Submission after deadline
+       → Server calculates deadline = scheduledStart + duration.
+       Returns 403 "Deadline passed".
+
+EC-09  TEST SUBMISSION — Non-student role
+       → Returns 403 "Access denied". No score or XP recorded.
+
+EC-10  USER DELETION — Self-deletion attempt
+       → POST /api/delete-user returns 403 "Cannot delete your own account".
+
+EC-11  USER DELETION — Deleting last admin
+       → Returns 403 "Cannot delete the last administrator".
+
+EC-12  USER DELETION — User ID does not exist
+       → Supabase delete succeeds silently (no-op). No error returned.
+       [KNOWN GAP — not validated before deletion attempt]
+
+EC-13  AI API — Rate limit exceeded
+       → Returns 429 "Rate limit exceeded. Retry after Ns."
+
+EC-14  AI API — File too large (>5MB)
+       → Returns 400 "File too large".
+
+EC-15  AI API — Invalid file type
+       → Returns 400 with file type rejection message.
+
+EC-16  AI API — LLM returns malformed JSON (no array found)
+       → JSON extraction fails. Returns 500 with parsing error.
+
+EC-17  FILE UPLOAD — File exceeds 50MB
+       → Client-side check (MAX_FILE_SIZE). File rejected before upload.
+       Toast: "File too large. Maximum 50MB."
+
+EC-18  COURSE COMPLETION — No course files exist
+       → Certificate never issues (no files to complete).
+       Student sees 0% progress, no claim button.
+
+EC-19  PARENT LINKING — Invalid QGX ID
+       → Profile query returns null. UI message: "Student not found."
+       No parent_students row created.
+
+EC-20  PARENT DATA VIEW — No children linked
+       → All Monitor tabs show empty state with "Link a student" CTA.
+       No data until at least one child is linked.
+
+EC-21  PASSWORD RESET — /reset-password without token
+       → PASSWORD_RECOVERY event never fires. Reset form not shown.
+       User sees waiting state or is prompted to use forgot-password.
+
+EC-22  PLAGIARISM SCAN — More than 100 submissions
+       → Only first 100 processed. Warning toast: "Showing first 100 submissions."
+
+EC-23  CODE PLAYGROUND — Infinite loop (JavaScript)
+       → 5-second timeout in Web Worker. Displays: "Execution timed out"
+       in output panel. Worker terminated and restarted.
+
+EC-24  CODE PLAYGROUND — Unsupported Python syntax (def, class, import)
+       → Custom error: "Unsupported syntax. Python mode supports basic
+       statements only."
+
+EC-25  QUEST CLAIM — Already claimed
+       → claimed = true. Claim button disabled. XP not double-awarded.
+
+EC-26  FORUM ATTACHMENT — File exceeds 10MB
+       → Client-side check. Rejected before upload.
+
+EC-27  DAILY LOGIN BONUS — Already claimed today
+       → RPC claim_daily_login_xp returns error. Toast: "Already claimed
+       today." No duplicate XP.
+
+EC-28  REALTIME — WebSocket connection drops
+       → Supabase client handles reconnection automatically. UI may show
+       stale data briefly until reconnect.
+
+EC-29  BUILD — Missing environment variables
+       → lib/supabase.ts throws on startup: "Missing Supabase environment
+       variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY".
+
+EC-30  GLOBAL ERROR — Any unhandled page-level exception
+       → app/error.tsx renders. Shows: error message, "Try Again" (reloads
+       component), "Home" (navigates to /).
+
+================================================================================
+END OF DOCUMENT
+================================================================================
+  Total Features Specified:          28
+  Total Acceptance Criteria:        180+
+  Total Functional Requirements:     15
+  Total Non-Functional Requirements: 20
+  Total Edge Cases Documented:       30
+================================================================================

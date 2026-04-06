@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { logActivity } from '@/lib/actions'
 import { useToast } from '@/lib/toast'
@@ -30,9 +30,11 @@ import { MeetingSchedulerModule } from '@/components/modules/MeetingSchedulerMod
 import { PredictiveAlertsModule } from '@/components/modules/PredictiveAlertsModule'
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton'
 
-export default function TeacherDashboard() {
+function TeacherDashboardContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
+  const handledDeepLink = useRef(false)
   const [profile, setProfile]         = useState<Profile | null>(null)
   const [tab, setTab]                 = useState('home')
   const [tests, setTests]             = useState<Test[]>([])
@@ -53,6 +55,14 @@ export default function TeacherDashboard() {
   const [announceSearch, setAnnounceSearch] = useState('')
   const [newAnnounce, setNewAnnounce] = useState<{ title: string; body: string; pinned: boolean; target: 'students' | 'parents' | 'all' }>({ title:'', body:'', pinned:false, target: 'students' })
   const [announceSubmitting, setAnnounceSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (handledDeepLink.current) return
+    const requestedTab = searchParams.get('tab')
+    const allowedTabs = new Set(['home','tests','timetable','courses','assignments','attendance','grades','analytics','quests','calendar','live-classes','announcements','forums','plagiarism','meetings','pred-alerts','messaging','report-card','batch-grades','profile'])
+    if (requestedTab && allowedTabs.has(requestedTab)) setTab(requestedTab)
+    handledDeepLink.current = true
+  }, [searchParams])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -592,5 +602,13 @@ export default function TeacherDashboard() {
         )}
       </div>
     </DashboardLayout>
+  )
+}
+
+export default function TeacherDashboard() {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <TeacherDashboardContent />
+    </Suspense>
   )
 }

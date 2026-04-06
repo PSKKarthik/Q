@@ -84,6 +84,50 @@ function renderMd(text: string) {
 type SortMode = 'hot' | 'new' | 'top'
 type CommentSort = 'newest' | 'oldest' | 'top'
 
+/** Increment quest_progress for every active 'social' quest the student hasn't completed yet */
+async function incrementSocialQuests(studentId: string) {
+  try {
+    const { data: quests } = await supabase
+      .from('quests')
+      .select('id, target_count')
+      .eq('target_type', 'social')
+      .eq('active', true)
+    if (!quests?.length) return
+
+    for (const quest of quests) {
+      const { data: existing } = await supabase
+        .from('quest_progress')
+        .select('id, progress, completed')
+        .eq('student_id', studentId)
+        .eq('quest_id', quest.id)
+        .maybeSingle()
+
+      if (existing?.completed) continue
+
+      const newProgress = (existing?.progress ?? 0) + 1
+      const nowComplete = newProgress >= quest.target_count
+
+      if (existing) {
+        await supabase.from('quest_progress').update({
+          progress: newProgress,
+          completed: nowComplete,
+          completed_at: nowComplete ? new Date().toISOString() : null,
+        }).eq('id', existing.id)
+      } else {
+        await supabase.from('quest_progress').insert({
+          student_id: studentId,
+          quest_id: quest.id,
+          progress: newProgress,
+          completed: nowComplete,
+          completed_at: nowComplete ? new Date().toISOString() : null,
+        })
+      }
+    }
+  } catch {
+    // non-critical — don't block the user action
+  }
+}
+
 /* ── component ───────────────────────────────────────── */
 interface ForumModuleProps { profile: Profile }
 
@@ -307,6 +351,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
         } else {
           toast('▪ +5 XP — New forum post!', 'success')
         }
+        if (profile.role === 'student') incrementSocialQuests(profile.id)
       }
     }
     setPostModal(false)
@@ -485,6 +530,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
         } else {
           toast('◇ +3 XP — Forum comment!', 'success')
         }
+        if (profile.role === 'student') incrementSocialQuests(profile.id)
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to add comment', 'error')

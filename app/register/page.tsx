@@ -130,8 +130,7 @@ export default function RegisterPage() {
                 <div style={{ position: 'relative' }}>
                   <input className="input" type={showPw ? 'text' : 'password'}
                     value={form[k]} onChange={e => upd(k, e.target.value)} style={{ paddingRight: 40 }}
-                    placeholder="Min 8 chars, 1 letter & 1 number" autoComplete="new-password"
-                    required />
+                    placeholder="Min 8 chars, 1 letter & 1 number" autoComplete="new-password" />
                   <button type="button" onClick={() => setShowPw(!showPw)}
                     style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-dim)', padding: 4, display: 'flex', alignItems: 'center' }}
                     aria-label={showPw ? 'Hide password' : 'Show password'}>
@@ -139,10 +138,10 @@ export default function RegisterPage() {
                   </button>
                 </div>
               ) : (
-                <input className="input" type={k === 'email' ? 'email' : 'text'}
+                <input className="input" type={k === 'email' ? 'text' : 'text'}
                   value={form[k]} onChange={e => upd(k, e.target.value)}
                   placeholder={k === 'name' ? 'Full name' : k === 'email' ? 'you@example.com' : k === 'phone' ? '+1 (555) 000-0000' : ''}
-                  required={k !== 'phone'} autoComplete={k === 'name' ? 'name' : k === 'email' ? 'email' : k === 'phone' ? 'tel' : undefined} />
+                  autoComplete={k === 'name' ? 'name' : k === 'email' ? 'email' : k === 'phone' ? 'tel' : undefined} />
               )}
             </div>
           ))}

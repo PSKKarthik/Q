@@ -1,0 +1,93 @@
+%% QGX LMS - UML Class Diagram (Mermaid)
+%% Core domain entities and service components
+classDiagram
+    class User {
+        +UUID id
+        +string email
+        +string passwordHash
+        +DateTime createdAt
+        +DateTime updatedAt
+    }
+
+    class Role {
+        +UUID id
+        +UUID userId
+        +string roleName
+        +DateTime assignedAt
+    }
+
+    class Course {
+        +UUID id
+        +string name
+        +string description
+        +UUID createdBy
+    }
+
+    class Test {
+        +UUID id
+        +UUID courseId
+        +string title
+        +UUID createdBy
+        +DateTime createdAt
+    }
+
+    class Question {
+        +UUID id
+        +UUID testId
+        +string content
+        +string difficulty
+        +string type
+    }
+
+    class Attempt {
+        +UUID id
+        +UUID userId
+        +UUID testId
+        +float score
+        +DateTime submittedAt
+    }
+
+    class Notification {
+        +UUID id
+        +UUID userId
+        +string content
+        +string type
+        +DateTime createdAt
+    }
+
+    class ActivityLog {
+        +UUID id
+        +UUID actorId
+        +string action
+        +string resourceId
+        +DateTime timestamp
+    }
+
+    class AuthService {
+        +login(email, password)
+        +logout(session)
+        +resetPassword(token)
+    }
+
+    class AuthorizationService {
+        +checkPermission(user, action)
+        +enforceRole(user, role)
+    }
+
+    class AIService {
+        +generateQuery(prompt)
+        +validatePrompt(input)
+        +normalizeResponse(output)
+    }
+
+    User "1" --> "many" Role
+    User "1" --> "many" Attempt
+    User "1" --> "many" Notification
+    User "1" --> "many" ActivityLog
+    Course "1" --> "many" Test
+    Test "1" --> "many" Question
+    Test "1" --> "many" Attempt
+
+    AuthService ..> User
+    AuthorizationService ..> Role
+    AIService ..> Question

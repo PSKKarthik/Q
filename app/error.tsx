@@ -1,6 +1,12 @@
 'use client'
+import { useEffect } from 'react'
+import * as Sentry from '@sentry/nextjs'
 
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => {
+    Sentry.captureException(error)
+  }, [error])
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', position: 'relative' }}>
       <div className="grid-bg" />

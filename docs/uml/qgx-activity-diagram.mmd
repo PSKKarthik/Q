@@ -1,0 +1,50 @@
+%% QGX LMS - UML Activity Diagram / Flow Chart (Mermaid)
+%% Core workflow: authentication, role-based navigation, protected actions, and auditing
+flowchart TD
+    A([Start]) --> B[Open QGX Application]
+    B --> C{Has Active Session?}
+
+    C -->|No| D[Show Login Page]
+    D --> E[Enter Email and Password]
+    E --> F{Credentials Valid?}
+    F -->|No| G[Show Authentication Error]
+    G --> D
+    F -->|Yes| H[Create Secure Session]
+
+    C -->|Yes| I[Load Session Context]
+    H --> I
+
+    I --> J[Fetch User Profile and Role]
+    J --> K{Determine Role}
+
+    K -->|Admin| L[Route to Admin Dashboard]
+    K -->|Teacher| M[Route to Teacher Dashboard]
+    K -->|Student| N[Route to Student Dashboard]
+    K -->|Parent| O[Route to Parent Dashboard]
+
+    L --> P[User Initiates Protected Action]
+    M --> P
+    N --> P
+    O --> P
+
+    P --> Q[Validate Request Payload]
+    Q --> R{Payload Valid?}
+    R -->|No| S[Return Validation Error]
+    S --> T[Display Error Message]
+
+    R -->|Yes| U[Check Role Authorization]
+    U --> V{Authorized?}
+    V -->|No| W[Return 403 Forbidden]
+    W --> T
+
+    V -->|Yes| X[Execute Business Logic]
+    X --> Y[Read/Write Data in Supabase]
+    Y --> Z[Record Activity Log]
+    Z --> AA[Send Success Response]
+    AA --> AB[Update UI / Notification]
+
+    T --> AC{Retry Action?}
+    AC -->|Yes| P
+    AC -->|No| AD([End])
+
+    AB --> AD

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import type { Profile } from '@/types'
 import { PageHeader } from '@/components/ui/PageHeader'
 
@@ -18,70 +18,35 @@ export function CodePlaygroundModule({ profile }: Props) {
   const [code, setCode] = useState(TEMPLATES.js.code)
   const [output, setOutput] = useState<string[]>([])
   const [running, setRunning] = useState(false)
-  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const [htmlPreview, setHtmlPreview] = useState('')
 
   const runCode = useCallback(() => {
     setRunning(true)
     setOutput([])
 
     if (lang === 'html') {
-      // Render HTML in iframe
-      if (iframeRef.current) {
-        const doc = iframeRef.current.contentDocument
-        if (doc) {
-          doc.open()
-          doc.write(code)
-          doc.close()
-        }
-      }
+      setHtmlPreview(code)
       setOutput(['HTML rendered in preview below.'])
       setRunning(false)
       return
     }
 
     if (lang === 'js') {
-      // Sandboxed JS execution via Web Worker (no DOM access, 5s timeout)
-      const workerCode = [
-        'self.console = {',
-        '  log: (...args) => self.postMessage({ type: "log", msg: args.map(a => typeof a === "object" ? JSON.stringify(a, null, 2) : String(a)).join(" ") }),',
-        '  error: (...args) => self.postMessage({ type: "error", msg: "Error: " + args.join(" ") }),',
-        '  warn: (...args) => self.postMessage({ type: "log", msg: "Warning: " + args.join(" ") }),',
-        '};',
-        'self.onmessage = (e) => {',
-        '  try { (0, eval)(e.data); }',
-        '  catch (err) { self.postMessage({ type: "error", msg: "Error: " + err.message }); }',
-        '  self.postMessage({ type: "done" });',
-        '};',
-      ].join('\n')
-      const blob = new Blob([workerCode], { type: 'application/javascript' })
-      const url = URL.createObjectURL(blob)
-      const worker = new Worker(url)
       const logs: string[] = []
-      const timeout = setTimeout(() => {
-        worker.terminate()
-        URL.revokeObjectURL(url)
-        setOutput([...logs, 'Error: Execution timed out (possible infinite loop)'])
-        setRunning(false)
-      }, 5000)
-      worker.onmessage = (e) => {
-        if (e.data.type === 'log') logs.push(e.data.msg)
-        if (e.data.type === 'error') logs.push(e.data.msg)
-        if (e.data.type === 'done') {
-          clearTimeout(timeout)
-          worker.terminate()
-          URL.revokeObjectURL(url)
-          setOutput(logs.length ? logs : ['(no output)'])
-          setRunning(false)
-        }
+      const sandboxConsole = {
+        log: (...args: any[]) => logs.push(args.map((a: any) => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ')),
+        error: (...args: any[]) => logs.push('Error: ' + args.join(' ')),
+        warn: (...args: any[]) => logs.push('Warning: ' + args.join(' ')),
+        info: (...args: any[]) => logs.push(args.map((a: any) => String(a)).join(' ')),
       }
-      worker.onerror = () => {
-        clearTimeout(timeout)
-        worker.terminate()
-        URL.revokeObjectURL(url)
-        setOutput([...logs, 'Error: Execution failed'])
-        setRunning(false)
+      try {
+        // eslint-disable-next-line no-new-func
+        new Function('console', code)(sandboxConsole)
+      } catch (e: any) {
+        logs.push(`Error: ${e.message}`)
       }
-      worker.postMessage(code)
+      setOutput(logs.length ? logs : ['(no output)'])
+      setRunning(false)
       return
     }
 
@@ -239,6 +204,7 @@ export function CodePlaygroundModule({ profile }: Props) {
     setLang(newLang)
     setCode(TEMPLATES[newLang].code)
     setOutput([])
+    setHtmlPreview('')
   }
 
   return (
@@ -294,7 +260,7 @@ export function CodePlaygroundModule({ profile }: Props) {
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginBottom: 4 }}>OUTPUT</div>
           {lang === 'html' ? (
             <iframe
-              ref={iframeRef}
+              srcDoc={htmlPreview}
               sandbox="allow-scripts"
               style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 8, background: '#fff' }}
             />

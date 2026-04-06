@@ -21,10 +21,18 @@ export async function pushNotification(
   message: string,
   type: string
 ): Promise<{ error: string | null }> {
-  void userId
-  void message
-  void type
-  return { error: null }
+  if (!userId || !message) return { error: null }
+  try {
+    const { error } = await supabase.from('notifications').insert({
+      user_id: userId,
+      message,
+      type,
+      read: false,
+    })
+    return { error: error?.message || null }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Notification failed' }
+  }
 }
 
 /** Batch-insert notifications for multiple users at once */

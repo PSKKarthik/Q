@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { Profile, Test, Attempt, Course, Assignment, Submission, TimetableSlot, Announcement } from '@/types'
 import { getLevel, DEFAULT_XP_LEVELS, type XPLevel } from '@/lib/utils'
@@ -30,8 +30,10 @@ import { CollaborationModule } from '@/components/modules/CollaborationModule'
 import { CodePlaygroundModule } from '@/components/modules/CodePlaygroundModule'
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton'
 
-export default function StudentDashboard() {
+function StudentDashboardContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const handledDeepLink = useRef(false)
   const [profile, setProfile]         = useState<Profile | null>(null)
   const [tab, setTab]                 = useState('home')
   const [tests, setTests]             = useState<Test[]>([])
@@ -50,6 +52,14 @@ export default function StudentDashboard() {
   const [isExamMode, setIsExamMode]   = useState(false)
   const channelRefs = useRef<any[]>([])
   const [isOffline, setIsOffline]   = useState(false)
+
+  useEffect(() => {
+    if (handledDeepLink.current) return
+    const requestedTab = searchParams.get('tab')
+    const allowedTabs = new Set(['home','tests','timetable','courses','assignments','attendance','grades','xp','forums','calendar','messaging','report-card','my-analytics','certificates','ai-tutor','live-classes','quests','collab','code','profile'])
+    if (requestedTab && allowedTabs.has(requestedTab)) setTab(requestedTab)
+    handledDeepLink.current = true
+  }, [searchParams])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -140,7 +150,7 @@ export default function StudentDashboard() {
         (payload) => setAnnouncements(prev => [payload.new as Announcement, ...prev]))
       .subscribe()
 
-    const ch2 = supabase.channel(`student-leaderboard-${p.id}`)
+    const ch2 = supabase.channel(`student-leaderboard-${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: 'role=eq.student' }, () => {
         supabase.from('profiles').select('*').eq('role', 'student').then(({ data }) => {
           if (data) setAllStudents(data as Profile[])
@@ -383,5 +393,13 @@ export default function StudentDashboard() {
         )}
       </div>
     </DashboardLayout>
+  )
+}
+
+export default function StudentDashboard() {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <StudentDashboardContent />
+    </Suspense>
   )
 }

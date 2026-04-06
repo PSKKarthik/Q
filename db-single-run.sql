@@ -7,7 +7,7 @@
 -- STORAGE BUCKET (for course files, attachments, forum uploads)
 -- ============================================================
 insert into storage.buckets (id, name, public)
-  values ('course-files', 'course-files', false)
+  values ('course-files', 'course-files', true)
   on conflict (id) do update set public = false;
 
 -- Allow authenticated users to upload files
@@ -1780,7 +1780,7 @@ create trigger quests_test_attempt_trigger
 create or replace function public.update_quest_on_assignment_submit()
 returns trigger as $$
 begin
-  if new.status = 'submitted' then
+  if new.is_draft = false then
     update quest_progress
     set progress = progress + 1,
         completed = (progress + 1) >= (select target_count from quests where id = quest_progress.quest_id and target_type = 'course'),

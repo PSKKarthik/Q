@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const MAX_XP_PER_TEST = 500
 
@@ -23,6 +24,9 @@ export async function POST(req: Request) {
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { success: rateLimitOk } = await checkRateLimit(`submit-test:${user.id}`)
+  if (!rateLimitOk) return NextResponse.json({ error: 'Too many requests. Please wait a minute.' }, { status: 429 })
 
   const userId = user.id
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single()

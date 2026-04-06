@@ -36,17 +36,30 @@ interface TeacherCourseProps {
 }
 
 type SortKey = 'newest' | 'popular' | 'rated'
-type FilePreview = { file: CourseFile; type: 'pdf' | 'image' | 'video' | 'other' } | null
+type PreviewType = 'pdf' | 'image' | 'video' | 'youtube' | 'document' | 'other'
+type FilePreview = { file: CourseFile; type: PreviewType } | null
 
 // ── HELPERS ────────────────────────────────────────────────
 const SUBJECTS = ['All', 'Mathematics', 'Science', 'English', 'History', 'Computer Science', 'Art', 'Music', 'Physics', 'Chemistry', 'Biology', 'Other']
 
-function getPreviewType(file: CourseFile): 'pdf' | 'image' | 'video' | 'other' {
+const YOUTUBE_REGEX = /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/
+
+function extractYouTubeId(url: string): string | null {
+  const m = url.match(YOUTUBE_REGEX)
+  return m ? m[1] : null
+}
+
+function getPreviewType(file: CourseFile): PreviewType {
   const name = (file.name || '').toLowerCase()
   const type = (file.type || '').toLowerCase()
+  const url = (file.url || '').toLowerCase()
+  // YouTube links (stored as url or in name)
+  if (YOUTUBE_REGEX.test(url) || YOUTUBE_REGEX.test(file.url || '')) return 'youtube'
   if (type.includes('pdf') || name.endsWith('.pdf')) return 'pdf'
   if (type.includes('image') || /\.(jpg|jpeg|png|gif|webp)$/.test(name)) return 'image'
   if (type.includes('video') || /\.(mp4|mov|webm)$/.test(name)) return 'video'
+  if (/\.(docx?|pptx?|xlsx?)$/.test(name)) return 'document'
+  if (type.includes('word') || type.includes('presentation') || type.includes('powerpoint') || type.includes('spreadsheet') || type.includes('excel')) return 'document'
   return 'other'
 }
 
@@ -322,54 +335,111 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
       sections[sec].push(f)
     })
 
+    // Inline preview renderer
+    const renderInlinePreview = (file: CourseFile, pType: PreviewType) => {
+      if (!preview || preview.file.id !== file.id) return null
+      return (
+        <div className="course-inline-preview">
+          <div className="course-inline-preview-header">
+            <span className="course-inline-preview-title">
+              <Icon name="search" size={12} /> {file.name}
+            </span>
+            <button className="btn btn-xs course-inline-preview-close" onClick={() => setPreview(null)}>✕ Close</button>
+          </div>
+          <div className="course-inline-preview-body">
+            {pType === 'youtube' && (() => {
+              const ytId = extractYouTubeId(file.url || '')
+              return ytId ? (
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${ytId}?rel=0`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="course-inline-preview-iframe"
+                  style={{ aspectRatio: '16/9' }}
+                />
+              ) : (
+                <div className="course-inline-preview-fallback">
+                  <div style={{ fontSize: 36, marginBottom: 12 }}>▶</div>
+                  <div>Could not extract YouTube video ID</div>
+                  {file.url && <a href={file.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-xs" style={{ marginTop: 12, textDecoration: 'none' }}>Open on YouTube</a>}
+                </div>
+              )
+            })()}
+            {pType === 'pdf' && file.url && (
+              <iframe src={file.url} className="course-inline-preview-iframe course-inline-preview-tall" />
+            )}
+            {pType === 'image' && file.url && (
+              <Image src={file.url} alt={file.name} width={1200} height={800} unoptimized
+                className="course-inline-preview-tall"
+                style={{ width: '100%', objectFit: 'contain', borderRadius: 8 }} />
+            )}
+            {pType === 'video' && file.url && (
+              <div>
+                <video
+                  src={file.url}
+                  controls
+                  className="course-inline-preview-tall"
+                  style={{ width: '100%', borderRadius: 8 }}
+                  onTimeUpdate={(e) => {
+                    const vid = e.currentTarget
+                    if (vid.duration && vid.currentTime / vid.duration >= 0.8 && !isFileCompleted(file.id)) {
+                      supabase.from('course_progress').upsert({ student_id: profile.id, course_id: activeCourse?.id, file_id: file.id }).then(() => {
+                        setProgress(prev => prev.some(p => p.file_id === file.id) ? prev : [...prev, { id: '', student_id: profile.id, course_id: activeCourse?.id || '', file_id: file.id, completed_at: new Date().toISOString() } as CourseProgress])
+                      })
+                    }
+                  }}
+                />
+                {isFileCompleted(file.id) ? (
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--success)', textAlign: 'center', marginTop: 8 }}>✓ Watched</div>
+                ) : (
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', textAlign: 'center', marginTop: 8 }}>Watch 80% to mark as complete</div>
+                )}
+              </div>
+            )}
+            {pType === 'document' && file.url && (
+              <div>
+                <iframe
+                  src={`https://docs.google.com/gview?url=${encodeURIComponent(file.url)}&embedded=true`}
+                  className="course-inline-preview-iframe course-inline-preview-tall"
+                  onLoad={(e) => {
+                    // Google Docs viewer may redirect to a blank page on failure — show fallback
+                    try {
+                      const f = e.currentTarget
+                      if (f.contentDocument?.title === '') f.style.display = 'none'
+                    } catch { /* cross-origin — viewer loaded, which means success */ }
+                  }}
+                />
+                <div className="course-doc-download-bar">
+                  <Icon name="download" size={11} />
+                  <span>Can&apos;t see the preview?</span>
+                  <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name}
+                    className="btn btn-xs btn-primary" style={{ textDecoration: 'none' }}>
+                    Download File
+                  </a>
+                </div>
+              </div>
+            )}
+            {pType === 'other' && (
+              <div className="course-inline-preview-fallback">
+                <div style={{ fontSize: 48, marginBottom: 16 }}>{getFileIcon(file.type)}</div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginBottom: 16 }}>
+                  Preview not available for this file type
+                </div>
+                {file.url && (
+                  <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name}
+                    className="btn btn-primary btn-sm" style={{ textDecoration: 'none' }}>
+                    <Icon name="download" size={12} /> Download
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="course-detail fade-up">
-        {/* Preview Modal */}
-        <Modal open={!!preview} onClose={() => setPreview(null)} title={preview?.file.name || ''} width={800}>
-          {preview?.type === 'pdf' && preview.file.url && (
-            <iframe src={preview.file.url} style={{ width: '100%', height: '70vh', border: 'none', borderRadius: 8 }} />
-          )}
-          {preview?.type === 'image' && preview.file.url && (
-            <Image src={preview.file.url} alt={preview.file.name} width={1200} height={800} unoptimized style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 8 }} />
-          )}
-          {preview?.type === 'video' && preview.file.url && (
-            <div>
-              <video
-                src={preview.file.url}
-                controls
-                style={{ width: '100%', maxHeight: '70vh', borderRadius: 8 }}
-                onTimeUpdate={(e) => {
-                  const vid = e.currentTarget
-                  if (vid.duration && vid.currentTime / vid.duration >= 0.8 && !isFileCompleted(preview.file.id)) {
-                    // Mark as completed when 80% watched
-                    supabase.from('course_progress').upsert({ student_id: profile.id, course_id: activeCourse?.id, file_id: preview.file.id }).then(() => {
-                      setProgress(prev => prev.some(p => p.file_id === preview.file.id) ? prev : [...prev, { id: '', student_id: profile.id, course_id: activeCourse?.id || '', file_id: preview.file.id, completed_at: new Date().toISOString() } as CourseProgress])
-                    })
-                  }
-                }}
-              />
-              {isFileCompleted(preview.file.id) ? (
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--success)', textAlign: 'center', marginTop: 8 }}>✓ Watched</div>
-              ) : (
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', textAlign: 'center', marginTop: 8 }}>Watch 80% to mark as complete</div>
-              )}
-            </div>
-          )}
-          {preview?.type === 'other' && (
-            <div style={{ textAlign: 'center', padding: 40 }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>{getFileIcon(preview.file.type)}</div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginBottom: 16 }}>
-                Preview not available for this file type
-              </div>
-              {preview.file.url && (
-                <a href={preview.file.url} target="_blank" rel="noopener noreferrer" download={preview.file.name}
-                  className="btn btn-primary btn-sm" style={{ textDecoration: 'none' }}>
-                  <Icon name="download" size={12} /> Download
-                </a>
-              )}
-            </div>
-          )}
-        </Modal>
 
         {/* Rate Modal */}
         <Modal open={rateModal} onClose={() => setRateModal(false)} title="Rate This Course">
@@ -448,38 +518,43 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
                 const completed = isFileCompleted(f.id)
                 const pType = getPreviewType(f)
                 const canPreview = pType !== 'other'
+                const isActive = preview?.file.id === f.id
                 return (
-                  <div key={f.id} className={`course-file-card ${completed ? 'course-file-done' : ''}`}>
-                    <div className="course-file-left">
-                      {isEnrolled && (
-                        <button className={`course-file-check ${completed ? 'checked' : ''}`} onClick={() => toggleFileComplete(f)}
-                          title={completed ? 'Mark incomplete' : 'Mark complete'}>
-                          {completed ? <Icon name="check" size={12} /> : <span style={{ opacity: 0.3 }}>○</span>}
-                        </button>
-                      )}
-                      <span className="course-file-icon">{getFileIcon(f.type)}</span>
-                      <div className="course-file-info">
-                        <div className="course-file-name">{f.name}</div>
-                        <div className="course-file-meta">
-                          {formatSize(f.size || 0)}{f.size ? ' · ' : ''}
-                          {new Date(f.uploaded_at || Date.now()).toLocaleDateString()}
+                  <div key={f.id}>
+                    <div className={`course-file-card ${completed ? 'course-file-done' : ''} ${isActive ? 'course-file-active' : ''}`}>
+                      <div className="course-file-left">
+                        {isEnrolled && (
+                          <button className={`course-file-check ${completed ? 'checked' : ''}`} onClick={() => toggleFileComplete(f)}
+                            title={completed ? 'Mark incomplete' : 'Mark complete'}>
+                            {completed ? <Icon name="check" size={12} /> : <span style={{ opacity: 0.3 }}>○</span>}
+                          </button>
+                        )}
+                        <span className="course-file-icon">{pType === 'youtube' ? '▶' : getFileIcon(f.type)}</span>
+                        <div className="course-file-info">
+                          <div className="course-file-name">{f.name}</div>
+                          <div className="course-file-meta">
+                            {pType === 'youtube' ? 'YouTube' : formatSize(f.size || 0)}{(f.size || pType === 'youtube') ? ' · ' : ''}
+                            {new Date(f.uploaded_at || Date.now()).toLocaleDateString()}
+                          </div>
                         </div>
                       </div>
+                      <div className="course-file-actions">
+                        {canPreview && f.url && (
+                          <button className={`btn btn-xs ${isActive ? 'btn-primary' : ''}`}
+                            onClick={() => setPreview(isActive ? null : { file: f, type: pType })}
+                            style={!isActive ? { borderColor: 'var(--fg-dim)', color: 'var(--fg-dim)' } : {}}>
+                            <Icon name={isActive ? 'minimize-2' : 'search'} size={10} /> {isActive ? 'Close' : 'Preview'}
+                          </button>
+                        )}
+                        {f.url && pType !== 'youtube' && (
+                          <a href={f.url} target="_blank" rel="noopener noreferrer" download={f.name}
+                            className="btn btn-xs" style={{ borderColor: 'var(--success)', color: 'var(--success)', textDecoration: 'none' }}>
+                            <Icon name="download" size={10} />
+                          </a>
+                        )}
+                      </div>
                     </div>
-                    <div className="course-file-actions">
-                      {canPreview && f.url && (
-                        <button className="btn btn-xs" onClick={() => setPreview({ file: f, type: pType })}
-                          style={{ borderColor: 'var(--fg-dim)', color: 'var(--fg-dim)' }}>
-                          <Icon name="search" size={10} /> Preview
-                        </button>
-                      )}
-                      {f.url && (
-                        <a href={f.url} target="_blank" rel="noopener noreferrer" download={f.name}
-                          className="btn btn-xs" style={{ borderColor: 'var(--success)', color: 'var(--success)', textDecoration: 'none' }}>
-                          <Icon name="download" size={10} />
-                        </a>
-                      )}
-                    </div>
+                    {renderInlinePreview(f, pType)}
                   </div>
                 )
               })}

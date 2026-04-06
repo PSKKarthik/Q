@@ -1,0 +1,730 @@
+ABSTRACT
+QGX (Query Gen X) is a cloud-ready, AI-enabled Learning Management System developed to solve practical academic management challenges in schools and colleges. Many institutions currently depend on disconnected tools for attendance, announcements, assessments, and student tracking, which causes delayed decision-making and repeated manual work. QGX addresses this by providing a unified, role-based platform with secure authentication, structured dashboards, and integrated educational workflows. The system is built with Next.js 14, TypeScript, Supabase (Auth + PostgreSQL + Realtime), and GROQ AI APIs, offering both modern usability and maintainable architecture.
+
+The project supports four primary roles: Admin, Teacher, Student, and Parent. Admin users can perform governance tasks such as user lifecycle management, activity monitoring, and announcements. Teachers can manage assessment operations and AI-assisted content generation. Students receive a guided academic interface for participation and progress tracking. Parents can monitor linked student outcomes. In addition, the platform includes password recovery, audit logging, and Progressive Web App (PWA) features.
+
+From a software engineering perspective, QGX demonstrates full lifecycle execution: requirement analysis, feasibility assessment, architecture and module design, implementation, testing, and deployment-readiness validation. The final system offers a balanced outcome: strong usability for non-technical users, technical correctness for evaluators, and extendability for future research or institutional deployment.
+
+LIST OF FIGURES AND TABLES
+Suggested Figures
+Figure 1.1: Existing Academic Workflow Challenges
+Figure 1.2: Proposed QGX Unified LMS Model
+Figure 3.1: Use Case Diagram (All Actors)
+Figure 3.2: Authentication and Authorization Flow
+Figure 3.3: AI Query Request Lifecycle
+Figure 3.4: Batch User Creation Activity Flow
+Figure 3.5: Sequence Diagram for Protected API Request
+Figure 3.6: Class Diagram of Core Entities
+Figure 3.7: Component Diagram (Frontend, API, DB, AI)
+Figure 4.1: Layered Architecture Design
+Figure 4.2: Data Flow in Role-Based Dashboard Operation
+Figure 4.3: Security Checkpoints in Request Pipeline
+Figure 5.1: Module Integration Overview
+Figure 5.2: Deployment View (Vercel + Supabase)
+Figure 7.1: Landing, Login, and Registration Screens
+Figure 7.2: Admin Dashboard and Monitoring Screens
+Figure 7.3: Teacher Operational Screens
+Figure 7.4: Student Learning and Interaction Screens
+Figure 7.5: Notification and Activity Log Screens
+
+Suggested Tables
+Table 2.1: Functional Requirement Matrix
+Table 2.2: Non-Functional Requirement Metrics
+Table 2.3: Hardware Requirement Specification
+Table 2.4: Software Requirement Specification
+Table 2.5: Feasibility Study Summary
+Table 4.1: Module Responsibility Mapping
+Table 4.2: Database Entity and Attribute Summary
+Table 5.1: Technology Stack Justification
+Table 5.2: API Endpoint Classification
+Table 6.1: Unit Testing Summary
+Table 6.2: Integration Testing Summary
+Table 6.3: End-to-End Testing Summary
+Table 7.1: Objective vs Outcome Evaluation
+
+INTRODUCTION
+Digital transformation in education is no longer optional. Institutions now require systems that can support secure data handling, role-specific workflows, and real-time visibility without creating complexity for users. Traditional fragmented ecosystems fail to deliver this consistency, especially when the number of users and operations grows. QGX was conceptualized to solve this gap by combining modern full-stack web engineering with practical academic workflows.
+
+The project is intentionally designed for clarity, maintainability, and operational realism. Instead of over-engineering, QGX focuses on foundational institutional needs: secure user access, role-based dashboards, workflow automation, activity traceability, and AI-assisted productivity support.
+
+1.1 Purpose of the System
+The purpose of QGX is to provide a centralized and secure digital platform that simplifies teaching, learning, and academic administration.
+
+Detailed purpose points:
+1. Replace disconnected educational tools with one integrated system.
+2. Minimize repetitive manual operations in administration and communication.
+3. Support teachers with AI-assisted workflow acceleration.
+4. Improve student interaction quality and visibility of academic progress.
+5. Provide audit-friendly transparency for administrators.
+6. Improve parent visibility of student-level outcomes.
+
+1.2 Scope of the System
+QGX covers major web-based LMS operations for institutional use. It includes user onboarding, secure role-aware access, operational dashboards, AI-assisted features, and quality assurance support.
+
+In-scope:
+1. Registration, login, logout, forgot password, and reset password.
+2. Role-specific dashboards and protected module access.
+3. Admin-level user operations including batch user creation.
+4. AI query endpoint integration via secured backend route.
+5. Notification and announcement workflows.
+6. Activity logging and monitoring.
+7. PWA installability and basic offline fallback.
+8. Unit, integration, and E2E testing support.
+
+Out-of-scope for current phase:
+1. Full institutional ERP integration.
+2. Payment and billing modules.
+3. Native Android and iOS applications.
+4. Deep analytics and ML-driven adaptive recommendation engine.
+
+1.3 Existing System and Limitations
+In many institutions, operations are split across spreadsheets, messaging groups, isolated portals, and email threads. This creates poor synchronization, weak accountability, and high manual correction effort. Teachers and administrators often spend more time coordinating operations than improving educational quality.
+
+Limitations observed:
+1. Duplicate data entry and inconsistent updates.
+2. Delayed communication between stakeholders.
+3. Insufficient role-based access protection.
+4. Weak traceability of critical operations.
+5. Poor mobile usability and no offline fallback.
+6. No practical AI assistance in everyday teaching operations.
+
+1.4 Proposed System and Advantages
+QGX proposes a role-driven, secure, and modular LMS architecture. The platform centralizes core workflows and adds controlled AI support while maintaining data governance and usability.
+
+Advantages:
+1. Centralized source of truth for operations and users.
+2. Faster execution of routine institutional workflows.
+3. Reduced operational errors through validation-first APIs.
+4. Stronger security through layered authentication and authorization.
+5. Better user experience across desktop and mobile.
+6. Improved maintainability through modular and typed codebase.
+7. Real-time visibility via notifications and activity logs.
+
+REQUIREMENT ANALYSIS
+Requirement analysis was performed by mapping stakeholder expectations to implementable and testable software capabilities. This chapter defines what features are required, how quality should be measured, and whether the system is viable technically and operationally.
+
+2.1 Functional Requirements
+Functional requirements define mandatory behavior the system must implement.
+
+Core functional requirements:
+1. User authentication and secure session establishment.
+2. Role determination after login and role-based route access.
+3. Dashboard rendering based on user privileges.
+4. User management including admin-side batch creation.
+5. Password recovery and credential update flow.
+6. AI endpoint integration for query/content support.
+7. Notification and announcement delivery.
+8. Logging of critical activities for audit and analysis.
+9. Structured error responses and user feedback.
+
+Functional quality expectations:
+1. Feature consistency across roles.
+2. Predictable request-response behavior.
+3. Proper rejection of unauthorized operations.
+
+2.2 Non-Functional Requirements
+Non-functional requirements establish quality targets and deployment readiness standards.
+
+Key non-functional goals:
+1. Performance: responsive navigation and acceptable API response times.
+2. Security: strong access control and protected request handling.
+3. Reliability: recoverable error handling and stable operation.
+4. Usability: low learning curve for users with varied technical skills.
+5. Maintainability: modular architecture and readable code structure.
+6. Scalability: support for growth in users and records.
+7. Compatibility: smooth behavior on modern browsers and device sizes.
+
+2.3 Hardware Requirements
+The platform is browser-based and supports low to moderate client hardware environments.
+
+Development hardware (recommended):
+1. CPU: Intel i5/Ryzen 5 or equivalent and above.
+2. RAM: 8 GB minimum, 16 GB preferred for testing tools.
+3. Storage: 10 GB+ available space.
+4. Network: stable internet for package installation and cloud access.
+
+End-user hardware:
+1. Desktop/laptop or smartphone with modern browser.
+2. Reliable internet for full feature usage.
+
+2.4 Software Requirements
+Software prerequisites ensure reproducible setup and runtime stability.
+
+Required stack:
+1. OS: Windows/Linux/macOS.
+2. Runtime: Node.js 18+.
+3. Package manager: npm.
+4. Framework: Next.js 14.
+5. Language: TypeScript 5.
+6. Backend services: Supabase Auth, PostgreSQL, Realtime.
+7. AI provider access: GROQ API key.
+8. Testing tools: Jest, React Testing Library, Playwright.
+9. Quality checks: ESLint and TypeScript compile checks.
+
+2.5 Feasibility Study
+Feasibility determines whether QGX can be built, operated, and maintained under realistic constraints.
+
+Technical feasibility:
+The selected technologies are mature, documented, and proven in production-grade web systems.
+
+Economic feasibility:
+Development and pilot deployment are possible on low-cost/free service tiers.
+
+Operational feasibility:
+Role-specific interfaces align directly with institutional responsibilities, reducing adoption friction.
+
+Schedule feasibility:
+Modular architecture supports phased development with iterative testing.
+
+Risk feasibility:
+Primary risks (security misuse, unstable API behavior, incorrect role access) are mitigated through validation, logging, and test automation.
+
+SYSTEM ANALYSIS
+3.1 Introduction
+System analysis converts requirements into practical interaction models. It identifies user roles, process dependencies, and control points needed for secure and reliable operation.
+
+3.2 System Overview
+QGX uses a unified full-stack model where frontend and backend logic are hosted within one Next.js project. Supabase provides authentication and data persistence. AI calls are routed through backend APIs to enforce input control and centralized policy handling.
+
+System overview points:
+1. Single codebase for UI and API operations.
+2. Middleware-based protected access.
+3. Role-specific dashboard experiences.
+4. Centralized data and logging model.
+
+3.2.1 User Registration and Authentication
+Authentication establishes identity and controls access boundaries for all protected operations.
+
+Flow:
+1. User submits login or registration credentials.
+2. Credentials are validated by auth service.
+3. Session context is generated and maintained.
+4. Middleware guards private routes.
+5. Logout invalidates active session.
+
+Engineering focus:
+1. Secure credential path handling.
+2. Reliable session continuity.
+3. Clear feedback for failed attempts.
+
+3.2.2 Role-Based Dashboard and Navigation
+The dashboard system ensures users see only modules relevant to their responsibilities.
+
+Role-level behavior:
+1. Admin: governance and operational monitoring.
+2. Teacher: assessment and teaching workflows.
+3. Student: participation and progress interaction.
+4. Parent: visibility and monitoring.
+
+Benefits:
+1. Improved usability.
+2. Better security boundaries.
+3. Reduced interface clutter.
+
+3.2.3 AI Query Generation and Processing
+AI support is mediated through backend APIs for control and consistency.
+
+Processing pipeline:
+1. User submits a prompt.
+2. Request payload is validated.
+3. Backend invokes AI model API.
+4. Response is normalized and sanitized.
+5. Structured output is delivered to UI.
+
+3.2.4 Batch User Creation Workflow
+Batch user creation enables efficient onboarding in high-volume scenarios.
+
+Workflow details:
+1. Admin submits multi-user data.
+2. Backend validates structure and duplicates.
+3. Valid entries are persisted.
+4. Invalid entries are returned with reasons.
+5. Admin can correct failed rows and retry.
+
+3.2.5 Activity Logs and Admin Monitoring
+Every critical operation is audit-relevant in institutional systems.
+
+Activity log value:
+1. Tracks who did what and when.
+2. Supports compliance and accountability.
+3. Helps identify misuse and operational bottlenecks.
+
+3.2.6 Password Recovery and Account Security
+Recovery flows maintain continuity while preserving access safety.
+
+Security points:
+1. Tokenized password reset flow.
+2. Controlled reset endpoints.
+3. Validation on new credential update.
+
+3.2.7 PWA and Offline Support
+PWA support improves reach in variable connectivity conditions.
+
+Practical effects:
+1. Installable app-like usage.
+2. Faster revisit experience.
+3. Fallback content for limited offline scenarios.
+
+3.2.8 Settings and Profile Management
+Profile settings provide personalization while reducing admin dependency for basic updates.
+
+Supported operations:
+1. Profile information updates.
+2. Visual personalization.
+3. Preference management.
+
+3.2.9 Error Handling and Reliability
+Reliability depends on clear failure handling across UI and API layers.
+
+Reliability practices:
+1. Input validation at boundaries.
+2. Standardized error payloads.
+3. UI fallback/error screens.
+4. Predictable retry/recovery messaging.
+
+3.3 Actors of the System
+Primary actors:
+1. Admin
+2. Teacher
+3. Student
+4. Parent
+
+Secondary actors:
+1. Supabase service components.
+2. External AI model provider.
+
+3.4 Use Case Diagram and Description
+Use cases map business expectations to system behavior.
+
+Major use cases:
+1. Authenticate and access role dashboard.
+2. Manage users and operational records.
+3. Generate AI-assisted content.
+4. Execute role-specific workflows.
+5. Recover account and secure access.
+
+3.4.1 Actors
+Each actor has bounded capabilities and cannot access restricted operations outside policy limits.
+
+3.4.2 Algorithm and Flowcharts
+Recommended flowcharts:
+1. Authentication and route access decision flow.
+2. API request validation and execution flow.
+3. Batch creation with failure branch handling.
+4. Error handling and retry logic flow.
+
+3.4.3 Use Case Diagram
+The use case diagram should include actors, system boundaries, dependency paths, and permission checks.
+
+3.5 Activity Diagram
+Activity diagrams should represent user actions, decision branches, success/failure states, and endpoint outcomes.
+
+3.6 Sequence Diagram
+Sequence diagrams should show request chronology between UI, middleware, API routes, data services, and AI service.
+
+3.7 Class Diagram
+Core classes/entities include User, Role, Course, Test, Question, Attempt, Notification, and ActivityLog.
+
+3.8 Component Diagram
+The component diagram should show page components, API modules, auth middleware, database clients, and AI integration adapters.
+
+SYSTEM DESIGN
+4.1 Introduction
+System design defines structure, interfaces, and responsibilities for implementation. It ensures each functional requirement maps to a clear technical unit.
+
+4.2 System Architecture
+QGX follows layered architecture for clean separation of concerns.
+
+Layers:
+1. Presentation Layer: pages, forms, dashboard widgets, UI components.
+2. Application Layer: validation, business logic, API routes.
+3. Data/Service Layer: Supabase services and AI integrations.
+
+Design benefits:
+1. Easier testing and debugging.
+2. Reduced cross-layer coupling.
+3. Better long-term extensibility.
+
+4.3 System Modules
+Modules in QGX:
+1. Authentication Module
+2. Authorization Module
+3. Dashboard Module
+4. User Management Module
+5. AI API Module
+6. Notification Module
+7. Activity Log Module
+8. PWA Module
+9. Error Recovery Module
+
+Module design approach:
+1. Clear boundaries.
+2. Reusable utilities.
+3. Consistent input/output contracts.
+
+4.4 Data Flow Description
+Standard request lifecycle:
+1. User action in UI.
+2. API request generated.
+3. Session and role checks.
+4. Payload validation.
+5. Business logic execution.
+6. DB/AI service call.
+7. Structured response to UI.
+
+4.5 Database Design
+The database is relational and designed for identity control, workflow operations, and traceability.
+
+Design structure:
+1. Identity tables (users, roles, mapping).
+2. Academic operation tables (tests, questions, attempts).
+3. Communication tables (announcements, notifications).
+4. Governance tables (activity logs).
+
+Design principles:
+1. Referential integrity.
+2. Timestamp tracking.
+3. Policy-based access control.
+
+4.6 Security Design
+Security is implemented in layered form rather than single-point protection.
+
+Security controls:
+1. Authentication at entry points.
+2. Role checks in routes and APIs.
+3. Input sanitization and validation.
+4. Restriction of critical operations.
+5. Recovery flow protection.
+6. Audit logging for sensitive actions.
+
+4.7 AI-Assisted Workflow and User Experience Design
+AI is integrated as controlled assistance and not as unrestricted automation.
+
+Design priorities:
+1. User intent capture before AI invocation.
+2. Backend mediation for safety and consistency.
+3. Structured and readable output format.
+4. Error transparency and fallback behavior.
+5. Mobile-responsive and accessible interfaces.
+
+IMPLEMENTATION
+5.1 Introduction
+Implementation followed phased modular delivery with frequent testing. This reduced integration risk and improved debugging efficiency.
+
+5.2 Technologies Used
+Technology selection was based on production readiness, developer productivity, and support ecosystem.
+
+5.2.1 Backend Technologies
+1. Next.js API routes.
+2. Supabase authentication and PostgreSQL.
+3. Shared server utilities for validation and policy checks.
+
+5.2.2 Frontend Technologies
+1. Next.js App Router.
+2. React component architecture.
+3. TypeScript strict typing.
+4. Reusable module-based UI composition.
+
+5.2.3 AI and NLP Technologies
+1. GROQ model integration via backend API.
+2. Input-validated prompt processing.
+3. Response normalization for UI display.
+
+5.2.4 Testing and QA Tooling
+1. Jest for logic-level testing.
+2. React Testing Library for component behavior.
+3. Playwright for end-to-end workflows.
+4. ESLint and TypeScript checks for code quality.
+
+5.3 System Implementation Overview
+Implementation phases:
+1. Project initialization and structure setup.
+2. Authentication and protected routing.
+3. Role-based dashboard development.
+4. Admin and user lifecycle modules.
+5. AI route integration.
+6. Logging and notifications.
+7. PWA and offline setup.
+8. Testing, bug fixing, and stabilization.
+
+5.4 Module Implementation
+5.4.1 Authentication Module
+Handles secure user sign-in, sign-up, sign-out, forgot-password, and reset-password flows.
+
+Key points:
+1. Session persistence support.
+2. Middleware-based route protection.
+3. Safe failure handling and messaging.
+
+5.4.2 Authorization and Role Management Module
+Enforces privilege boundaries at both frontend and backend levels.
+
+Key points:
+1. Role-aware dashboard rendering.
+2. Role checks before critical API actions.
+3. Blocking unauthorized operations.
+
+5.4.3 AI API Module
+Provides controlled AI interaction for educational query assistance.
+
+Key points:
+1. Payload validation.
+2. Managed model invocation.
+3. Standardized output and error handling.
+
+5.4.4 Batch User Management Module
+Supports high-volume admin onboarding tasks.
+
+Key points:
+1. Bulk input handling.
+2. Record-level validation and feedback.
+3. Retry support for failed records.
+
+5.4.5 Dashboard and Navigation Module
+Defines role-centric information architecture.
+
+Key points:
+1. Dynamic menu based on permissions.
+2. Focused workflow entry points.
+3. Consistent layout behavior.
+
+5.4.6 Notification and Toast Module
+Improves operational awareness and feedback.
+
+Key points:
+1. Action result notifications.
+2. Alert surfacing for important events.
+3. Unified status messaging patterns.
+
+5.4.7 PWA and Service Worker Module
+Delivers app-like usability and fallback behavior.
+
+Key points:
+1. Manifest and icon setup.
+2. Service worker integration.
+3. Offline fallback page.
+
+5.4.8 Error and Recovery Module
+Ensures failure conditions are controlled and understandable.
+
+Key points:
+1. API error standardization.
+2. UI fallback screens.
+3. Guided retry behavior.
+
+5.5 Core Processing Algorithm
+The system follows a validation-first and policy-first request model.
+
+5.5.1 API Layer and Request Pipeline
+Steps:
+1. Receive request.
+2. Authenticate session.
+3. Authorize role.
+4. Validate payload.
+5. Execute logic.
+6. Persist/process via DB/AI.
+7. Return normalized response.
+
+5.5.2 Data Validation and Business Logic
+Validation ensures data correctness before state changes.
+
+Validation points:
+1. Required fields.
+2. Type checks.
+3. Business rule consistency.
+4. Invalid-state rejection.
+
+5.5.3 Frontend Orchestration
+Frontend handles user input, state transitions, and feedback rendering.
+
+Orchestration points:
+1. Form handling and validation.
+2. Loading and disabled controls.
+3. Success/error notifications.
+4. Safe role-based navigation.
+
+5.5.4 Database Schema and Persistence
+Persistence supports reliable CRUD operations with relationship integrity and audit trails.
+
+5.6 Project File Structure
+Representative structure:
+1. app/: pages and API routes.
+2. components/: reusable layout and feature modules.
+3. lib/: clients, constants, shared utilities.
+4. types/: interfaces and contracts.
+5. __tests__/: unit and behavior tests.
+6. e2e/: workflow automation tests.
+7. scripts/: setup and seed utilities.
+
+5.7 Installation and Execution
+Execution steps:
+1. Install Node.js 18+.
+2. Install project dependencies.
+3. Configure environment variables.
+4. Initialize schema on Supabase.
+5. Optionally run seed script.
+6. Start dev server.
+7. Run tests and verify stability.
+
+5.8 Implementation Challenges
+Challenges and mitigation:
+1. Cross-module role logic complexity:
+Handled through centralized guards.
+2. Async API failures:
+Handled using consistent response/error wrappers.
+3. AI response variability:
+Handled with backend normalization and controlled formatting.
+4. Maintainability with feature growth:
+Handled using modular architecture and strict typing.
+
+TESTING
+6.1 Introduction
+Testing validates functionality, security behavior, and overall reliability before submission or deployment.
+
+6.2 Testing Methodology
+Methodology combines multiple testing layers.
+
+Testing layers:
+1. Unit tests for logic correctness.
+2. Integration tests for module interaction.
+3. E2E tests for realistic user journeys.
+4. Security/accessibility checks for quality assurance.
+
+6.3 Unit Testing
+Unit tests verify deterministic behavior of utilities and business functions.
+
+Coverage focus:
+1. Utility functions.
+2. Constants and config logic.
+3. Validation and scoring behavior.
+
+6.4 Integration Testing
+Integration tests ensure API and data flow correctness across modules.
+
+Coverage focus:
+1. Auth-protected operations.
+2. API and database collaboration.
+3. Dashboard-module interactions.
+
+6.5 End-to-End Testing
+E2E tests simulate real role-based usage patterns.
+
+Scenario coverage:
+1. Registration and login.
+2. Role-based dashboard navigation.
+3. Password recovery workflow.
+4. Admin-centric operations.
+5. Core student/teacher interaction flow.
+
+6.6 Security and Accessibility Testing
+Security tests:
+1. Unauthorized access prevention.
+2. Invalid payload rejection.
+3. Session-bound operation validation.
+
+Accessibility checks:
+1. Keyboard support.
+2. Semantic content structure.
+3. User-readable feedback behavior.
+
+6.7 Test Results Summary
+Testing cycles indicate that core workflows operate reliably and role restrictions are enforced as expected. Defects identified during iterative execution were addressed, and the project achieved stable behavior suitable for final-year demonstration and evaluation.
+
+RESULT ANALYSIS AND OUTPUT SCREENS
+7.1 Introduction
+This chapter evaluates project outcomes against original objectives and demonstrates practical behavior through system outputs.
+
+7.2 Landing and Login Interface
+Outcome:
+1. Clear entry flow for all users.
+2. Reliable authentication behavior.
+3. Responsive layout across device widths.
+
+7.3 Registration and Password Recovery Screens
+Outcome:
+1. Structured account creation process.
+2. Reliable reset-password path.
+3. Clear validation and recovery messaging.
+
+7.4 Dashboard and Navigation Screens
+Outcome:
+1. Role-specific clarity in UI.
+2. Faster feature discoverability.
+3. Reduced user navigation confusion.
+
+7.5 AI Query and Response Screens
+Outcome:
+1. Stable AI request-response behavior.
+2. Understandable output formatting.
+3. Controlled error fallback on service issues.
+
+7.6 Batch User Creation and Admin Screens
+Outcome:
+1. Improved onboarding speed.
+2. Better correction workflow for invalid entries.
+3. Enhanced admin visibility through logs and summaries.
+
+7.7 API and Performance Results
+Outcome:
+1. Stable endpoint behavior under typical load.
+2. Smooth UI interactions.
+3. No critical blockers in core institutional workflows.
+
+7.8 Security and Reliability Results
+Outcome:
+1. Effective role and route protections.
+2. Controlled error impact through fallback handling.
+3. Improved confidence due to repeatable test verification.
+
+7.9 Output Screens
+Recommended evidence set:
+1. Landing, login, registration interfaces.
+2. Admin dashboard and management screens.
+3. Teacher workflow screens.
+4. Student interaction screens.
+5. AI output screens.
+6. Notification, logs, and error-state screens.
+
+CONCLUSION
+QGX delivers a practical and professionally structured LMS solution aligned with final-year B.Tech project expectations. The system successfully integrates secure identity management, role-based workflows, AI-assisted functionality, centralized data operations, and quality assurance practices. Its modular architecture and test-backed behavior make it both academically defensible and technically extendable.
+
+The project demonstrates that modern full-stack technologies can effectively improve institutional efficiency, transparency, and user experience. QGX is suitable for viva demonstration, pilot deployment, and future expansion into larger educational ecosystems.
+
+FUTURE SCOPE
+Future improvements can significantly increase system intelligence and institutional value.
+
+Scope directions:
+1. Predictive analytics for student performance risk detection.
+2. Adaptive learning recommendation engine.
+3. Advanced anti-cheat and proctoring integrations.
+4. Multi-language and accessibility compliance expansion.
+5. Multi-tenant institutional architecture.
+6. ERP and external academic system integrations.
+7. Native mobile applications.
+8. AI governance and policy control dashboards.
+
+BIBLIOGRAPHY
+1. Next.js Documentation, Vercel, https://nextjs.org/docs
+2. React Documentation, Meta, https://react.dev
+3. TypeScript Documentation, Microsoft, https://www.typescriptlang.org/docs
+4. Supabase Documentation, Supabase, https://supabase.com/docs
+5. PostgreSQL Documentation, https://www.postgresql.org/docs
+6. Jest Documentation, https://jestjs.io/docs
+7. Playwright Documentation, https://playwright.dev/docs
+8. GROQ API Documentation, https://console.groq.com/docs
+
+ANNEXURE
+Annexure A: Environment Variables and Configuration Sheet
+Annexure B: Database Schema, Migrations, and SQL Notes
+Annexure C: API Endpoint List with Sample Request/Response
+Annexure D: Test Cases, Defect Logs, and Validation Evidence
+Annexure E: UI Screenshots and Feature-to-Screen Mapping
+
+BASE PAPER
+The base paper should clearly explain the initial problem domain, literature baseline, objective mapping, and architecture rationale that motivated the QGX solution design. It should capture why a secure role-based AI-enabled LMS is relevant for current academic operational needs.
+
+PUBLISHED PAPER
+The published paper should present implementation novelty, system design decisions, integration strategy, observed outcomes, and scalability potential. It should highlight the practical impact of combining cloud-native architecture with role-aware educational workflows.
+
+CERTIFICATES
+This section should include all evidence of project-related academic and professional engagement, including internship completion, workshop participation, certification programs, paper publication acceptance, conference participation, and project demonstration certificates.

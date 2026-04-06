@@ -1,26 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 // Force Node.js runtime — pdf-parse and jszip require fs/Buffer, not available in Edge runtime
 export const runtime = 'nodejs'
-
-// In-memory per-user rate limiter (10 requests/minute)
-const RATE_WINDOW_MS = 60_000
-const RATE_LIMIT = 10
-const rateMap = new Map<string, number[]>()
-
-function isRateLimited(userId: string): boolean {
-  const now = Date.now()
-  const timestamps = (rateMap.get(userId) || []).filter(t => now - t < RATE_WINDOW_MS)
-  if (timestamps.length >= RATE_LIMIT) {
-    rateMap.set(userId, timestamps)
-    return true
-  }
-  timestamps.push(now)
-  rateMap.set(userId, timestamps)
-  return false
-}
 
 /** Validate AI-generated question structure */
 function validateQuestion(q: any, type: string): boolean {
@@ -71,7 +55,8 @@ export async function POST(req: Request) {
     .eq('id', user.id)
     .single()
 
-  if (isRateLimited(user.id)) {
+  const { success: rateLimitOk } = await checkRateLimit(user.id)
+  if (!rateLimitOk) {
     return NextResponse.json({ error: 'Too many requests. Please wait a minute.' }, { status: 429 })
   }
 

@@ -31,7 +31,7 @@ function ForgotPasswordInner() {
     setLoading(true); setError('')
 
     const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
     })
 
     if (err) { setError(err.message); setLoading(false); return }
@@ -69,7 +69,7 @@ function ForgotPasswordInner() {
               </div>
               <div style={{ marginBottom: 24 }}>
                 <label className="label">Email</label>
-                <input className="input" type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)}
+                <input className="input" type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="you@example.com" />
               </div>
               {error && <div style={{ color: 'var(--danger)', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 16 }}>{error}</div>}

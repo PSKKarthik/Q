@@ -8,6 +8,7 @@ import { useToast } from '@/lib/toast'
 import { resolveAvatarUrl } from '@/lib/avatar'
 import type { Profile } from '@/types'
 import { Icon } from '@/components/ui/Icon'
+import { NotificationBell } from '@/components/layout/NotificationBell'
 
 interface NavItem {
   id?: string; label?: string; icon?: string; section?: string
@@ -42,7 +43,7 @@ export default function DashboardLayout({ profile, navItems, activeTab, onTabCha
   }, [profile.avatar_url])
 
   const roleColor: Record<string, string> = {
-    admin: 'var(--danger)', teacher: 'var(--warn)', student: 'var(--success)'
+    admin: 'var(--danger)', teacher: 'var(--warn)', student: 'var(--success)', parent: 'var(--fg-dim)'
   }
 
   const handleLogout = async () => {
@@ -115,6 +116,7 @@ export default function DashboardLayout({ profile, navItems, activeTab, onTabCha
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <NotificationBell userId={profile.id} />
             <button className="btn btn-sm" onClick={toggleTheme} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
               <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={12} />
             </button>
