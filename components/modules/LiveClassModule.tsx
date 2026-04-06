@@ -85,6 +85,7 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
         await pushNotificationBatch(studentIds, `● Class is live: ${cls.title} (${cls.subject}) by ${cls.teacher_name}`, 'live_class')
       }
       joinClass(liveClass)
+      openJitsi(liveClass)
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Failed to start class', 'error')
     }
@@ -128,9 +129,17 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
 
   if (loading) return <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>Loading live classes...</div>
 
-  // Active class view with embedded Jitsi
+  /* ── Open Jitsi in new tab (iframe embed blocked by meet.jit.si) ── */
+  const openJitsi = (cls: LiveClass) => {
+    if (!/^qgx-[a-z0-9]+-[a-z0-9]+$/i.test(cls.room_id)) {
+      toast('Invalid class room', 'error'); return
+    }
+    const url = `https://meet.jit.si/${encodeURIComponent(cls.room_id)}#userInfo.displayName="${encodeURIComponent(profile.name)}"`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  // Active class status view
   if (activeClass) {
-    const jitsiUrl = `https://meet.jit.si/${encodeURIComponent(activeClass.room_id)}#userInfo.displayName="${encodeURIComponent(profile.name)}"`
     return (
       <>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -149,14 +158,21 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
             )}
           </div>
         </div>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 0, overflow: 'hidden', height: 'calc(100vh - 200px)', minHeight: 400 }}>
-          <iframe
-            src={jitsiUrl}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            style={{ width: '100%', height: '100%', border: 'none' }}
-            allow="camera; microphone; fullscreen; display-capture"
-            title="Live Class"
-          />
+        <div className="card" style={{ padding: 32, textAlign: 'center' }}>
+          <div style={{ fontFamily: 'var(--display)', fontSize: 48, letterSpacing: '0.1em', marginBottom: 8 }}>●</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            {activeClass.status === 'live' ? 'Class is live' : activeClass.status}
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{activeClass.title}</div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', marginBottom: 20 }}>
+            {activeClass.subject} · {activeClass.duration}min · Room: {activeClass.room_id}
+          </div>
+          <button className="btn btn-primary" onClick={() => openJitsi(activeClass)} style={{ margin: '0 auto' }}>
+            <Icon name="video" size={12} /> Open in Jitsi Meet ↗
+          </button>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginTop: 12 }}>
+            Opens in a new tab with camera &amp; mic access
+          </div>
         </div>
       </>
     )
@@ -200,8 +216,8 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
                   {cls.subject} · {cls.teacher_name} · {cls.duration}min
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-primary btn-sm" onClick={() => joinClass(cls)} style={{ flex: 1, justifyContent: 'center' }}>
-                    Join Class
+                  <button className="btn btn-primary btn-sm" onClick={() => { joinClass(cls); openJitsi(cls) }} style={{ flex: 1, justifyContent: 'center' }}>
+                    Join Class ↗
                   </button>
                   {isTeacher && cls.teacher_id === profile.id && (
                     <button className="btn btn-sm btn-danger" onClick={() => endClass(cls)} disabled={busy === cls.id}>{busy === cls.id ? 'Ending...' : 'End'}</button>

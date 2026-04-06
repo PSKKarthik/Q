@@ -119,7 +119,6 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
   const [selectedDay, setSelectedDay] = useState<string>(
     (() => { const d = new Date().getDay(); return DAYS[d === 0 ? 5 : d - 1] })()
   )
-  const [jitsiRoom, setJitsiRoom] = useState<TimetableSlot | null>(null)
   const [slotModal, setSlotModal] = useState(false)
   const [editSlot, setEditSlot] = useState<TimetableSlot | null>(null)
   const [form, setForm] = useState({ subject: '', day: 'Monday', time: '', room: '' })
@@ -304,26 +303,10 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
     timetable.reduce((sum, s) => sum + getDurationMins(s.time), 0)
   , [timetable])
 
-  /* ── Jitsi room view ── */
-  if (jitsiRoom) {
-    return (
-      <div className="fade-up">
-        <div className="tt-jitsi-bar">
-          <button className="btn btn-sm" onClick={() => setJitsiRoom(null)}>← Back</button>
-          <div className="tt-jitsi-info">
-            <span className="tt-live-dot" /> Live: <strong>{jitsiRoom.subject}</strong>
-            <span className="tt-jitsi-room">Room: {jitsiRoom.room}</span>
-          </div>
-        </div>
-        <div className="tt-jitsi-frame">
-          <iframe
-            src={`https://meet.jit.si/${encodeURIComponent(jitsiRoom.room)}#userInfo.displayName="${encodeURIComponent(profile.name)}"`}
-            style={{ width: '100%', height: '100%', border: 'none' }}
-            allow="camera; microphone; fullscreen; display-capture"
-          />
-        </div>
-      </div>
-    )
+  /* ── Open Jitsi in new tab (iframe embed blocked by meet.jit.si) ── */
+  const openJitsi = (slot: TimetableSlot) => {
+    const url = `https://meet.jit.si/${encodeURIComponent(slot.room)}#userInfo.displayName="${encodeURIComponent(profile.name)}"`
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   /* ── render slot card ── */
@@ -364,7 +347,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
         )}
         <div className="tt-slot-actions">
           <button className="btn btn-xs" style={{ borderColor: color, color }}
-            onClick={e => { e.stopPropagation(); setJitsiRoom(slot) }}>
+            onClick={e => { e.stopPropagation(); openJitsi(slot) }}>
             <Icon name="video" size={10} /> Join
           </button>
           {isStudent && live && !didCheckIn && (
@@ -447,7 +430,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
                             background: `${color}18`, borderLeft: `3px solid ${color}`,
                             height: `${Math.max(duration * 100, 100)}%`,
                           }}
-                          onClick={e => { e.stopPropagation(); setJitsiRoom(slot) }}>
+                          onClick={e => { e.stopPropagation(); openJitsi(slot) }}>
                           {live && <span className="tt-live-dot-sm" />}
                           <div className="tt-week-slot-subject" style={{ color }}>{slot.subject}</div>
                           <div className="tt-week-slot-time">{slot.time}</div>
@@ -616,7 +599,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
                 <span>{formatDuration(getDurationMins(liveSlot.time))}</span>
               </div>
               <div className="tt-next-up-actions">
-                <button className="btn btn-sm btn-primary" onClick={() => setJitsiRoom(liveSlot)}>
+                <button className="btn btn-sm btn-primary" onClick={() => openJitsi(liveSlot)}>
                   <Icon name="video" size={11} /> Join Class
                 </button>
                 {isStudent && !checkedIn.has(liveSlot.id) && (
@@ -705,7 +688,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
               return (
                 <div key={slot.id} className={`tt-today-chip ${live ? 'tt-today-chip-live' : ''} ${done ? 'tt-today-chip-done' : ''}`}
                   style={{ borderColor: live ? 'var(--success)' : color }}
-                  onClick={() => live ? setJitsiRoom(slot) : undefined}>
+                  onClick={() => live ? openJitsi(slot) : undefined}>
                   {live && <span className="tt-live-dot" />}
                   <span className="tt-today-chip-period">P{i + 1}</span>
                   <span className="tt-today-chip-subject" style={{ color: done ? 'var(--fg-dim)' : color }}>{slot.subject}</span>

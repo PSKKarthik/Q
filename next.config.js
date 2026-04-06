@@ -56,7 +56,7 @@ const nextConfig = {
               "font-src 'self'",
               "connect-src 'self' https://udfzxrmvbyfesxutklof.supabase.co wss://udfzxrmvbyfesxutklof.supabase.co https://api.groq.com",
               "media-src 'self' https://udfzxrmvbyfesxutklof.supabase.co blob:",
-              "frame-src 'self' https://udfzxrmvbyfesxutklof.supabase.co meet.jit.si www.youtube-nocookie.com www.youtube.com docs.google.com",
+              "frame-src 'self' https://udfzxrmvbyfesxutklof.supabase.co www.youtube-nocookie.com www.youtube.com docs.google.com",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",
