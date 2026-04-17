@@ -2669,7 +2669,7 @@ input[type="datetime-local"].input::-webkit-calendar-picker-indicator:hover {
 
 /* Teacher student browser */
 .gr-search { margin-bottom:12px; }
-.gr-student-layout { display:grid; grid-template-columns:280px 1fr; gap:12px; }
+.gr-student-layout { display:grid; grid-template-columns:clamp(200px,22%,300px) 1fr; gap:12px; }
 .gr-student-list { border:1px solid var(--border); background:var(--card); max-height:500px; overflow-y:auto; }
 .gr-student-item { display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; transition:all .15s; border-bottom:1px solid var(--border); }
 .gr-student-item:hover { background:var(--hover); }
@@ -3228,7 +3228,7 @@ img, video, svg { max-width: 100%; height: auto; }
 }
 
 /* ═══════ MESSAGING ═══════ */
-.messaging-container { display:flex; border:1px solid var(--border); border-radius: 0; height:520px; overflow:hidden; }
+.messaging-container { display:flex; border:1px solid var(--border); border-radius: 0; height:clamp(400px,calc(100dvh - 220px),700px); overflow:hidden; }
 .messaging-sidebar { width:280px; border-right:1px solid var(--border); display:flex; flex-direction:column; }
 .messaging-sidebar > div:first-child { padding:12px; border-bottom:1px solid var(--border); }
 .messaging-thread-list { flex:1; overflow-y:auto; }
@@ -3349,3 +3349,236 @@ img, video, svg { max-width: 100%; height: auto; }
 .analytics-chart-bar { width:100%; max-width:24px; border-radius: 0 0 0; transition:height 0.4s ease; }
 .analytics-chart-label { font-family:var(--mono); font-size:8px; color:var(--fg-dim); margin-top:4px; white-space:nowrap; }
 .analytics-chart-date { font-family:var(--mono); font-size:7px; color:var(--fg-dim); opacity:0.6; }
+
+/* ═══════════════════════════════════════════════════════
+   UNIVERSAL RESPONSIVE LAYOUT SYSTEM
+   Mobile → Tablet → Laptop → Monitor → Large Monitor → TV/4K
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Sidebar logo & footer — CSS-controlled for responsive scaling ── */
+.sidebar-logo-title {
+  font-family: var(--display); font-size: 26px;
+  letter-spacing: 0.15em; line-height: 1;
+}
+.sidebar-logo-sub {
+  font-family: var(--mono); font-size: 9px; color: var(--fg-muted);
+  letter-spacing: 0.12em; text-transform: uppercase; margin-top: 2px;
+}
+.sidebar-footer {
+  padding: 16px 20px; border-top: 1px solid var(--border); flex-shrink: 0;
+}
+.sidebar-footer-name { font-size: 12px; font-weight: 500; line-height: 1.2; }
+.sidebar-footer-role { font-family: var(--mono); font-size: 9px; }
+.sidebar-footer-id {
+  font-family: var(--mono); font-size: 9px;
+  color: var(--fg-muted); margin-bottom: 12px;
+}
+
+/* ── Light theme overrides for new classes ── */
+.light-theme .sidebar-footer-role { opacity: 0.85; }
+
+/* ── main-content: prevent horizontal overflow ── */
+.main-content { min-width: 0; }
+
+/* ── Notification dropdown: safe on all widths ── */
+.notif-dropdown {
+  width: min(320px, calc(100vw - 24px));
+}
+
+/* ── Search input: fluid width ── */
+.search-input { width: clamp(160px, 18vw, 260px); }
+
+/* ─────────────────────────────────────────────────
+   Standard Laptop Bridge (1280–1439px)
+   Fills the gap between tablet (1024px) and large
+   desktop (1440px) with proportional spacing.
+───────────────────────────────────────────────── */
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .page { padding: 28px 36px; }
+  .topbar { padding: 0 36px; }
+  .search-input { width: 240px; }
+}
+
+/* ─────────────────────────────────────────────────
+   Large Laptop / Small Monitor (1440px+)
+   Sidebar widens, fonts step up, topbar breathes.
+───────────────────────────────────────────────── */
+@media (min-width: 1440px) {
+  .sidebar { width: 240px; }
+  .main-content { margin-left: 240px; }
+  .sidebar-logo { padding: 28px 24px; }
+  .sidebar-logo-title { font-size: 28px; }
+  .sidebar-footer { padding: 18px 24px; }
+  .sidebar-footer-name { font-size: 13px; }
+  .nav-item { font-size: 12px; padding: 11px 24px; }
+  .nav-section { padding: 12px 24px 4px; }
+  .topbar { padding: 0 48px; height: 60px; }
+  .stat-val { font-size: 56px; }
+  .page-title { font-size: 44px; }
+  .modal { width: 580px; }
+  .search-input { width: 260px; }
+  .card { padding: 22px; }
+  .btn { padding: 11px 24px; }
+  .btn-sm { padding: 7px 16px; }
+}
+
+/* ─────────────────────────────────────────────────
+   Medium Monitor (1600px+)
+   More breathing room, larger cards, wider grids.
+───────────────────────────────────────────────── */
+@media (min-width: 1600px) {
+  .sidebar { width: 256px; }
+  .main-content { margin-left: 256px; }
+  .page { padding: 40px 56px; }
+  .topbar { padding: 0 56px; height: 62px; }
+  .sidebar-logo { padding: 32px 28px; }
+  .sidebar-logo-title { font-size: 30px; }
+  .sidebar-footer { padding: 20px 28px; }
+  .sidebar-footer-name { font-size: 13px; }
+  .nav-item { font-size: 12px; padding: 12px 28px; }
+  .nav-section { padding: 14px 28px 4px; }
+  .stat-val { font-size: 62px; }
+  .stat-card { padding: 26px; }
+  .page-title { font-size: 50px; }
+  .modal { width: 620px; padding: 32px; }
+  .modal-title { font-size: 30px; }
+  .search-input { width: 280px; }
+  .card { padding: 24px; }
+  .grid-4, .grid-6 { gap: 20px; }
+  .btn { padding: 11px 26px; font-size: 12px; }
+  .btn-sm { padding: 7px 16px; font-size: 11px; }
+  .input { padding: 11px 16px; }
+  .table td { font-size: 14px; padding: 13px 14px; }
+  .table th { font-size: 11px; padding: 11px 14px; }
+  .tm-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 18px; }
+  .course-grid { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
+  .messaging-container { height: clamp(500px, calc(100dvh - 240px), 840px); }
+  .gr-student-layout { grid-template-columns: clamp(240px, 22%, 320px) 1fr; }
+}
+
+/* ─────────────────────────────────────────────────
+   Full HD Monitor (1920px+)
+   Everything scales up meaningfully — comfortable
+   for an arm's-length workstation.
+───────────────────────────────────────────────── */
+@media (min-width: 1920px) {
+  .sidebar { width: 272px; }
+  .main-content { margin-left: 272px; }
+  .page { padding: 48px 72px; }
+  .topbar { padding: 0 72px; height: 64px; }
+  .sidebar-logo { padding: 36px 28px; }
+  .sidebar-logo-title { font-size: 32px; }
+  .sidebar-logo-sub { font-size: 10px; }
+  .sidebar-footer { padding: 22px 28px; }
+  .sidebar-footer-name { font-size: 14px; }
+  .sidebar-footer-role { font-size: 10px; }
+  .sidebar-footer-id { font-size: 10px; }
+  .nav-item { font-size: 13px; padding: 13px 28px; gap: 12px; }
+  .nav-section { padding: 14px 28px 6px; font-size: 10px; }
+  .stat-val { font-size: 68px; }
+  .stat-label { font-size: 12px; letter-spacing: 0.12em; }
+  .stat-card { padding: 28px; }
+  .page-title { font-size: 56px; }
+  .page-sub { font-size: 13px; }
+  .modal { width: 660px; padding: 36px; }
+  .modal-title { font-size: 32px; }
+  .search-input { width: 320px; }
+  .card { padding: 28px; }
+  .grid-4, .grid-6 { gap: 24px; }
+  .btn { padding: 12px 28px; font-size: 13px; }
+  .btn-sm { padding: 8px 18px; font-size: 12px; }
+  .btn-xs { padding: 5px 12px; font-size: 11px; }
+  .input { padding: 12px 18px; font-size: 14px; }
+  .label { font-size: 11px; }
+  .table td { font-size: 14px; padding: 14px 16px; }
+  .table th { font-size: 11px; padding: 13px 16px; }
+  .tm-grid { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 20px; }
+  .tm-teacher-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 18px; }
+  .tm-admin-stats { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .course-grid { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 20px; }
+  .announce-card { padding: 20px; }
+  .announce-card .ac-title { font-size: 15px; }
+  .announce-card .ac-body { font-size: 14px; }
+  .leaderboard-row { padding: 14px 20px; }
+  .messaging-container { height: clamp(600px, calc(100dvh - 260px), 960px); }
+  .gr-student-layout { grid-template-columns: clamp(260px, 20%, 360px) 1fr; }
+  .tag { padding: 4px 10px; font-size: 11px; }
+  .divider { margin: 24px 0; }
+  .avatar { width: 40px; height: 40px; font-size: 13px; }
+  .notif-dropdown { width: 380px; max-height: 560px; }
+}
+
+/* ─────────────────────────────────────────────────
+   2K / 4K / TV (2560px+)
+   Watched from the couch or wall-mounted display —
+   everything reads clearly from 2–4 metres away.
+───────────────────────────────────────────────── */
+@media (min-width: 2560px) {
+  .sidebar { width: 300px; }
+  .main-content { margin-left: 300px; }
+  .page { padding: 56px 96px; }
+  .topbar { padding: 0 96px; height: 72px; }
+  .sidebar-logo { padding: 40px 32px; }
+  .sidebar-logo-title { font-size: 36px; }
+  .sidebar-logo-sub { font-size: 11px; }
+  .sidebar-footer { padding: 24px 32px; }
+  .sidebar-footer-name { font-size: 15px; }
+  .sidebar-footer-role { font-size: 11px; }
+  .sidebar-footer-id { font-size: 11px; }
+  .nav-item { font-size: 14px; padding: 14px 32px; gap: 14px; min-height: 52px; }
+  .nav-section { padding: 16px 32px 6px; font-size: 11px; }
+  .stat-val { font-size: 80px; }
+  .stat-label { font-size: 13px; }
+  .stat-card { padding: 32px; }
+  .page-title { font-size: 64px; }
+  .page-sub { font-size: 14px; }
+  .modal { width: 740px; padding: 40px; }
+  .modal-title { font-size: 36px; }
+  .search-input { width: 360px; }
+  .card { padding: 32px; }
+  .grid-4, .grid-6 { gap: 28px; }
+  .btn { padding: 14px 32px; font-size: 14px; }
+  .btn-sm { padding: 9px 20px; font-size: 13px; }
+  .btn-xs { padding: 6px 14px; font-size: 12px; }
+  .input { padding: 14px 20px; font-size: 15px; }
+  .label { font-size: 12px; }
+  .table td { font-size: 15px; padding: 16px 18px; }
+  .table th { font-size: 12px; padding: 14px 18px; }
+  .tm-grid { grid-template-columns: repeat(auto-fill, minmax(500px, 1fr)); gap: 24px; }
+  .tm-teacher-grid { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 20px; }
+  .tm-admin-stats { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .course-grid { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 24px; }
+  .announce-card { padding: 24px; }
+  .announce-card .ac-title { font-size: 16px; }
+  .announce-card .ac-body { font-size: 15px; }
+  .leaderboard-row { padding: 16px 24px; gap: 24px; }
+  .messaging-container { height: clamp(700px, calc(100dvh - 300px), 1100px); }
+  .gr-student-layout { grid-template-columns: clamp(280px, 18%, 420px) 1fr; }
+  .tag { padding: 5px 12px; font-size: 12px; }
+  .divider { margin: 28px 0; }
+  .avatar { width: 48px; height: 48px; font-size: 16px; }
+  .notif-dropdown { width: 420px; max-height: 640px; }
+  .spinner { width: 20px; height: 20px; }
+  .announce-card .ac-meta { font-size: 11px; }
+}
+
+/* ─────────────────────────────────────────────────
+   Mobile: sidebar overlay tweak
+   Sidebar width independent of main-content margin
+───────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Sidebar is an overlay — visual width stays 260px
+     regardless of main-content margin (which is 0) */
+  .sidebar { width: 260px !important; }
+  .main-content { margin-left: 0 !important; }
+  /* Messaging: shrinks for narrow viewports */
+  .messaging-container { height: clamp(360px, calc(100dvh - 180px), 600px); }
+  /* Grade teacher layout: single column already handled above but ensure it */
+  .gr-student-layout { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 480px) {
+  .sidebar { width: 240px !important; }
+}
+@media (max-width: 360px) {
+  .sidebar { width: 220px !important; }
+}

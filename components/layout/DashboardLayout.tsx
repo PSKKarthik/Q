@@ -64,8 +64,8 @@ export default function DashboardLayout({ profile, navItems, activeTab, onTabCha
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-logo">
-          <div style={{ fontFamily: 'var(--display)', fontSize: 26, letterSpacing: '0.15em' }}>QGX</div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--fg-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 2 }}>Query Gen X</div>
+          <div className="sidebar-logo-title">QGX</div>
+          <div className="sidebar-logo-sub">Query Gen X</div>
         </div>
         <nav className="sidebar-nav">
           {navItems.map((item, i) =>
@@ -87,17 +87,17 @@ export default function DashboardLayout({ profile, navItems, activeTab, onTabCha
                 </div>
           )}
         </nav>
-        <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
+        <div className="sidebar-footer">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
             {avatarSrc
               ? <Image src={avatarSrc} alt="Avatar" width={30} height={30} unoptimized style={{ width: 30, height: 30, objectFit: 'cover', borderRadius: '50%', border: '1px solid var(--border)' }} />
               : <div className="avatar">{profile.avatar}</div>}
             <div>
-              <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.2 }}>{profile.name}</div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: roleColor[profile.role] }}>{profile.role.toUpperCase()}</div>
+              <div className="sidebar-footer-name">{profile.name}</div>
+              <div className="sidebar-footer-role" style={{ color: roleColor[profile.role] }}>{profile.role.toUpperCase()}</div>
             </div>
           </div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--fg-muted)', marginBottom: 12 }}>{profile.qgx_id}</div>
+          <div className="sidebar-footer-id">{profile.qgx_id}</div>
           <button className="btn btn-sm" style={{ width: '100%', justifyContent: 'center' }} onClick={handleLogout}>
             <Icon name="logout" size={11} /> Logout
           </button>
