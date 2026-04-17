@@ -6,6 +6,7 @@ import type { Profile } from '@/types'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Icon } from '@/components/ui/Icon'
 import { SectionLabel } from '@/components/ui/SectionLabel'
+import { JitsiMeet } from '@/components/ui/JitsiMeet'
 
 interface Room {
   id: string
@@ -230,7 +231,6 @@ export function CollaborationModule({ profile }: Props) {
 
   if (activeRoom) {
     const jitsiRoom = getJitsiRoomName(activeRoom)
-    const jitsiUrl = `https://meet.jit.si/${jitsiRoom}#config.prejoinPageEnabled=false&config.startWithAudioMuted=true&config.startWithVideoMuted=false`
 
     return (
       <>
@@ -245,13 +245,7 @@ export function CollaborationModule({ profile }: Props) {
               ● {onlineUsers.length} online
             </div>
             <button className="btn btn-sm" onClick={() => setShowVideo(v => !v)}>
-              {showVideo ? 'Hide Jitsi' : 'Show Jitsi'}
-            </button>
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={() => window.open(jitsiUrl, '_blank', 'noopener,noreferrer')}
-            >
-              Open Jitsi
+              <Icon name="video" size={11} /> {showVideo ? 'Hide Video' : 'Video Call'}
             </button>
           </div>
         </div>
@@ -308,18 +302,13 @@ export function CollaborationModule({ profile }: Props) {
           </div>
 
           {showVideo && (
-            <div style={{ border: '1px solid var(--border)', borderRadius: 0, overflow: 'hidden', background: 'var(--surface)', minHeight: isMobile ? '45vh' : 'calc(100vh - 250px)' }}>
-              <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)' }}>
-                Jitsi Room: {jitsiRoom}
-              </div>
-              <iframe
-                title={`Jitsi ${activeRoom.name}`}
-                src={jitsiUrl}
-                style={{ width: '100%', height: isMobile ? '42vh' : 'calc(100% - 33px)', border: 0 }}
-                allow="camera; microphone; fullscreen; display-capture"
-                referrerPolicy="no-referrer"
-              />
-            </div>
+            <JitsiMeet
+              roomName={jitsiRoom}
+              displayName={profile.name}
+              subject={activeRoom.name}
+              onClose={() => setShowVideo(false)}
+              height={isMobile ? '45vh' : 'calc(100vh - 250px)'}
+            />
           )}
         </div>
       </>

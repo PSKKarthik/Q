@@ -186,19 +186,12 @@ export async function POST(req: Request) {
   })
   // Fallback to direct update if RPC doesn't exist yet
   if (updateErr) {
-    // Retry with RPC; if that also fails, fall back to direct update with stale data
-    const retryResult = await supabase.rpc('atomic_xp_update', {
-      p_user_id: userId, p_xp_delta: xpEarned,
-      p_best_score: bestScore, p_ghost_win_increment: ghostWinIncrement,
-    })
-    if (retryResult.error) {
-      const newGhostWins = ghostBonus > 0 ? (profile.ghost_wins || 0) + 1 : (profile.ghost_wins || 0)
-      await supabase.from('profiles').update({
-        xp: newXP,
-        score: bestScore,
-        ghost_wins: newGhostWins,
-      }).eq('id', userId)
-    }
+    const newGhostWins = ghostBonus > 0 ? (profile.ghost_wins || 0) + 1 : (profile.ghost_wins || 0)
+    await supabase.from('profiles').update({
+      xp: newXP,
+      score: bestScore,
+      ghost_wins: newGhostWins,
+    }).eq('id', userId)
   }
 
   // Activity log (non-critical, don't block response)

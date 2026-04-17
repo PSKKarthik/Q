@@ -262,6 +262,9 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
       const rows = aiResult.map((q, i) => ({ test_id: questionBank.id, type: q.type, text: q.text, options: q.options || null, answer: q.answer, marks: q.marks || 1, order_index: baseIndex + i }))
       const { error } = await supabase.from('questions').insert(rows)
       if (error) throw error
+      const addedMarks = aiResult.reduce((s, q) => s + (q.marks || 1), 0)
+      const newTotalMarks = (questionBank.total_marks || 0) + addedMarks
+      await supabase.from('tests').update({ total_marks: newTotalMarks }).eq('id', questionBank.id).eq('teacher_id', profile.id)
       setAiModal(false); setAiResult(null)
       const { data } = await supabase.from('tests').select('*, questions(*)').eq('id', questionBank.id).single()
       if (data) {

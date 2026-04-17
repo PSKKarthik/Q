@@ -377,7 +377,28 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       onProfileUpdate({ ...profile, xp: newXP })
       toast(`◈ +${loginXP} XP — Daily login bonus! ${streak.current > 0 ? `(${streak.current}-day streak bonus!)` : ''}`, 'success')
     } catch {
-      toast('Could not claim daily login bonus right now.', 'error')
+      // RPC not available — fall back to atomic_xp_update, then direct update
+      try {
+        const { error: rpcErr } = await supabase.rpc('atomic_xp_update', {
+          p_user_id: profile.id, p_xp_delta: loginXP,
+          p_best_score: profile.score || 0, p_ghost_win_increment: 0,
+        })
+        if (rpcErr) throw rpcErr
+        setDailyLoginClaimed(true)
+        onProfileUpdate({ ...profile, xp: (profile.xp || 0) + loginXP })
+        toast(`◈ +${loginXP} XP — Daily login bonus!${streak.current > 0 ? ` (${streak.current}-day streak bonus!)` : ''}`, 'success')
+      } catch {
+        // Final fallback: direct profile update
+        const newXP = (profile.xp || 0) + loginXP
+        const { error: directErr } = await supabase.from('profiles').update({ xp: newXP }).eq('id', profile.id)
+        if (!directErr) {
+          setDailyLoginClaimed(true)
+          onProfileUpdate({ ...profile, xp: newXP })
+          toast(`◈ +${loginXP} XP — Daily login bonus!${streak.current > 0 ? ` (${streak.current}-day streak bonus!)` : ''}`, 'success')
+        } else {
+          toast('Could not claim daily login bonus right now.', 'error')
+        }
+      }
     }
     setClaimingLogin(false)
   }

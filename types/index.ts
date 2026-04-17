@@ -83,6 +83,8 @@ export interface Attempt {
   score: number
   total: number
   percent: number
+  xp_earned?: number
+  attempt_number?: number
   answer_map: Record<string, number | boolean | string | number[] | Record<string, string>>
   submitted_at: string
 }

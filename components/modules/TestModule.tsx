@@ -53,6 +53,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
     score: number; total: number; percent: number; date: string
     xpEarned: number; isDoubleXP: boolean; ghostMsg: string; ghostBonus: number
     answerMap: Record<string, any>
+    questsCompleted: Array<{ title: string; xp_reward: number }>
   } | null>(null)
 
   /* review */
@@ -315,8 +316,26 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
       if (!res.ok) throw new Error(data.error || 'Submission failed')
 
       const { score, total, percent, xpEarned, isDoubleXP, ghostMsg, ghostBonus, newXP } = data
-      setTestResult({ score, total, percent, date: new Date().toISOString().slice(0, 10), xpEarned, isDoubleXP, ghostMsg, ghostBonus, answerMap })
-      onAttemptDone({ id: '', student_id: profile.id, test_id: activeTest.id, score, total, percent, answer_map: answerMap, submitted_at: new Date().toISOString() }, { newXP })
+
+      // Fetch quest progress that advanced from this submission (DB trigger fires asynchronously)
+      let questsCompleted: Array<{ title: string; xp_reward: number }> = []
+      try {
+        await new Promise(r => setTimeout(r, 800)) // brief wait for DB trigger
+        const { data: qpData } = await supabase
+          .from('quest_progress')
+          .select('quest_id, completed, claimed, quests(title, xp_reward, target_type)')
+          .eq('student_id', profile.id)
+          .eq('completed', true)
+          .eq('claimed', false)
+        if (qpData) {
+          questsCompleted = qpData
+            .filter((p: any) => p.quests?.target_type === 'test' || p.quests?.target_type === 'xp')
+            .map((p: any) => ({ title: p.quests.title, xp_reward: p.quests.xp_reward }))
+        }
+      } catch { /* non-blocking */ }
+
+      setTestResult({ score, total, percent, date: new Date().toISOString().slice(0, 10), xpEarned, isDoubleXP, ghostMsg, ghostBonus, answerMap, questsCompleted })
+      onAttemptDone({ id: '', student_id: profile.id, test_id: activeTest.id, score, total, percent, xp_earned: xpEarned, answer_map: answerMap, submitted_at: new Date().toISOString() }, { newXP })
       setView('result')
     } catch (e: any) {
       toast(`Submission error: ${e.message}`, 'error')
@@ -325,9 +344,15 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
   }
 
   /* ── review ── */
-  const openReview = (attempt: Attempt) => {
-    const test = tests.find(t => t.id === attempt.test_id)
-    if (!test || !test.questions?.length) return
+  const openReview = async (attempt: Attempt) => {
+    let test = tests.find(t => t.id === attempt.test_id)
+    if (!test) return
+    if (!test.questions?.length) {
+      const { data: fullTest } = await supabase
+        .from('tests').select('*, questions(*)').eq('id', test.id).single()
+      if (!fullTest?.questions?.length) { toast('No questions available to review', 'error'); return }
+      test = fullTest as Test
+    }
     setReviewTest(test); setReviewAttempt(attempt); setReviewQ(0)
     setView('review')
   }
@@ -758,9 +783,21 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
             </div>
           </div>
 
+          {testResult.questsCompleted.length > 0 && (
+            <div style={{ margin: '16px 0', border: '1px solid var(--warn)', padding: 14 }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--warn)', letterSpacing: '0.1em', marginBottom: 8 }}>◇ QUEST COMPLETE</div>
+              {testResult.questsCompleted.map((q, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 4 }}>
+                  <span>{q.title}</span>
+                  <span style={{ color: 'var(--warn)' }}>+{q.xp_reward} XP ready to claim</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="tm-result-actions">
             {canReviewAttempt(activeTest) && (
-              <button className="btn btn-sm" onClick={() => openReview({ id: '', student_id: profile.id, test_id: activeTest.id, score: testResult.score, total: testResult.total, percent: testResult.percent, answer_map: testResult.answerMap, submitted_at: testResult.date })}>
+              <button className="btn btn-sm" onClick={() => openReview({ id: '', student_id: profile.id, test_id: activeTest.id, score: testResult.score, total: testResult.total, percent: testResult.percent, xp_earned: testResult.xpEarned, answer_map: testResult.answerMap, submitted_at: testResult.date })}>
                 <Icon name="book" size={12} /> Review Answers
               </button>
             )}

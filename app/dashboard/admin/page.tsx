@@ -114,7 +114,7 @@ function AdminDashboardContent() {
     if (handledDeepLink.current) return
     const requestedTab = searchParams.get('tab')
     const openCreateUser = searchParams.get('createUser') === '1'
-    const allowedTabs = new Set(['home', 'users', 'announcements', 'tests', 'courses', 'assignments', 'attendance', 'forums', 'analytics', 'activity', 'settings', 'batch', 'calendar', 'profile'])
+    const allowedTabs = new Set(['home', 'users', 'announcements', 'tests', 'courses', 'assignments', 'attendance', 'forums', 'analytics', 'activity', 'settings', 'batch', 'calendar', 'profile', 'grades', 'quests'])
     if (requestedTab && allowedTabs.has(requestedTab)) {
       setTab(requestedTab)
     }
@@ -281,8 +281,8 @@ function AdminDashboardContent() {
 
   const activateDoubleXP = async () => {
     try {
-      const val = { active: true, ends_at: Date.now() + DOUBLE_XP_DURATION_MS }
-      await supabase.from('platform_settings').update({ value: val }).eq('key', 'double_xp')
+      const val = { active: true, ends_at: Date.now() + (platformSettings.double_xp_duration || DOUBLE_XP_DURATION_MS) }
+      await supabase.from('platform_settings').upsert({ key: 'double_xp', value: val }, { onConflict: 'key' })
       setDoubleXP(val)
       const studentIds = users.filter(u => u.role === 'student').map(u => u.id)
       await pushNotificationBatch(studentIds, '◈ Double XP Hour is now active! Earn 2x XP on tests!', 'double_xp')
@@ -404,6 +404,8 @@ function AdminDashboardContent() {
     { id: 'forums', label: 'Forums', icon: 'chat' },
     { id: 'analytics', label: 'Analytics', icon: 'chart' },
     { id: 'activity', label: 'Activity Log', icon: 'clock' },
+    { id: 'grades', label: 'Grades', icon: 'chart' },
+    { id: 'quests', label: 'Quests', icon: 'star' },
     { id: 'settings', label: 'Settings', icon: 'gear' },
     { id: 'batch', label: 'Batch Create', icon: 'plus' },
     { id: 'calendar', label: 'Calendar', icon: 'calendar' },
@@ -1277,7 +1279,8 @@ function AdminDashboardContent() {
         {/* SETTINGS */}
         {tab === 'settings' && (() => {
           const saveSetting = async (key: string, value: any) => {
-            await supabase.from('platform_settings').upsert({ key, value }, { onConflict: 'key' })
+            const { error } = await supabase.from('platform_settings').upsert({ key, value }, { onConflict: 'key' })
+            if (error) { toast(error.message, 'error'); return }
             setPlatformSettings(prev => ({ ...prev, [key]: value }))
           }
           return (
@@ -1415,26 +1418,25 @@ function AdminDashboardContent() {
                   <SectionLabel>Grade Weights (Report Cards)</SectionLabel>
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginBottom: 12 }}>Must total 100%</div>
                   {[
-                    { key: 'tests_weight', label: 'Tests' },
-                    { key: 'assignments_weight', label: 'Assignments' },
-                    { key: 'attendance_weight', label: 'Attendance' },
-                    { key: 'participation_weight', label: 'Participation' },
+                    { key: 'tests_weight', label: 'Tests', fallback: 40 },
+                    { key: 'assignments_weight', label: 'Assignments', fallback: 30 },
+                    { key: 'attendance_weight', label: 'Attendance', fallback: 10 },
+                    { key: 'participation_weight', label: 'Participation', fallback: 20 },
                   ].map(w => (
                     <div key={w.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <span style={{ fontFamily: 'var(--mono)', fontSize: 11, width: 100 }}>{w.label}</span>
                       <input className="input" type="number" min={0} max={100} style={{ width: 70 }}
-                        id={`gw-${w.key}`}
-                        defaultValue={platformSettings[`gw_${w.key}`] ?? (w.key === 'tests_weight' ? 40 : w.key === 'assignments_weight' ? 30 : w.key === 'attendance_weight' ? 10 : 20)} />
+                        value={platformSettings[`gw_${w.key}`] ?? w.fallback}
+                        onChange={e => setPlatformSettings(prev => ({ ...prev, [`gw_${w.key}`]: parseInt(e.target.value) || 0 }))} />
                       <span style={{ fontFamily: 'var(--mono)', fontSize: 10 }}>%</span>
                     </div>
                   ))}
                   <button className="btn btn-primary btn-sm" onClick={async () => {
-                    const vals = ['tests_weight', 'assignments_weight', 'attendance_weight', 'participation_weight'].map(k =>
-                      parseInt((document.getElementById(`gw-${k}`) as HTMLInputElement).value) || 0
-                    )
+                    const keys = ['tests_weight', 'assignments_weight', 'attendance_weight', 'participation_weight']
+                    const fallbacks = [40, 30, 10, 20]
+                    const vals = keys.map((k, i) => platformSettings[`gw_${k}`] ?? fallbacks[i])
                     if (vals.reduce((a, b) => a + b, 0) !== 100) { toast('Weights must total 100%', 'error'); return }
                     try {
-                      const keys = ['tests_weight', 'assignments_weight', 'attendance_weight', 'participation_weight']
                       for (let i = 0; i < keys.length; i++) {
                         await saveSetting(`gw_${keys[i]}`, vals[i])
                       }

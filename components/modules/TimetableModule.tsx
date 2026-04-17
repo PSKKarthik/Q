@@ -315,7 +315,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
       <JitsiMeet
         roomName={getJitsiSlug(jitsiRoom)}
         displayName={profile.name}
-        subject={jitsiRoom.subject}
+        subject={`${jitsiRoom.subject} · ${jitsiRoom.time}`}
         onClose={() => setJitsiRoom(null)}
       />
     )
@@ -441,19 +441,24 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
                           style={{
                             background: `${color}18`, borderLeft: `3px solid ${color}`,
                             height: `${Math.max(duration * 100, 100)}%`,
+                            cursor: 'pointer',
                           }}
-                          onClick={e => { e.stopPropagation(); setJitsiRoom(slot) }}>
+                          onClick={e => { e.stopPropagation(); setSelectedDay(slot.day); setView('day') }}>
                           {live && <span className="tt-live-dot-sm" />}
                           <div className="tt-week-slot-subject" style={{ color }}>{slot.subject}</div>
                           <div className="tt-week-slot-time">{slot.time}</div>
                           <div className="tt-week-slot-dur">{formatDuration(getDurationMins(slot.time))}</div>
                           {!isTeacher && <div className="tt-week-slot-teacher">{slot.teacher_name}</div>}
-                          {isTeacher && (
-                            <div className="tt-week-slot-actions" onClick={e => e.stopPropagation()}>
-                              <button className="tt-micro-btn" onClick={() => openEdit(slot)}>✎</button>
-                              <button className="tt-micro-btn tt-micro-danger" onClick={() => deleteSlot(slot.id)}>×</button>
-                            </div>
-                          )}
+                          <div className="tt-week-slot-actions" onClick={e => e.stopPropagation()}>
+                            <button className="tt-micro-btn" style={{ borderColor: color, color }}
+                              onClick={() => setJitsiRoom(slot)} title="Join video call">▶</button>
+                            {isTeacher && (
+                              <>
+                                <button className="tt-micro-btn" onClick={() => openEdit(slot)}>✎</button>
+                                <button className="tt-micro-btn tt-micro-danger" onClick={() => deleteSlot(slot.id)}>×</button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       )
                     })}

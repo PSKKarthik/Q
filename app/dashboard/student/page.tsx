@@ -260,8 +260,8 @@ function StudentDashboardContent() {
             allStudents={allStudents}
             onExamStateChange={setIsExamMode}
             onAttemptDone={(attempt, xpData) => {
-              setProfile(p => p ? { ...p, xp: xpData.newXP, score: attempt.percent } : p)
-              setAttempts(prev => [...prev.filter(a => a.test_id !== attempt.test_id), attempt])
+              setProfile(p => p ? { ...p, xp: xpData.newXP, score: Math.max(p.score || 0, attempt.percent) } : p)
+              setAttempts(prev => [...prev, attempt])
             }}
           />
         )}

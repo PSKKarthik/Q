@@ -51,7 +51,8 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
     if (new Date(form.scheduled_at) <= new Date()) { toast('Scheduled time must be in the future', 'error'); return }
     setBusy('create')
     try {
-      const roomId = `qgx-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+      const randPart = Math.random().toString(36).slice(2, 8) || Math.floor(Math.random() * 1000000).toString(36)
+      const roomId = `qgx-${Date.now().toString(36)}-${randPart}`
       const { data, error } = await supabase.from('live_classes').insert({
         teacher_id: profile.id,
         teacher_name: profile.name,
@@ -108,14 +109,13 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
   }
 
   const joinClass = (cls: LiveClass) => {
-    // Only allow joining classes that are explicitly live.
     if (cls.status !== 'live') {
       toast('This class is not currently live', 'error')
       return
     }
-    // Validate room_id format to prevent Jitsi URL injection
-    if (!/^qgx-[a-z0-9]+-[a-z0-9]+$/i.test(cls.room_id)) {
-      toast('Invalid class room', 'error')
+    // Validate room_id — lenient: must start with qgx- and contain only safe chars
+    if (!/^qgx-[a-z0-9-]+$/i.test(cls.room_id)) {
+      toast('Invalid class room ID', 'error')
       return
     }
     setActiveClass(cls)
@@ -136,22 +136,23 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
   // Active class — embedded Jitsi view
   if (activeClass) {
     return (
-      <>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div />
-          <div style={{ display: 'flex', gap: 8 }}>
-            {isTeacher && activeClass.status === 'live' && (
-              <button className="btn btn-sm btn-danger" onClick={() => endClass(activeClass)} disabled={busy === activeClass.id}>{busy === activeClass.id ? 'Ending...' : 'End Class'}</button>
-            )}
-          </div>
-        </div>
-        <JitsiMeet
-          roomName={getJitsiSlug(activeClass)}
-          displayName={profile.name}
-          subject={`${activeClass.title} · ${activeClass.subject}`}
-          onClose={() => setActiveClass(null)}
-        />
-      </>
+      <JitsiMeet
+        roomName={getJitsiSlug(activeClass)}
+        displayName={profile.name}
+        subject={`${activeClass.title} · ${activeClass.subject}`}
+        onClose={() => setActiveClass(null)}
+        actions={
+          isTeacher && activeClass.status === 'live' ? (
+            <button
+              className="btn btn-sm btn-danger"
+              onClick={() => endClass(activeClass)}
+              disabled={busy === activeClass.id}
+            >
+              {busy === activeClass.id ? 'Ending...' : 'End Class'}
+            </button>
+          ) : undefined
+        }
+      />
     )
   }
 
@@ -231,7 +232,7 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
         </>
       )}
 
-      {/* Past */}
+      {/* Missed / unstarted */}
       {missed.length > 0 && (
         <>
           <SectionLabel>Missed / Unstarted</SectionLabel>
@@ -245,7 +246,15 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
                     <td><span className="tag">{cls.subject}</span></td>
                     <td><span className="mono" style={{ fontSize: 11 }}>{cls.teacher_name}</span></td>
                     <td><span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{new Date(cls.scheduled_at).toLocaleString()}</span></td>
-                    <td><span className="mono" style={{ fontSize: 11, color: 'var(--warn)' }}>MISSED</span></td>
+                    <td>
+                      {isTeacher && cls.teacher_id === profile.id ? (
+                        <button className="btn btn-xs btn-primary" onClick={() => startClass(cls)} disabled={busy === cls.id}>
+                          {busy === cls.id ? '...' : 'Start Late'}
+                        </button>
+                      ) : (
+                        <span className="mono" style={{ fontSize: 11, color: 'var(--warn)' }}>MISSED</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
