@@ -146,7 +146,7 @@ export function JitsiMeet({ roomName, displayName, onClose, subject, height = 'c
             background: '#000', zIndex: 2,
           }}>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--danger)', textAlign: 'center', maxWidth: 320 }}>
-              △ Could not load embedded call.<br />Click "Open in Browser Tab" above to join.
+              △ Could not load embedded call.<br />Click &quot;Open in Browser Tab&quot; above to join.
             </div>
           </div>
         )}
