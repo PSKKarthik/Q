@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import Link from 'next/link'
@@ -18,6 +18,25 @@ function LoginForm() {
   const [showPw, setShowPw]     = useState(false)
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
+  const [checkingSession, setCheckingSession] = useState(true)
+
+  // Redirect already-authenticated users to their dashboard
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) { setCheckingSession(false); return }
+      const { data: profile } = await supabase
+        .from('profiles').select('role').eq('id', data.user.id).single()
+      if (profile?.role) {
+        const target = redirectPath && isSafeRedirect(redirectPath)
+          ? redirectPath
+          : `/dashboard/${profile.role}`
+        router.replace(target)
+      } else {
+        setCheckingSession(false)
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleLogin = async () => {
     if (!identifier || !password) { setError('Enter email or QGX ID and password'); return }
@@ -40,13 +59,42 @@ function LoginForm() {
 
     // Get profile to determine role
     const { data: profile } = await supabase
-      .from('profiles').select('role').eq('id', data.user.id).single()
+      .from('profiles').select('role, qgx_id').eq('id', data.user.id).single()
 
-    const role = profile?.role || 'student'
+    if (!profile?.role) {
+      setError('Account setup incomplete. Please contact an administrator.')
+      await supabase.auth.signOut()
+      setLoading(false)
+      return
+    }
+
+    // Backfill QGX ID if missing (users who registered before the fix)
+    if (!profile.qgx_id) {
+      const meta = data.user.user_metadata
+      fetch('/api/setup-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: data.user.id,
+          name: meta?.name || '',
+          email: data.user.email || '',
+          role: profile.role,
+        }),
+      }).catch(() => {})
+    }
+
     const target = redirectPath && isSafeRedirect(redirectPath)
       ? redirectPath
-      : `/dashboard/${role}`
+      : `/dashboard/${profile.role}`
     router.push(target)
+  }
+
+  if (checkingSession) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}>
+        <span className="spinner" />
+      </div>
+    )
   }
 
   return (

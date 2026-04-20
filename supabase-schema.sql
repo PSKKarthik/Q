@@ -398,6 +398,10 @@ begin
 end $$;
 alter table forum_posts add column if not exists best_answer_id uuid;
 alter table forum_comments add column if not exists is_best_answer boolean default false;
+alter table forum_comments add column if not exists edited_at timestamptz;
+-- Full row needed in realtime UPDATE payloads (view_count, likes, etc.)
+alter table forum_posts replica identity full;
+alter table forum_comments replica identity full;
 
 -- Profiles
 drop policy if exists "profiles_select" on profiles;
@@ -1392,6 +1396,112 @@ create policy "meeting_slots_update" on meeting_slots for update using (
 );
 
 -- ============================================================
+-- PARENT MEETING REQUESTS
+-- ============================================================
+create table if not exists meeting_requests (
+  id uuid primary key default gen_random_uuid(),
+  teacher_id uuid references profiles(id) on delete cascade,
+  teacher_name text,
+  parent_id uuid references profiles(id) on delete cascade,
+  parent_name text,
+  proposed_date text not null,
+  proposed_start text not null,
+  proposed_end text not null,
+  message text,
+  status text default 'pending' check (status in ('pending','approved','rejected')),
+  created_at timestamptz default now()
+);
+
+alter table meeting_requests enable row level security;
+
+drop policy if exists "meeting_requests_select" on meeting_requests;
+create policy "meeting_requests_select" on meeting_requests for select using (
+  auth.uid() = teacher_id or auth.uid() = parent_id
+);
+
+drop policy if exists "meeting_requests_parent_insert" on meeting_requests;
+create policy "meeting_requests_parent_insert" on meeting_requests for insert with check (
+  exists (select 1 from profiles where id = auth.uid() and role = 'parent')
+  and parent_id = auth.uid()
+);
+
+drop policy if exists "meeting_requests_teacher_update" on meeting_requests;
+create policy "meeting_requests_teacher_update" on meeting_requests for update using (
+  auth.uid() = teacher_id
+);
+
+-- ============================================================
+-- MULTI-INSTITUTION SUPPORT
+-- ============================================================
+create table if not exists institutions (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  code text unique not null,
+  description text,
+  active boolean default true,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz default now()
+);
+alter table institutions enable row level security;
+drop policy if exists "institutions_select" on institutions;
+create policy "institutions_select" on institutions for select using (true);
+drop policy if exists "institutions_admin_all" on institutions;
+create policy "institutions_admin_all" on institutions for all using (
+  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);
+
+alter table profiles add column if not exists institution_id uuid references institutions(id) on delete set null;
+
+-- ============================================================
+-- CLASSROOMS
+-- ============================================================
+create table if not exists classrooms (
+  id uuid primary key default gen_random_uuid(),
+  institution_id uuid references institutions(id) on delete cascade,
+  name text not null,
+  grade text,
+  section text,
+  academic_year text default extract(year from now())::text,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz default now()
+);
+alter table classrooms enable row level security;
+drop policy if exists "classrooms_select" on classrooms;
+create policy "classrooms_select" on classrooms for select using (auth.role() = 'authenticated');
+drop policy if exists "classrooms_admin_all" on classrooms;
+create policy "classrooms_admin_all" on classrooms for all using (
+  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);
+drop policy if exists "classrooms_teacher_insert" on classrooms;
+create policy "classrooms_teacher_insert" on classrooms for insert with check (
+  exists (select 1 from profiles where id = auth.uid() and role in ('admin','teacher'))
+);
+drop policy if exists "classrooms_teacher_update" on classrooms;
+create policy "classrooms_teacher_update" on classrooms for update using (
+  exists (select 1 from profiles where id = auth.uid() and role in ('admin','teacher'))
+  and created_by = auth.uid()
+);
+
+-- ============================================================
+-- CLASSROOM MEMBERS
+-- ============================================================
+create table if not exists classroom_members (
+  id uuid primary key default gen_random_uuid(),
+  classroom_id uuid references classrooms(id) on delete cascade,
+  user_id uuid references profiles(id) on delete cascade,
+  role text check (role in ('teacher','student')),
+  joined_at timestamptz default now(),
+  unique(classroom_id, user_id)
+);
+alter table classroom_members enable row level security;
+drop policy if exists "classroom_members_select" on classroom_members;
+create policy "classroom_members_select" on classroom_members for select using (auth.role() = 'authenticated');
+drop policy if exists "classroom_members_manage" on classroom_members;
+create policy "classroom_members_manage" on classroom_members for all using (
+  exists (select 1 from profiles where id = auth.uid() and role in ('admin','teacher'))
+);
+
+-- ============================================================
 -- FORUM REPUTATION
 -- ============================================================
 alter table profiles add column if not exists reputation integer default 0;
@@ -1497,3 +1607,32 @@ end;
 $$;
 
 grant execute on function public.increment_reputation(uuid, integer) to authenticated;
+
+-- ============================================================
+-- PLAGIARISM FLAGS
+-- ============================================================
+create table if not exists plagiarism_flags (
+  id uuid primary key default gen_random_uuid(),
+  assignment_id uuid references assignments(id) on delete cascade,
+  teacher_id uuid references profiles(id) on delete cascade,
+  student_a_id uuid references profiles(id) on delete set null,
+  student_b_id uuid references profiles(id) on delete set null,
+  submission_a_id uuid references submissions(id) on delete set null,
+  submission_b_id uuid references submissions(id) on delete set null,
+  similarity integer not null,
+  status text not null default 'open' check (status in ('open', 'reviewed', 'dismissed')),
+  shared_phrases jsonb default '[]'::jsonb,
+  created_at timestamptz default now()
+);
+
+alter table plagiarism_flags enable row level security;
+
+drop policy if exists "plagiarism_flags_select" on plagiarism_flags;
+create policy "plagiarism_flags_select" on plagiarism_flags for select using (
+  auth.uid() = teacher_id
+  or exists (select 1 from profiles where profiles.id = auth.uid() and profiles.role = 'admin')
+);
+drop policy if exists "plagiarism_flags_insert" on plagiarism_flags;
+create policy "plagiarism_flags_insert" on plagiarism_flags for insert with check (auth.uid() = teacher_id);
+drop policy if exists "plagiarism_flags_update" on plagiarism_flags;
+create policy "plagiarism_flags_update" on plagiarism_flags for update using (auth.uid() = teacher_id);

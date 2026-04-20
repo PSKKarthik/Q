@@ -138,7 +138,7 @@ export function StudentGradesModule({ profile, attempts, assignments, allCourses
       if (att.data) setAttendance(att.data)
       if (ts.data)  setTestsMeta(ts.data as TestMeta[])
     }).catch(err => {
-      toast(err instanceof Error ? err.message : 'Failed to load grade data', 'error')
+      toast((err as any)?.message ||'Failed to load grade data', 'error')
     })
   }, [profile.id, toast])
 
@@ -313,7 +313,7 @@ export function StudentGradesModule({ profile, attempts, assignments, allCourses
 
       {/* ── REPORT CARD ── */}
       {view === 'report' && (
-        <div className="gr-report fade-up-2">
+        <div className="gr-report fade-up-2" style={{ overflowX: 'auto' }}>
           <div className="gr-report-header">
             <div>
               <h3 className="gr-report-title">Academic Report Card</h3>
@@ -398,7 +398,7 @@ export function TeacherGradesModule({ profile, students, allAttempts, assignment
       if (att.data) setAttendance(att.data)
       if (ts.data)  setTestsMeta(ts.data as TestMeta[])
     }).catch(err => {
-      toast(err instanceof Error ? err.message : 'Failed to load grade data', 'error')
+      toast((err as any)?.message ||'Failed to load grade data', 'error')
     })
   }, [profile.id, toast])
 

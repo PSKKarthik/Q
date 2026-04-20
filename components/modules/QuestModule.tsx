@@ -42,7 +42,7 @@ export function QuestModule({ profile }: Props) {
       if (questsRes.data) setQuests(questsRes.data as Quest[])
       if (progressRes.data) setProgress(progressRes.data as QuestProgress[])
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load quests', 'error')
+      toast((err as any)?.message ||'Failed to load quests', 'error')
     }
     setLoading(false)
   }, [profile.id, toast])
@@ -56,12 +56,12 @@ export function QuestModule({ profile }: Props) {
     try {
       const { error: claimErr } = await supabase.from('quest_progress').update({ claimed: true }).eq('id', prog.id)
       if (claimErr) throw claimErr
-      const { error: xpErr } = await supabase.rpc('atomic_xp_update', { p_user_id: profile.id, p_xp_delta: quest.xp_reward, p_best_score: 0, p_ghost_win_increment: 0 })
+      const { error: xpErr } = await supabase.rpc('atomic_xp_update', { p_user_id: profile.id, p_xp_delta: quest.xp_reward, p_best_score: profile.score || 0, p_ghost_win_increment: 0 })
       if (xpErr) throw xpErr
       setProgress(prev => prev.map(p => p.id === prog.id ? { ...p, claimed: true } : p))
       toast(`+${quest.xp_reward} XP claimed!`, 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to claim reward', 'error')
+      toast((err as any)?.message ||'Failed to claim reward', 'error')
     }
   }
 
@@ -80,7 +80,11 @@ export function QuestModule({ profile }: Props) {
     return true
   })
 
-  if (loading) return <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>Loading quests...</div>
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+      <div className="spinner" />
+    </div>
+  )
 
   return (
     <>
@@ -153,7 +157,7 @@ export function QuestModule({ profile }: Props) {
 }
 
 function QuestCard({ quest, progress, onClaim }: { quest: Quest; progress?: QuestProgress; onClaim: (q: Quest, p: QuestProgress) => void }) {
-  const pct = progress ? Math.min(100, Math.round((progress.progress / quest.target_count) * 100)) : 0
+  const pct = progress && quest.target_count > 0 ? Math.min(100, Math.round((progress.progress / quest.target_count) * 100)) : 0
   const icon = QUEST_ICONS[quest.target_type] || '◉'
   const actionHint = QUEST_ACTIONS[quest.target_type] || 'Complete quest actions'
 

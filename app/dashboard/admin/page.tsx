@@ -18,6 +18,7 @@ import { SectionLabel } from '@/components/ui/SectionLabel'
 import { ProfileTab } from '@/components/ui/ProfileTab'
 import { AdminTestModule } from '@/components/modules/AdminTestModule'
 import { AdminBatchModule } from '@/components/modules/BatchModule'
+import { InstitutionModule } from '@/components/modules/InstitutionModule'
 import { CalendarModule } from '@/components/modules/CalendarModule'
 import { ForumModule } from '@/components/modules/ForumModule'
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton'
@@ -56,6 +57,7 @@ function AdminDashboardContent() {
   const [createUserLoading, setCreateUserLoading] = useState(false)
   const [announcePosting, setAnnouncePosting] = useState(false)
   const [userSaving, setUserSaving] = useState(false)
+  const [resetEmailLoading, setResetEmailLoading] = useState(false)
   const [questSaving, setQuestSaving] = useState(false)
   const [userRoleFilter, setUserRoleFilter] = useState<'all' | Profile['role']>('all')
   const [xpFilter, setXpFilter] = useState<'all' | '0-99' | '100-999' | '1000+'>('all')
@@ -70,7 +72,7 @@ function AdminDashboardContent() {
       const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false })
       if (data) setAnnouncements(data as Announcement[])
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load announcements'
+      const msg = (err as any)?.message ||'Failed to load announcements'
       toast(msg, 'error')
     }
   }, [toast])
@@ -114,7 +116,7 @@ function AdminDashboardContent() {
     if (handledDeepLink.current) return
     const requestedTab = searchParams.get('tab')
     const openCreateUser = searchParams.get('createUser') === '1'
-    const allowedTabs = new Set(['home', 'users', 'announcements', 'tests', 'courses', 'assignments', 'attendance', 'forums', 'analytics', 'activity', 'settings', 'batch', 'calendar', 'profile', 'grades', 'quests'])
+    const allowedTabs = new Set(['home', 'institutions', 'users', 'announcements', 'tests', 'courses', 'assignments', 'attendance', 'forums', 'analytics', 'activity', 'settings', 'batch', 'calendar', 'profile', 'grades', 'quests'])
     if (requestedTab && allowedTabs.has(requestedTab)) {
       setTab(requestedTab)
     }
@@ -154,7 +156,11 @@ function AdminDashboardContent() {
     if (!doubleXP.active || !doubleXP.ends_at) return
     const iv = setInterval(() => {
       const rem = Math.max(0, doubleXP.ends_at! - Date.now())
-      if (rem === 0) { setDoubleXP({ active: false, ends_at: null }); setXpTimer(''); return }
+      if (rem === 0) {
+        const val = { active: false, ends_at: null }
+        supabase.from('platform_settings').update({ value: val }).eq('key', 'double_xp').then()
+        setDoubleXP(val); setXpTimer(''); return
+      }
       const m = Math.floor(rem / 60000), s = Math.floor((rem % 60000) / 1000)
       setXpTimer(`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`)
     }, 1000)
@@ -188,12 +194,27 @@ function AdminDashboardContent() {
       }).map(u => u.id)
       const { error: batchErr } = await pushNotificationBatch(targetIds, `◆ Admin announcement: ${newAnnounce.title}`, 'announcement')
       if (batchErr) { /* non-blocking dispatch helper failed */ }
+      // Email targeted users via Brevo (non-blocking)
+      const targetEmails = users.filter(u => {
+        if (u.id === profile.id) return false
+        if (newAnnounce.target === 'students') return u.role === 'student'
+        if (newAnnounce.target === 'teachers') return u.role === 'teacher'
+        if (newAnnounce.target === 'parents') return u.role === 'parent'
+        return true
+      }).map(u => u.email).filter(Boolean)
+      if (targetEmails.length > 0) {
+        fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: targetEmails, subject: newAnnounce.title, message: newAnnounce.body, template: 'New Announcement' }),
+        }).catch(() => {/* non-blocking */})
+      }
       await logActivity(`Admin posted announcement: ${newAnnounce.title}`, 'announcement')
       setNewAnnounce({ title: '', body: '', target: 'all', pinned: false })
       setAnnounceModal(false)
       await fetchAnnouncements()
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to post announcement', 'error')
+      toast((err as any)?.message ||'Failed to post announcement', 'error')
     } finally {
       setAnnouncePosting(false)
     }
@@ -205,7 +226,7 @@ function AdminDashboardContent() {
       await supabase.from('announcements').delete().eq('id', id)
       setAnnouncements(a => a.filter(x => x.id !== id))
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete announcement', 'error')
+      toast((err as any)?.message ||'Failed to delete announcement', 'error')
     }
   }
 
@@ -220,14 +241,15 @@ function AdminDashboardContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUser),
       })
-      const data = await res.json()
-      if (!res.ok) { toast(`Create failed: ${data.error || 'Unknown error'}`, 'error'); setCreateUserLoading(false); return }
-      toast(`User created: ${newUser.email}`, 'success')
+      const json = await res.json()
+      if (!res.ok) { toast(`Create failed: ${json.error || 'Unknown error'}`, 'error'); setCreateUserLoading(false); return }
+      const data = json.data || json
+      toast(`User created: ${newUser.email}${data.qgxId ? ` — ID: ${data.qgxId}` : ''}`, 'success')
       setNewUser({ name: '', email: '', role: 'student' })
       setCreateUserModal(false)
       fetchAll()
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to create user', 'error')
+      toast((err as any)?.message ||'Failed to create user', 'error')
     } finally {
       setCreateUserLoading(false)
     }
@@ -249,8 +271,9 @@ function AdminDashboardContent() {
         return
       }
       setUsers(u => u.filter(x => x.id !== id))
+      if (userModal?.id === id) setUserModal(null)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete user', 'error')
+      toast((err as any)?.message ||'Failed to delete user', 'error')
     }
   }
 
@@ -259,7 +282,7 @@ function AdminDashboardContent() {
     if (!userModal) return
     setUserSaving(true)
     try {
-      const { name, phone, bio, role } = editUser
+      const { name, phone, bio, role, email, xp } = editUser
       if (role === 'admin' && userModal.role !== 'admin') {
         const ok = confirm('Grant admin privileges to this user? This gives full platform access.')
         if (!ok) return
@@ -268,12 +291,15 @@ function AdminDashboardContent() {
         toast('You cannot change your own role from this panel.', 'error')
         return
       }
-      const { error } = await supabase.from('profiles').update({ name, phone, bio, role }).eq('id', userModal.id)
+      const updates: Record<string, unknown> = { name, phone, bio, role }
+      if (email && email !== userModal.email) updates.email = email
+      if (xp !== undefined && xp !== '') updates.xp = Number(xp)
+      const { error } = await supabase.from('profiles').update(updates).eq('id', userModal.id)
       if (error) { toast(`Save failed: ${error.message}`, 'error'); return }
-      setUsers(u => u.map(x => x.id === userModal.id ? { ...x, name: name ?? x.name, phone: phone ?? x.phone, bio: bio ?? x.bio, role: (role as Profile['role']) ?? x.role } : x))
+      setUsers(u => u.map(x => x.id === userModal.id ? { ...x, name: name ?? x.name, phone: phone ?? x.phone, bio: bio ?? x.bio, role: (role as Profile['role']) ?? x.role, email: (updates.email as string) ?? x.email, xp: updates.xp !== undefined ? Number(updates.xp) : x.xp } : x))
       setUserModal(null)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to save user', 'error')
+      toast((err as any)?.message ||'Failed to save user', 'error')
     } finally {
       setUserSaving(false)
     }
@@ -287,7 +313,7 @@ function AdminDashboardContent() {
       const studentIds = users.filter(u => u.role === 'student').map(u => u.id)
       await pushNotificationBatch(studentIds, '◈ Double XP Hour is now active! Earn 2x XP on tests!', 'double_xp')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to activate Double XP', 'error')
+      toast((err as any)?.message ||'Failed to activate Double XP', 'error')
     }
   }
 
@@ -297,7 +323,7 @@ function AdminDashboardContent() {
       await supabase.from('platform_settings').update({ value: val }).eq('key', 'double_xp')
       setDoubleXP(val)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to deactivate Double XP', 'error')
+      toast((err as any)?.message ||'Failed to deactivate Double XP', 'error')
     }
   }
 
@@ -395,6 +421,7 @@ function AdminDashboardContent() {
 
   const navItems = [
     { id: 'home', label: 'Overview', icon: 'home' },
+    { id: 'institutions', label: 'Institutions', icon: 'home' },
     { id: 'users', label: 'Users', icon: 'users' },
     { id: 'announcements', label: 'Announcements', icon: 'bell' },
     { id: 'tests', label: 'Tests', icon: 'test' },
@@ -476,29 +503,74 @@ function AdminDashboardContent() {
             saveUser()
           }}
         >
-          {userModal && [
-            ['name', 'Name'],
-            ['phone', 'Phone'],
-            ['bio', 'Bio'],
-          ].map(([k, lbl]) => (
-            <div key={k} style={{ marginBottom: 14 }}>
-              <label className="label">{lbl}</label>
-              <input className="input" value={editUser[k] || ''} onChange={e => setEditUser(f => ({ ...f, [k]: e.target.value }))} />
-            </div>
-          ))}
           {userModal && (
-            <div style={{ marginBottom: 14 }}>
-              <label className="label">Role</label>
-              <select className="input" value={editUser.role || userModal.role} onChange={e => setEditUser(f => ({ ...f, role: e.target.value }))}>
-                <option value="student">Student</option>
-                <option value="teacher">Teacher</option>
-                <option value="parent">Parent</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
+            <>
+              {[
+                ['name', 'Name'],
+                ['phone', 'Phone'],
+                ['bio', 'Bio'],
+              ].map(([k, lbl]) => (
+                <div key={k} style={{ marginBottom: 14 }}>
+                  <label className="label">{lbl}</label>
+                  <input className="input" value={editUser[k] || ''} onChange={e => setEditUser(f => ({ ...f, [k]: e.target.value }))} />
+                </div>
+              ))}
+              <div style={{ marginBottom: 14 }}>
+                <label className="label">Email</label>
+                <input className="input" type="email" value={editUser.email || ''} onChange={e => setEditUser(f => ({ ...f, email: e.target.value }))} />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label className="label">XP</label>
+                <input className="input" type="number" min={0} value={editUser.xp || '0'} onChange={e => setEditUser(f => ({ ...f, xp: e.target.value }))} />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label className="label">Role</label>
+                <select className="input" value={editUser.role || userModal.role} onChange={e => setEditUser(f => ({ ...f, role: e.target.value }))}>
+                  <option value="student">Student</option>
+                  <option value="teacher">Teacher</option>
+                  <option value="parent">Parent</option>
+                  <option value="admin">Admin</option>
+                </select>
+                {editUser.role === 'admin' && userModal.role !== 'admin' && (
+                  <div style={{ marginTop: 6, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--danger)', padding: '6px 10px', border: '1px solid var(--danger)', background: 'rgba(255,0,0,0.06)' }}>
+                    Warning: granting admin gives full platform access.
+                  </div>
+                )}
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label className="label">QGX ID</label>
+                <input className="input" value={userModal.qgx_id || '—'} readOnly style={{ opacity: 0.5, cursor: 'not-allowed' }} />
+              </div>
+            </>
           )}
           <div className="modal-form-actions">
             <button className="btn btn-primary" type="submit" disabled={userSaving}>{userSaving ? <span className="spinner" /> : 'Save'}</button>
+            <button
+              className="btn btn-sm"
+              type="button"
+              disabled={resetEmailLoading || !userModal}
+              onClick={async () => {
+                if (!userModal) return
+                setResetEmailLoading(true)
+                try {
+                  const res = await fetch('/api/reset-user-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: userModal.id }),
+                  })
+                  const json = await res.json()
+                  if (!res.ok) { toast(`Reset failed: ${json.error || 'Unknown error'}`, 'error'); return }
+                  const data = json.data || json
+                  toast(`Password reset email sent to ${data.email}`, 'success')
+                } catch (err) {
+                  toast((err as any)?.message ||'Failed to send reset email', 'error')
+                } finally {
+                  setResetEmailLoading(false)
+                }
+              }}
+            >
+              {resetEmailLoading ? <span className="spinner" /> : 'Send Reset Email'}
+            </button>
             <button className="btn" type="button" onClick={() => setUserModal(null)} disabled={userSaving}>Cancel</button>
           </div>
         </form>
@@ -562,9 +634,18 @@ function AdminDashboardContent() {
                   searchTimer.current = setTimeout(() => { setDebouncedSearch(e.target.value); setUserPage(0) }, DEBOUNCE_MS)
                 }} />
               </div>
-              <button className="btn btn-sm" onClick={() => setCreateUserModal(true)}>
-                <Icon name="plus" size={10} /> Create User
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-sm" onClick={() => {
+                  const headers = ['Name', 'Email', 'QGX ID', 'Role', 'XP', 'Joined']
+                  const rows = filteredUsers.map(u => [u.name || '', u.email || '', u.qgx_id || '', u.role || '', u.xp ?? 0, u.joined || ''])
+                  exportCSV('qgx-users.csv', headers, rows)
+                }}>
+                  <Icon name="download" size={10} /> Export CSV
+                </button>
+                <button className="btn btn-sm" onClick={() => setCreateUserModal(true)}>
+                  <Icon name="plus" size={10} /> Create User
+                </button>
+              </div>
             </div>
             <div className="fade-up-3" style={{ border: '1px solid var(--border)', padding: 12, marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -645,7 +726,7 @@ function AdminDashboardContent() {
                       <td><span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{u.joined}</span></td>
                       <td>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn btn-xs" onClick={() => { setEditUser({ name: u.name, phone: u.phone || '', bio: u.bio || '', role: u.role }); setUserModal(u) }}><Icon name="edit" size={10} /></button>
+                          <button className="btn btn-xs" onClick={() => { setEditUser({ name: u.name, phone: u.phone || '', bio: u.bio || '', role: u.role, email: u.email || '', xp: String(u.xp || 0) }); setUserModal(u) }}><Icon name="edit" size={10} /></button>
                           <button className="btn btn-xs btn-danger" onClick={() => deleteUser(u.id)}><Icon name="trash" size={10} /></button>
                         </div>
                       </td>
@@ -695,7 +776,7 @@ function AdminDashboardContent() {
                 try {
                   await Promise.all(draftCourses.map(c => supabase.from('courses').update({ status: 'published' }).eq('id', c.id)))
                   setCourses(prev => prev.map(c => c.status === 'draft' ? { ...c, status: 'published' } : c))
-                } catch (err) { toast(err instanceof Error ? err.message : 'Failed to publish courses', 'error') }
+                } catch (err) { toast((err as any)?.message ||'Failed to publish courses', 'error') }
               }}><Icon name="check" size={11} /> Publish All Drafts</button>
               <button className="btn btn-sm" onClick={() => exportCSV('courses-export.csv', ['Title', 'Subject', 'Teacher', 'Status', 'Created'], courses.map(c => [c.title, c.subject, c.teacher_name, c.status, c.created_at?.slice(0, 10)]))}>
                 <Icon name="download" size={11} /> Export CSV
@@ -762,7 +843,7 @@ function AdminDashboardContent() {
                 try {
                   await Promise.all(overdue.map(a => supabase.from('assignments').update({ status: 'closed' }).eq('id', a.id)))
                   setAssignments(prev => prev.map(a => overdue.find(o => o.id === a.id) ? { ...a, status: 'closed' } : a))
-                } catch (err) { toast(err instanceof Error ? err.message : 'Failed to close assignments', 'error') }
+                } catch (err) { toast((err as any)?.message ||'Failed to close assignments', 'error') }
               }}><Icon name="check" size={11} /> Close Overdue</button>
               <button className="btn btn-sm" onClick={() => exportCSV('assignments-export.csv', ['Title', 'Teacher', 'Due', 'Priority', 'Submissions', 'Status'], assignments.map(a => [a.title, a.teacher_name, a.due_date?.slice(0, 10), a.priority, a.submissions?.length || 0, a.status]))}>
                 <Icon name="download" size={11} /> Export CSV
@@ -1271,6 +1352,11 @@ function AdminDashboardContent() {
           <ForumModule profile={profile} />
         )}
 
+        {/* INSTITUTIONS */}
+        {tab === 'institutions' && profile && (
+          <InstitutionModule profile={profile} allUsers={users} />
+        )}
+
         {/* BATCH OPERATIONS */}
         {tab === 'batch' && (
           <AdminBatchModule users={users} onUsersChange={setUsers} />
@@ -1446,7 +1532,7 @@ function AdminDashboardContent() {
                         tests_weight: vals[0], assignments_weight: vals[1],
                         attendance_weight: vals[2], participation_weight: vals[3],
                       }, { onConflict: 'id' })
-                    } catch (err) { toast(err instanceof Error ? err.message : 'Failed to save weights', 'error') }
+                    } catch (err) { toast((err as any)?.message ||'Failed to save weights', 'error') }
                   }}>Save Weights</button>
                 </div>
               </div>

@@ -227,7 +227,11 @@ export function CollaborationModule({ profile }: Props) {
     }
   }
 
-  if (loading) return <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>Loading rooms...</div>
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+      <div className="spinner" />
+    </div>
+  )
 
   if (activeRoom) {
     const jitsiRoom = getJitsiRoomName(activeRoom)

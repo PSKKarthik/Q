@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import type { Profile, Attempt, AttendanceRecord, Test, Assignment, Submission, TimetableSlot, AbsenceExcuse, MeetingSlot, Message, Announcement, Notification } from '@/types'
+import { pushNotificationBatch } from '@/lib/actions'
+import type { Profile, Attempt, AttendanceRecord, Test, Assignment, Submission, TimetableSlot, AbsenceExcuse, MeetingSlot, Announcement, Notification } from '@/types'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { StatGrid } from '@/components/ui/StatGrid'
@@ -25,6 +26,7 @@ function ParentDashboardContent() {
   const [tab, setTab] = useState('home')
   const [linkedStudents, setLinkedStudents] = useState<Profile[]>([])
   const [selectedStudent, setSelectedStudent] = useState<Profile | null>(null)
+  const [studentDataLoading, setStudentDataLoading] = useState(false)
   const [attempts, setAttempts] = useState<Attempt[]>([])
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
   const [tests, setTests] = useState<Test[]>([])
@@ -35,12 +37,22 @@ function ParentDashboardContent() {
   const [excuses, setExcuses] = useState<AbsenceExcuse[]>([])
   const [excuseForm, setExcuseForm] = useState({ date: '', reason: '' })
   const [teachers, setTeachers] = useState<Profile[]>([])
-  const [msgTeacher, setMsgTeacher] = useState<string>('')
-  const [msgText, setMsgText] = useState('')
-  const [parentMessages, setParentMessages] = useState<Message[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [alerts, setAlerts] = useState<{ type: string; message: string }[]>([])
   const [notifications, setNotifications] = useState<Notification[]>([])
+  // Link student: 2-step OTP flow
+  const [linkStep, setLinkStep] = useState<'id' | 'otp'>('id')
+  const [linkToken, setLinkToken] = useState('')
+  const [linkStudentName, setLinkStudentName] = useState('')
+  const [linkOtp, setLinkOtp] = useState('')
+  const [linkLoading, setLinkLoading] = useState(false)
+  const [institutionName, setInstitutionName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!profile?.institution_id) return
+    supabase.from('institutions').select('name').eq('id', profile.institution_id).single()
+      .then(({ data }) => { if (data) setInstitutionName(data.name) })
+  }, [profile?.institution_id])
 
   useEffect(() => {
     if (handledDeepLink.current) return
@@ -62,7 +74,10 @@ function ParentDashboardContent() {
         })
     }).catch(() => { router.push('/login') })
 
-    // Listen for auth state changes (logout in another tab, session expiry)
+    // Load teachers independently so messaging works even with no linked students
+    supabase.from('profiles').select('*').eq('role', 'teacher')
+      .then(({ data }) => { if (data) setTeachers(data as Profile[]) })
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') router.push('/login')
     })
@@ -89,28 +104,27 @@ function ParentDashboardContent() {
         loadStudentData(students[0] as Profile)
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load linked students', 'error')
+      toast((err as any)?.message ||'Failed to load linked students', 'error')
     }
   }
 
-  const loadStudentData = async (student: Profile, parentProfile?: Profile) => {
-    const resolvedProfile = parentProfile || profile
+  const loadStudentData = async (student: Profile) => {
+    setStudentDataLoading(true)
     try {
-      const [att, attn, t, a, tt, ann] = await Promise.all([
-        supabase.from('attempts').select('*').eq('student_id', student.id),
+      const [att, attn, tt, ann, excData] = await Promise.all([
+        supabase.from('attempts').select('*').eq('student_id', student.id).order('submitted_at', { ascending: false }),
         supabase.from('attendance').select('*').eq('student_id', student.id).order('date', { ascending: false }),
-        supabase.from('tests').select('id, title, subject, scheduled_date'),
-        supabase.from('assignments').select('*, submissions(*)').order('created_at', { ascending: false }),
         supabase.from('timetable').select('*'),
         supabase.from('announcements').select('*').in('target', ['all', 'parents']).order('created_at', { ascending: false }),
+        supabase.from('absence_excuses').select('*').eq('student_id', student.id).order('created_at', { ascending: false }),
       ])
+
       if (att.data) setAttempts(att.data as Attempt[])
       if (attn.data) setAttendance(attn.data as AttendanceRecord[])
-      if (t.data) setTests(t.data as Test[])
-      if (a.data) setAssignments(a.data)
       if (ann.data) setAnnouncements(ann.data as Announcement[])
+      if (excData.data) setExcuses(excData.data as AbsenceExcuse[])
 
-      // Fix #7: Filter timetable to subjects the student actually attends
+      // Filter timetable by subjects the student actually attends
       if (tt.data) {
         const studentSubjects = new Set((attn.data || []).map((r: any) => r.subject).filter(Boolean))
         const filtered = studentSubjects.size > 0
@@ -119,93 +133,137 @@ function ParentDashboardContent() {
         setTimetable(filtered)
       }
 
-      // Load excuses
-      const { data: excData } = await supabase.from('absence_excuses').select('*').eq('student_id', student.id).order('created_at', { ascending: false })
-      if (excData) setExcuses(excData as AbsenceExcuse[])
+      // Fetch only assignments this student has submitted to (inner join) + active assignments in their subjects
+      const studentSubjectSet = new Set((attn.data || []).map((r: any) => r.subject).filter(Boolean))
+      const [asgSubmitted, asgActive, testsRes] = await Promise.all([
+        // Assignments the student has already submitted
+        supabase.from('assignments')
+          .select('*, submissions!inner(*)')
+          .eq('submissions.student_id', student.id)
+          .order('created_at', { ascending: false }),
+        // Active assignments in the student's subjects
+        studentSubjectSet.size > 0
+          ? supabase.from('assignments')
+              .select('*, submissions(*)')
+              .eq('status', 'active')
+              .in('subject', Array.from(studentSubjectSet))
+              .order('created_at', { ascending: false })
+          : Promise.resolve({ data: [] as any[] }),
+        // Tests filtered by student's subjects
+        studentSubjectSet.size > 0
+          ? supabase.from('tests').select('id, title, subject, scheduled_date').in('subject', Array.from(studentSubjectSet))
+          : supabase.from('tests').select('id, title, subject, scheduled_date'),
+      ])
 
-      // Load teachers
-      const { data: tData } = await supabase.from('profiles').select('*').eq('role', 'teacher')
-      if (tData) setTeachers(tData as Profile[])
+      // Merge submitted + active assignments without duplicates
+      const submittedIds = new Set((asgSubmitted.data || []).map((a: any) => a.id))
+      const merged = [
+        ...(asgSubmitted.data || []),
+        ...(asgActive.data || []).filter((a: any) => !submittedIds.has(a.id)),
+      ]
+      setAssignments(merged)
+      if (testsRes.data) setTests(testsRes.data as Test[])
 
-      // Generate real-time alerts
+      // Generate alerts based on student-specific data
       const newAlerts: typeof alerts = []
       const recentAtt = (attn.data || []) as AttendanceRecord[]
       const absentDays = recentAtt.filter(a => a.status === 'absent').length
       const totalDays = recentAtt.length
-      if (totalDays > 0 && (absentDays / totalDays) > 0.2) {
-        newAlerts.push({ type: 'danger', message: `△ ${student.name} has missed ${absentDays} out of ${totalDays} days (${Math.round(absentDays/totalDays*100)}% absent)` })
+      if (totalDays > 0 && absentDays / totalDays > 0.2) {
+        newAlerts.push({ type: 'danger', message: `△ ${student.name} has missed ${absentDays} out of ${totalDays} days (${Math.round(absentDays / totalDays * 100)}% absent)` })
       }
-      const recentAttempts = (att.data || []) as Attempt[]
-      const lowScores = recentAttempts.filter(a => (a.percent || 0) < 50)
+      const lowScores = ((att.data || []) as Attempt[]).filter(a => (a.percent || 0) < 50)
       if (lowScores.length > 0) {
         newAlerts.push({ type: 'warn', message: `▪ ${student.name} scored below 50% on ${lowScores.length} test(s)` })
       }
-      const upcomingAssignments = (a.data || []).filter((asg: any) => asg.status === 'active' && asg.due_date && new Date(asg.due_date) > new Date() && new Date(asg.due_date) < new Date(Date.now() + 3 * 86400000))
-      if (upcomingAssignments.length > 0) {
-        newAlerts.push({ type: 'info', message: `▫ ${upcomingAssignments.length} assignment(s) due in the next 3 days` })
+      // Only count unsubmitted active assignments for this student
+      const studentSubIds = new Set((asgSubmitted.data || []).map((a: any) => a.id))
+      const due3Days = merged.filter((asg: any) =>
+        asg.status === 'active' &&
+        asg.due_date &&
+        !studentSubIds.has(asg.id) &&
+        new Date(asg.due_date) > new Date() &&
+        new Date(asg.due_date) < new Date(Date.now() + 3 * 86400000)
+      )
+      if (due3Days.length > 0) {
+        newAlerts.push({ type: 'info', message: `▫ ${due3Days.length} assignment(s) due in the next 3 days` })
       }
       setAlerts(newAlerts)
-
-      // Fix #4: Use resolvedProfile to avoid null race condition
-      if (resolvedProfile) {
-        const { data: msgs } = await supabase.from('messages').select('*').or(`sender_id.eq.${resolvedProfile.id},receiver_id.eq.${resolvedProfile.id}`).order('created_at', { ascending: true })
-        if (msgs) setParentMessages(msgs as Message[])
-      }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load student data', 'error')
+      toast((err as any)?.message ||'Failed to load student data', 'error')
+    } finally {
+      setStudentDataLoading(false)
     }
   }
 
-  const linkStudent = async () => {
+  // Step 1: send OTP to student's email
+  const requestOtp = async () => {
     if (!linkCode.trim() || !profile) return
     setLinkError('')
+    setLinkLoading(true)
     try {
-      // Find student by QGX ID
-      const { data: student } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('qgx_id', linkCode.trim().toUpperCase())
-        .eq('role', 'student')
-        .single()
-      if (!student) { setLinkError('Student not found. Check the QGX ID.'); return }
-      // Check not already linked
-      const { data: existing } = await supabase
-        .from('parent_students')
-        .select('*')
-        .eq('parent_id', profile.id)
-        .eq('student_id', student.id)
-        .single()
-      if (existing) { setLinkError('Already linked to this student.'); return }
-      await supabase.from('parent_students').insert({ parent_id: profile.id, student_id: student.id })
-      setLinkedStudents(prev => [...prev, student as Profile])
+      const res = await fetch('/api/link-student', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'request', qgx_id: linkCode.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setLinkError(json.error || 'Failed to send code'); return }
+      const data = json.data || json
+      setLinkToken(data.token)
+      setLinkStudentName(data.studentName)
+      setLinkOtp('')
+      setLinkStep('otp')
+    } catch {
+      setLinkError('Network error. Please try again.')
+    } finally {
+      setLinkLoading(false)
+    }
+  }
+
+  // Step 2: verify OTP and create link
+  const verifyOtp = async () => {
+    if (!linkOtp.trim() || !profile) return
+    setLinkError('')
+    setLinkLoading(true)
+    try {
+      const res = await fetch('/api/link-student', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', token: linkToken, otp: linkOtp.trim() }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setLinkError(json.error || 'Verification failed'); return }
+      const student = (json.data?.student || json.student) as Profile
+      setLinkedStudents(prev => [...prev, student])
       if (!selectedStudent) {
-        setSelectedStudent(student as Profile)
-        loadStudentData(student as Profile)
+        setSelectedStudent(student)
+        loadStudentData(student)
       }
       setLinkCode('')
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to link student', 'error')
+      setLinkOtp('')
+      setLinkToken('')
+      setLinkStudentName('')
+      setLinkStep('id')
+      toast(`✓ Linked to ${student.name}`, 'success')
+    } catch {
+      setLinkError('Network error. Please try again.')
+    } finally {
+      setLinkLoading(false)
     }
+  }
+
+  const resetLinkFlow = () => {
+    setLinkStep('id')
+    setLinkError('')
+    setLinkOtp('')
+    setLinkToken('')
+    setLinkStudentName('')
   }
 
   const switchStudent = (student: Profile) => {
     setSelectedStudent(student)
-    loadStudentData(student, profile || undefined)
-  }
-
-  const sendMessage = async () => {
-    if (!msgTeacher || !msgText.trim() || !profile) return
-    try {
-      const { data } = await supabase.from('messages').insert({
-        sender_id: profile.id,
-        receiver_id: msgTeacher,
-        body: msgText.trim(),
-      }).select().single()
-      if (data) setParentMessages(prev => [...prev, data as Message])
-      setMsgText('')
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to send message', 'error')
-    }
+    loadStudentData(student)
   }
 
   const navItems = [
@@ -244,29 +302,33 @@ function ParentDashboardContent() {
           <div className="fade-up" style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', letterSpacing: '0.1em' }}>VIEWING:</span>
             {linkedStudents.map(s => (
-              <button key={s.id} className={`btn btn-sm ${selectedStudent?.id === s.id ? 'btn-primary' : ''}`} onClick={() => switchStudent(s)}>
+              <button key={s.id} className={`btn btn-sm ${selectedStudent?.id === s.id ? 'btn-primary' : ''}`} onClick={() => switchStudent(s)} disabled={studentDataLoading}>
                 {s.name}
               </button>
             ))}
+            {studentDataLoading && <span className="spinner" style={{ width: 14, height: 14 }} />}
           </div>
         )}
 
         {tab === 'home' && (
           <>
-            <PageHeader title="PARENT DASHBOARD" subtitle={<>Welcome, {profile.name}</>} />
+            <PageHeader title="PARENT DASHBOARD" subtitle={<>Welcome, {profile.name}{institutionName && <> · <span style={{ color:'var(--accent)' }}>{institutionName}</span></>}</>} />
 
             {linkedStudents.length === 0 ? (
               <div className="card fade-up-2" style={{ padding: 32, textAlign: 'center' }}>
                 <div style={{ fontFamily: 'var(--display)', fontSize: 24, marginBottom: 12 }}>LINK YOUR CHILD</div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginBottom: 20 }}>
-                  Enter your child&apos;s QGX ID to view their progress
+                  {linkStep === 'id'
+                    ? "Enter your child's QGX ID — a verification code will be sent to their email"
+                    : `Code sent to ${linkStudentName}'s email. Enter it below to confirm.`}
                 </div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', maxWidth: 400, margin: '0 auto' }}>
-                  <input className="input" placeholder="QGX-ABCD-EFGH-IJKL" value={linkCode} onChange={e => setLinkCode(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') linkStudent() }} />
-                  <button className="btn btn-primary" onClick={linkStudent}>Link</button>
+                <div style={{ maxWidth: 400, margin: '0 auto' }}>
+                  <LinkStudentForm
+                    linkStep={linkStep} linkCode={linkCode} linkOtp={linkOtp} linkError={linkError} linkLoading={linkLoading}
+                    setLinkCode={setLinkCode} setLinkOtp={setLinkOtp}
+                    onRequestOtp={requestOtp} onVerifyOtp={verifyOtp} onReset={resetLinkFlow}
+                  />
                 </div>
-                {linkError && <div style={{ color: 'var(--danger)', fontFamily: 'var(--mono)', fontSize: 11, marginTop: 8 }}>{linkError}</div>}
               </div>
             ) : selectedStudent && (
               <>
@@ -280,12 +342,17 @@ function ParentDashboardContent() {
                 {/* Link another student */}
                 <div className="card fade-up-3" style={{ marginBottom: 20 }}>
                   <SectionLabel>Link Another Child</SectionLabel>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input className="input" placeholder="QGX-ABCD-EFGH-IJKL" value={linkCode} onChange={e => setLinkCode(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') linkStudent() }} style={{ maxWidth: 220 }} />
-                    <button className="btn btn-sm" onClick={linkStudent}>Link</button>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', marginBottom: 10 }}>
+                    {linkStep === 'otp'
+                      ? `Code sent to ${linkStudentName}'s email`
+                      : "A verification code will be sent to your child's email"}
                   </div>
-                  {linkError && <div style={{ color: 'var(--danger)', fontFamily: 'var(--mono)', fontSize: 11, marginTop: 6 }}>{linkError}</div>}
+                  <LinkStudentForm
+                    linkStep={linkStep} linkCode={linkCode} linkOtp={linkOtp} linkError={linkError} linkLoading={linkLoading}
+                    setLinkCode={setLinkCode} setLinkOtp={setLinkOtp}
+                    onRequestOtp={requestOtp} onVerifyOtp={verifyOtp} onReset={resetLinkFlow}
+                    compact
+                  />
                 </div>
 
                 {/* Recent activity */}
@@ -338,7 +405,13 @@ function ParentDashboardContent() {
           </>
         )}
 
-        {tab === 'grades' && selectedStudent && (
+        {tab === 'grades' && !selectedStudent && (
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginTop: 40, textAlign: 'center' }}>Link a student first to view their grades.</div>
+        )}
+        {tab === 'grades' && selectedStudent && studentDataLoading && (
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginTop: 40 }}>Loading grades...</div>
+        )}
+        {tab === 'grades' && selectedStudent && !studentDataLoading && (
           <>
             <PageHeader title="GRADES & TESTS" subtitle={`${selectedStudent.name}'s performance`} />
             <StatGrid items={[
@@ -371,7 +444,13 @@ function ParentDashboardContent() {
           </>
         )}
 
-        {tab === 'attendance' && selectedStudent && (
+        {tab === 'attendance' && !selectedStudent && (
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginTop: 40, textAlign: 'center' }}>Link a student first to view their attendance.</div>
+        )}
+        {tab === 'attendance' && selectedStudent && studentDataLoading && (
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginTop: 40 }}>Loading attendance...</div>
+        )}
+        {tab === 'attendance' && selectedStudent && !studentDataLoading && (
           <>
             <PageHeader title="ATTENDANCE" subtitle={`${selectedStudent.name}'s attendance record`} />
             <StatGrid items={[
@@ -431,11 +510,17 @@ function ParentDashboardContent() {
           </>
         )}
 
+        {tab === 'report' && !selectedStudent && (
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginTop: 40, textAlign: 'center' }}>Link a student first to view their report card.</div>
+        )}
         {tab === 'report' && selectedStudent && (
           <ReportCardModule profile={selectedStudent} />
         )}
 
         {/* ABSENCE EXCUSES */}
+        {tab === 'excuses' && !selectedStudent && (
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginTop: 40, textAlign: 'center' }}>Link a student first to submit absence excuses.</div>
+        )}
         {tab === 'excuses' && selectedStudent && (
           <>
             <PageHeader title="ABSENCE EXCUSES" subtitle={`Submit excuses for ${selectedStudent.name}`} />
@@ -450,17 +535,39 @@ function ParentDashboardContent() {
                 <button className="btn btn-primary btn-sm" onClick={async () => {
                   if (!excuseForm.date || !excuseForm.reason.trim() || !profile) return
                   try {
-                    const { data } = await supabase.from('absence_excuses').insert({
+                    const { data, error } = await supabase.from('absence_excuses').insert({
                       student_id: selectedStudent.id,
                       parent_id: profile.id,
                       date: excuseForm.date,
                       reason: excuseForm.reason.trim(),
                       status: 'pending',
                     }).select().single()
-                    if (data) setExcuses(prev => [data as AbsenceExcuse, ...prev])
-                    setExcuseForm({ date: '', reason: '' })
+                    if (error) throw error
+                    if (data) {
+                      setExcuses(prev => [data as AbsenceExcuse, ...prev])
+                      setExcuseForm({ date: '', reason: '' })
+                      // Notify teachers: find those with attendance records for this student
+                      const { data: attRecords } = await supabase
+                        .from('attendance')
+                        .select('teacher_id')
+                        .eq('student_id', selectedStudent.id)
+                      const teacherIds = Array.from(new Set((attRecords || []).map((r: any) => r.teacher_id).filter(Boolean))) as string[]
+                      if (teacherIds.length > 0) {
+                        await pushNotificationBatch(
+                          teacherIds,
+                          `${profile.name} submitted an absence excuse for ${selectedStudent.name} on ${excuseForm.date}.`,
+                          'excuse_submitted'
+                        )
+                      }
+                      // Send email to teachers via notify API
+                      fetch('/api/notify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'excuse_submitted', payload: { excuse_id: (data as AbsenceExcuse).id } }),
+                      }).catch(() => {/* non-blocking */})
+                    }
                   } catch (err) {
-                    toast(err instanceof Error ? err.message : 'Failed to submit excuse', 'error')
+                    toast((err as any)?.message ||'Failed to submit excuse', 'error')
                   }
                 }}>Submit</button>
               </div>
@@ -485,7 +592,7 @@ function ParentDashboardContent() {
         {tab === 'meetings' && (
           <MeetingSchedulerModule
             profile={profile}
-            allowedTeacherIds={Array.from(new Set((timetable || []).map(s => s.teacher_id).filter(Boolean)))}
+            allowedTeacherIds={teachers.map(t => t.id)}
           />
         )}
 
@@ -527,14 +634,17 @@ function ParentDashboardContent() {
 }
 
 function NotificationsTab({ profile, notifications, setNotifications }: { profile: Profile; notifications: Notification[]; setNotifications: (n: Notification[]) => void }) {
-  const [loaded, setLoaded] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (loaded) return
-    setLoaded(true)
+    setLoading(true)
     supabase.from('notifications').select('*').eq('user_id', profile.id).order('created_at', { ascending: false }).limit(50)
-      .then(({ data }) => { if (data) setNotifications(data as Notification[]) })
-  }, [profile.id, loaded, setNotifications])
+      .then(({ data }) => {
+        if (data) setNotifications(data as Notification[])
+        setLoading(false)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id])
 
   const markAllRead = async () => {
     await supabase.from('notifications').update({ read: true }).eq('user_id', profile.id).eq('read', false)
@@ -550,10 +660,10 @@ function NotificationsTab({ profile, notifications, setNotifications }: { profil
           <button className="btn btn-sm" onClick={markAllRead}>Mark all read ({unreadCount})</button>
         </div>
       )}
-      {notifications.length === 0 && !loaded && (
+      {loading && (
         <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>Loading...</div>
       )}
-      {notifications.length === 0 && loaded && (
+      {!loading && notifications.length === 0 && (
         <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>No notifications yet.</div>
       )}
       {notifications.map(n => (
@@ -562,6 +672,83 @@ function NotificationsTab({ profile, notifications, setNotifications }: { profil
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginTop: 4 }}>{new Date(n.created_at).toLocaleString()}</div>
         </div>
       ))}
+    </div>
+  )
+}
+
+interface LinkStudentFormProps {
+  linkStep: 'id' | 'otp'
+  linkCode: string
+  linkOtp: string
+  linkError: string
+  linkLoading: boolean
+  setLinkCode: (v: string) => void
+  setLinkOtp: (v: string) => void
+  onRequestOtp: () => void
+  onVerifyOtp: () => void
+  onReset: () => void
+  compact?: boolean
+}
+
+function LinkStudentForm({ linkStep, linkCode, linkOtp, linkError, linkLoading, setLinkCode, setLinkOtp, onRequestOtp, onVerifyOtp, onReset, compact }: LinkStudentFormProps) {
+  return (
+    <div>
+      {linkStep === 'id' ? (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            className="input"
+            placeholder="QGX-ABCD-EFGH"
+            value={linkCode}
+            onChange={e => setLinkCode(e.target.value.toUpperCase())}
+            onKeyDown={e => { if (e.key === 'Enter') onRequestOtp() }}
+            style={compact ? { maxWidth: 200 } : { flex: 1 }}
+          />
+          <button
+            className={`btn btn-primary ${compact ? 'btn-sm' : ''}`}
+            onClick={onRequestOtp}
+            disabled={linkLoading || !linkCode.trim()}
+          >
+            {linkLoading ? '...' : 'Send Code'}
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--accent)' }}>
+            ✉ A 6-digit code was sent to your child&apos;s email. Enter it below.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              className="input"
+              placeholder="_ _ _ _ _ _"
+              value={linkOtp}
+              onChange={e => setLinkOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onKeyDown={e => { if (e.key === 'Enter' && linkOtp.length === 6) onVerifyOtp() }}
+              style={{ width: 150, letterSpacing: '0.4em', textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 18 }}
+              maxLength={6}
+              inputMode="numeric"
+              autoFocus
+            />
+            <button
+              className={`btn btn-primary ${compact ? 'btn-sm' : ''}`}
+              onClick={onVerifyOtp}
+              disabled={linkLoading || linkOtp.length < 6}
+            >
+              {linkLoading ? '...' : 'Verify'}
+            </button>
+            <button className={`btn ${compact ? 'btn-sm' : ''}`} onClick={onReset}>
+              ← Back
+            </button>
+          </div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)' }}>
+            Code expires in 10 minutes. Check spam if not received.
+          </div>
+        </div>
+      )}
+      {linkError && (
+        <div style={{ color: 'var(--danger)', fontFamily: 'var(--mono)', fontSize: 11, marginTop: 6 }}>
+          {linkError}
+        </div>
+      )}
     </div>
   )
 }

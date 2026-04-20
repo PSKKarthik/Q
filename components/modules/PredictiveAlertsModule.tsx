@@ -114,7 +114,7 @@ export function PredictiveAlertsModule({ profile }: Props) {
     setRisks(riskData)
     setLoading(false)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to analyze students', 'error')
+      toast((err as any)?.message ||'Failed to analyze students', 'error')
       setLoading(false)
     }
   }, [profile.id, toast])

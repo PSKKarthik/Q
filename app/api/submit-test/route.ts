@@ -23,27 +23,27 @@ export async function POST(req: Request) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 
   const { success: rateLimitOk } = await checkRateLimit(`submit-test:${user.id}`)
-  if (!rateLimitOk) return NextResponse.json({ error: 'Too many requests. Please wait a minute.' }, { status: 429 })
+  if (!rateLimitOk) return NextResponse.json({ success: false, error: 'Too many requests. Please wait a minute.' }, { status: 429 })
 
   const userId = user.id
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single()
   if (!profile || profile.role !== 'student') {
-    return NextResponse.json({ error: 'Forbidden: students only' }, { status: 403 })
+    return NextResponse.json({ success: false, error: 'Forbidden: students only' }, { status: 403 })
   }
 
-  const { test_id, answer_map, is_double_xp } = await req.json()
+  const { test_id, answer_map } = await req.json()
   if (!test_id || !answer_map || typeof answer_map !== 'object') {
-    return NextResponse.json({ error: 'Missing test_id or answer_map' }, { status: 400 })
+    return NextResponse.json({ success: false, error: 'Missing test_id or answer_map' }, { status: 400 })
   }
 
   // Fetch the test with correct answers server-side
   const { data: test, error: testErr } = await supabase
     .from('tests').select('*, questions(*)').eq('id', test_id).single()
   if (testErr || !test) {
-    return NextResponse.json({ error: 'Test not found' }, { status: 404 })
+    return NextResponse.json({ success: false, error: 'Test not found' }, { status: 404 })
   }
 
   // Ensure the student can only submit tests they are allowed to see.
@@ -54,12 +54,12 @@ export async function POST(req: Request) {
     .eq('student_id', userId)
 
   if (enrollErr) {
-    return NextResponse.json({ error: 'Could not verify enrollment' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Could not verify enrollment' }, { status: 500 })
   }
 
   const enrolledCourseIds = (enrollRows || []).map((r: any) => r.course_id).filter(Boolean)
   if (enrolledCourseIds.length === 0) {
-    return NextResponse.json({ error: 'You are not enrolled in any course' }, { status: 403 })
+    return NextResponse.json({ success: false, error: 'You are not enrolled in any course' }, { status: 403 })
   }
 
   const { data: enrolledCourses, error: coursesErr } = await supabase
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
     .in('id', enrolledCourseIds)
 
   if (coursesErr) {
-    return NextResponse.json({ error: 'Could not verify course access' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Could not verify course access' }, { status: 500 })
   }
 
   const allowedSubjects = new Set((enrolledCourses || []).map((c: any) => c.subject).filter(Boolean))
@@ -76,11 +76,11 @@ export async function POST(req: Request) {
   const hasAccess = (test.subject && allowedSubjects.has(test.subject)) || (test.teacher_id && allowedTeacherIds.has(test.teacher_id))
 
   if (!hasAccess) {
-    return NextResponse.json({ error: 'Forbidden: test is not assigned to your enrolled courses' }, { status: 403 })
+    return NextResponse.json({ success: false, error: 'Forbidden: test is not assigned to your enrolled courses' }, { status: 403 })
   }
 
   if (test.status === 'locked') {
-    return NextResponse.json({ error: 'This test is locked' }, { status: 403 })
+    return NextResponse.json({ success: false, error: 'This test is locked' }, { status: 403 })
   }
 
   // --- Deadline enforcement (#3) ---
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
     const scheduledEnd = new Date(scheduledStart.getTime() + (test.duration || 60) * 60 * 1000 + 5 * 60 * 1000) // +5min grace
     const now = new Date()
     if (now > scheduledEnd) {
-      return NextResponse.json({ error: 'Test deadline has passed' }, { status: 403 })
+      return NextResponse.json({ success: false, error: 'Test deadline has passed' }, { status: 403 })
     }
   }
 
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
     .eq('student_id', userId)
     .eq('test_id', test_id)
   if (attemptCount !== null && attemptCount >= maxAttempts) {
-    return NextResponse.json({ error: `Maximum attempts (${maxAttempts}) reached` }, { status: 403 })
+    return NextResponse.json({ success: false, error: `Maximum attempts (${maxAttempts}) reached` }, { status: 403 })
   }
 
   const questions: any[] = test.questions || []
@@ -114,7 +114,7 @@ export async function POST(req: Request) {
     const ans = answer_map[q.id]
     if (q.type === 'mcq' && ans === q.answer) score += q.marks || 1
     else if (q.type === 'tf' && ans === q.answer) score += q.marks || 1
-    else if (q.type === 'fib' && typeof ans === 'string' && ans.trim().toLowerCase() === (q.answer as string)?.toLowerCase()) score += q.marks || 1
+    else if (q.type === 'fib' && typeof ans === 'string' && ans.trim().toLowerCase() === (q.answer as string)?.trim().toLowerCase()) score += q.marks || 1
     else if (q.type === 'msq') {
       if (Array.isArray(q.answer) && Array.isArray(ans)) {
         const correct = JSON.stringify((q.answer as number[]).sort()) === JSON.stringify(([...ans]).sort())
@@ -144,12 +144,18 @@ export async function POST(req: Request) {
 
   const ghostScore = prevAttempt?.percent ?? 0
 
+  // Verify double XP server-side — never trust the client flag
+  const { data: dxpSetting } = await supabase
+    .from('platform_settings').select('value').eq('key', 'double_xp').single()
+  const dxp = dxpSetting?.value as { active?: boolean; ends_at?: number | null } | null
+  const isDoubleXP = !!(dxp?.active && dxp?.ends_at && dxp.ends_at > Date.now())
+
   // Compute XP — use teacher-set xp_reward, scaled by percentage
   const testXPReward = test.xp_reward || 100
   const prevXPBase = prevAttempt ? Math.round(testXPReward * (prevAttempt.percent / 100)) : 0
   let baseXP = Math.round(testXPReward * (percent / 100))
   let deltaXP = Math.max(0, baseXP - prevXPBase) // Only reward improvement
-  let xpEarned = is_double_xp ? deltaXP * 2 : deltaXP
+  let xpEarned = isDoubleXP ? deltaXP * 2 : deltaXP
   xpEarned = Math.max(0, Math.min(xpEarned, MAX_XP_PER_TEST))
 
   let ghostMsg = '', ghostBonus = 0
@@ -160,17 +166,23 @@ export async function POST(req: Request) {
   } else {
     ghostMsg = '◉ First attempt — this becomes your ghost score!'
   }
+  // Cap XP after ghost bonus so bonus cannot bypass MAX_XP_PER_TEST
+  xpEarned = Math.min(xpEarned, MAX_XP_PER_TEST)
 
   // Write attempt (insert, not upsert — allows multiple attempts)
   const { error: attemptErr } = await supabase.from('attempts').insert({
     student_id: userId, test_id, score, total, percent, answer_map, xp_earned: xpEarned,
     attempt_number: (attemptCount || 0) + 1,
   })
-  // Fallback to upsert if attempt_number column doesn't exist yet
+  // Fallback insert without attempt_number if column doesn't exist yet
   if (attemptErr) {
-    await supabase.from('attempts').upsert({
+    const { error: fallbackErr } = await supabase.from('attempts').insert({
       student_id: userId, test_id, score, total, percent, answer_map, xp_earned: xpEarned
-    }, { onConflict: 'student_id,test_id' })
+    })
+    if (fallbackErr) {
+      console.error('Attempt insert failed:', fallbackErr.message)
+      return NextResponse.json({ success: false, error: 'Failed to record attempt' }, { status: 500 })
+    }
   }
 
   // Atomic profile update using RPC to prevent XP race condition (#11)
@@ -203,8 +215,11 @@ export async function POST(req: Request) {
   }).then(null, e => console.error('Activity log insert failed:', e))
 
   return NextResponse.json({
-    score, total, percent, xpEarned, isDoubleXP: !!is_double_xp,
-    ghostMsg, ghostBonus, newXP,
-    date: new Date().toISOString().slice(0, 10),
+    success: true,
+    data: {
+      score, total, percent, xpEarned, isDoubleXP,
+      ghostMsg, ghostBonus, newXP,
+      date: new Date().toISOString().slice(0, 10),
+    },
   })
 }

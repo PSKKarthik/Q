@@ -1,0 +1,276 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); }
+.wrap { padding: 1rem 0; }
+.header { margin-bottom: 1.5rem; }
+.header h2 { font-size: 18px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 4px; }
+.header p { font-size: 13px; color: var(--color-text-secondary); }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+.stat { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px; text-align: center; }
+.stat-num { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+.stat-label { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+.stat-num.pass { color: #3B6D11; }
+.stat-num.fail { color: #A32D2D; }
+.stat-num.skip { color: #854F0B; }
+.section { margin-bottom: 1.25rem; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); overflow: hidden; }
+.section-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; cursor: pointer; background: var(--color-background-secondary); user-select: none; }
+.section-title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); display: flex; align-items: center; gap: 8px; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+.badge-blue { background: #E6F1FB; color: #0C447C; }
+.badge-purple { background: #EEEDFE; color: #3C3489; }
+.badge-teal { background: #E1F5EE; color: #085041; }
+.badge-coral { background: #FAECE7; color: #712B13; }
+.badge-amber { background: #FAEEDA; color: #633806; }
+.badge-pink { background: #FBEAF0; color: #72243E; }
+.badge-green { background: #EAF3DE; color: #27500A; }
+.badge-gray { background: #F1EFE8; color: #444441; }
+.section-progress { font-size: 12px; color: var(--color-text-secondary); }
+.section-body { display: none; }
+.section-body.open { display: block; }
+.item { display: flex; align-items: flex-start; gap: 10px; padding: 9px 14px; border-top: 0.5px solid var(--color-border-tertiary); }
+.item:hover { background: var(--color-background-secondary); }
+.check-area { display: flex; gap: 4px; flex-shrink: 0; margin-top: 1px; }
+.btn-status { width: 22px; height: 22px; border-radius: 50%; border: 0.5px solid var(--color-border-secondary); background: transparent; cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; transition: background 0.1s; }
+.btn-pass { color: #3B6D11; }
+.btn-pass.active { background: #EAF3DE; border-color: #639922; }
+.btn-fail { color: #A32D2D; }
+.btn-fail.active { background: #FCEBEB; border-color: #E24B4A; }
+.btn-skip { color: #854F0B; }
+.btn-skip.active { background: #FAEEDA; border-color: #BA7517; }
+.item-text { font-size: 13px; color: var(--color-text-primary); line-height: 1.5; flex: 1; }
+.item-text .sub { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+.expand-icon { font-size: 12px; color: var(--color-text-secondary); transition: transform 0.2s; }
+.expand-icon.open { transform: rotate(180deg); }
+.progress-bar { height: 3px; background: var(--color-border-tertiary); }
+.progress-fill { height: 100%; background: #639922; transition: width 0.3s; }
+.export-btn { margin-top: 1rem; width: 100%; padding: 10px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; cursor: pointer; font-size: 13px; color: var(--color-text-primary); }
+.export-btn:hover { background: var(--color-background-secondary); }
+</style>
+
+<div class="wrap">
+  <h2 class="sr-only">QGX QA Checklist — track pass/fail/skip for all test areas</h2>
+  <div class="header">
+    <h2>QGX — QA test checklist</h2>
+    <p>Mark each item pass ✓, fail ✗, or skip — to track coverage across all roles and features</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-num" id="total">0</div><div class="stat-label">total</div></div>
+    <div class="stat"><div class="stat-num pass" id="pass-count">0</div><div class="stat-label">passed</div></div>
+    <div class="stat"><div class="stat-num fail" id="fail-count">0</div><div class="stat-label">failed</div></div>
+    <div class="stat"><div class="stat-num skip" id="skip-count">0</div><div class="stat-label">skipped</div></div>
+  </div>
+  <div id="sections"></div>
+  <button class="export-btn" onclick="exportResults()">Export failed items ↗</button>
+</div>
+
+<script>
+const sections = [
+  { title: "Authentication & access control", badge: "badge-gray", items: [
+    { text: "Email/password login works for all 4 roles", sub: "admin, teacher, student, parent" },
+    { text: "QGX ID login flow works correctly" },
+    { text: "Self-registration for student, teacher, parent" },
+    { text: "Password recovery email is sent and link works" },
+    { text: "Role-based redirect after login (correct dashboard per role)" },
+    { text: "Middleware blocks unauthorised route access" },
+    { text: "Session persists on page refresh (SSR cookie)" },
+    { text: "Logout clears session and redirects to login" },
+    { text: "Demo credentials all work: admin, teacher, student, parent" },
+  ]},
+  { title: "Admin features", badge: "badge-blue", items: [
+    { text: "Create a new user manually" },
+    { text: "Batch-create users via CSV upload" },
+    { text: "Delete a user and verify removal" },
+    { text: "Post a system-wide announcement", sub: "verify real-time delivery to other roles" },
+    { text: "Toggle Double XP Hour on/off", sub: "confirm XP multiplier applies for students" },
+    { text: "View platform analytics dashboard" },
+    { text: "View activity audit logs" },
+    { text: "Manage platform settings" },
+  ]},
+  { title: "Teacher features", badge: "badge-purple", items: [
+    { text: "Create a test/quiz manually" },
+    { text: "AI question generation works via GROQ API", sub: "Llama 3.3 70B or Llama 4 Scout" },
+    { text: "Anti-cheat settings save: tab-switch detection" },
+    { text: "Anti-cheat settings save: copy-paste block" },
+    { text: "Anti-cheat settings save: fullscreen lock" },
+    { text: "Create a course and upload files" },
+    { text: "Create and grade an assignment" },
+    { text: "Mark attendance for a class" },
+    { text: "Start a live class via Jitsi Meet integration" },
+    { text: "Create/manage timetable entries" },
+    { text: "Add report card comments for a student" },
+    { text: "Plagiarism detection runs on submission" },
+    { text: "Predictive risk alerts shown for at-risk students" },
+  ]},
+  { title: "Student features", badge: "badge-teal", items: [
+    { text: "Take a test — timer counts down correctly" },
+    { text: "Anti-cheat enforcement works during test", sub: "tab switch warning, copy-paste block, fullscreen" },
+    { text: "Test submission saves and score is calculated" },
+    { text: "XP is awarded after test completion" },
+    { text: "XP level progression works (Novice → Grandmaster)", sub: "7 levels total" },
+    { text: "Ghost Racing loads past attempt score to compete against" },
+    { text: "AI Tutor chat responds correctly", sub: "text and image support" },
+    { text: "Forum: create a post and reply to a thread" },
+    { text: "Code playground executes code" },
+    { text: "Certificate is generated after completion" },
+    { text: "Leaderboard updates with correct rankings" },
+    { text: "Badges display correctly on profile" },
+    { text: "Streaks tracked and displayed" },
+    { text: "Quests system shows progress and completion" },
+  ]},
+  { title: "Parent features", badge: "badge-pink", items: [
+    { text: "View linked child's grades" },
+    { text: "View linked child's attendance" },
+    { text: "Predictive at-risk alerts are visible for child" },
+    { text: "Send a message to a teacher" },
+    { text: "Schedule a parent-teacher meeting" },
+  ]},
+  { title: "Real-time & notifications", badge: "badge-amber", items: [
+    { text: "Bell icon shows new notifications" },
+    { text: "System announcement broadcasts in real-time to all online users" },
+    { text: "Notification count clears on view" },
+    { text: "Real-time message delivery in chat/messaging" },
+  ]},
+  { title: "AI integration (GROQ)", badge: "badge-coral", items: [
+    { text: "AI question generation API route responds without error" },
+    { text: "AI tutor chat sends and receives multi-turn messages" },
+    { text: "AI tutor handles image uploads correctly" },
+    { text: "Rate limiting (Upstash Redis) triggers on spam requests" },
+    { text: "Graceful error shown if GROQ API is down or key invalid" },
+  ]},
+  { title: "Database & security (Supabase)", badge: "badge-teal", items: [
+    { text: "Row Level Security: student cannot read another student's data" },
+    { text: "Row Level Security: parent can only see linked child's data" },
+    { text: "Row Level Security: teacher cannot access admin-only tables" },
+    { text: "RPC functions execute atomically (no partial writes)" },
+    { text: "Storage bucket: file upload and retrieval works" },
+    { text: "Triggers fire correctly: comment counts, quest progress" },
+    { text: "Seed script runs without errors and demo data loads" },
+  ]},
+  { title: "PWA & offline", badge: "badge-green", items: [
+    { text: "App installs via browser install prompt" },
+    { text: "Web App Manifest loads (name, icons, theme color)" },
+    { text: "Service Worker registers without error" },
+    { text: "Cached pages load while offline" },
+    { text: "Responsive layout correct on mobile (iOS + Android)" },
+    { text: "Responsive layout correct on tablet and desktop" },
+  ]},
+  { title: "Dark/light theme", badge: "badge-gray", items: [
+    { text: "Theme toggle switches between dark and light" },
+    { text: "Theme preference persists on page reload" },
+    { text: "All text readable in dark mode (no invisible text)" },
+    { text: "All text readable in light mode" },
+  ]},
+  { title: "Error handling & edge cases", badge: "badge-red", items: [
+    { text: "Invalid login shows correct error message (no crash)" },
+    { text: "Expired session redirects to login gracefully" },
+    { text: "Form validation catches empty required fields" },
+    { text: "Large file upload: error shown if exceeds limit" },
+    { text: "Network offline: graceful degradation, no white screen" },
+    { text: "Sentry captures errors in production (check dashboard)" },
+    { text: "API route returns 401 for unauthenticated requests" },
+  ]},
+  { title: "Testing suite", badge: "badge-gray", items: [
+    { text: "All 64 Jest unit tests pass (npm test)" },
+    { text: "Code coverage report generated" },
+    { text: "Playwright E2E tests pass on local or CI" },
+    { text: "No TypeScript compilation errors (tsc --noEmit)" },
+  ]},
+];
+
+let state = {};
+let allItems = [];
+
+function render() {
+  const container = document.getElementById('sections');
+  container.innerHTML = '';
+  let idx = 0;
+  sections.forEach((sec, si) => {
+    const secEl = document.createElement('div');
+    secEl.className = 'section';
+    const total = sec.items.length;
+    const done = sec.items.filter((_, ii) => state[`${si}-${ii}`]).length;
+    const pass = sec.items.filter((_, ii) => state[`${si}-${ii}`] === 'pass').length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    secEl.innerHTML = `
+      <div class="section-header" onclick="toggle(${si})">
+        <span class="section-title">
+          <span class="badge ${sec.badge}">${sec.title.split(' ')[0]}</span>
+          ${sec.title}
+        </span>
+        <span style="display:flex;align-items:center;gap:8px;">
+          <span class="section-progress">${pass}/${total}</span>
+          <span class="expand-icon" id="icon-${si}">▼</span>
+        </span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="section-body" id="body-${si}">
+        ${sec.items.map((item, ii) => {
+          const k = `${si}-${ii}`;
+          const s = state[k] || '';
+          return `<div class="item">
+            <div class="check-area">
+              <button class="btn-status btn-pass ${s==='pass'?'active':''}" onclick="setStatus('${k}','pass')" title="Pass">✓</button>
+              <button class="btn-status btn-fail ${s==='fail'?'active':''}" onclick="setStatus('${k}','fail')" title="Fail">✗</button>
+              <button class="btn-status btn-skip ${s==='skip'?'active':''}" onclick="setStatus('${k}','skip')" title="Skip">—</button>
+            </div>
+            <div class="item-text">${item.text}${item.sub ? `<div class="sub">${item.sub}</div>` : ''}</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    container.appendChild(secEl);
+    idx += total;
+  });
+  updateStats();
+}
+
+function toggle(si) {
+  const body = document.getElementById(`body-${si}`);
+  const icon = document.getElementById(`icon-${si}`);
+  body.classList.toggle('open');
+  icon.classList.toggle('open');
+}
+
+function setStatus(key, val) {
+  state[key] = state[key] === val ? '' : val;
+  render();
+  const openSections = Array.from(document.querySelectorAll('.section-body.open')).map(el => el.id.replace('body-',''));
+  openSections.forEach(si => {
+    document.getElementById(`body-${si}`).classList.add('open');
+    document.getElementById(`icon-${si}`).classList.add('open');
+  });
+}
+
+function updateStats() {
+  let total = 0, pass = 0, fail = 0, skip = 0;
+  sections.forEach((sec, si) => {
+    sec.items.forEach((_, ii) => {
+      total++;
+      const s = state[`${si}-${ii}`];
+      if (s === 'pass') pass++;
+      else if (s === 'fail') fail++;
+      else if (s === 'skip') skip++;
+    });
+  });
+  document.getElementById('total').textContent = total;
+  document.getElementById('pass-count').textContent = pass;
+  document.getElementById('fail-count').textContent = fail;
+  document.getElementById('skip-count').textContent = skip;
+}
+
+function exportResults() {
+  const failed = [];
+  sections.forEach((sec, si) => {
+    sec.items.forEach((item, ii) => {
+      if (state[`${si}-${ii}`] === 'fail') {
+        failed.push(`[${sec.title}] ${item.text}`);
+      }
+    });
+  });
+  if (!failed.length) { sendPrompt('All QGX QA checks passed! No failures found.'); return; }
+  sendPrompt('QGX QA — failed items:\n' + failed.map((f,i) => `${i+1}. ${f}`).join('\n') + '\n\nHelp me investigate and fix these failures.');
+}
+
+render();
+document.getElementById('total').textContent = sections.reduce((a,s) => a + s.items.length, 0);
+</script>

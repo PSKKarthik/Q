@@ -68,7 +68,7 @@ export function StudentAttendanceModule({ profile }: StudentAttendanceProps) {
       if (error) throw error
       setRecords((data || []) as AttendanceRecord[])
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load attendance', 'error')
+      toast((err as any)?.message ||'Failed to load attendance', 'error')
     } finally {
       setLoading(false)
     }
@@ -228,7 +228,7 @@ export function StudentAttendanceModule({ profile }: StudentAttendanceProps) {
 
       {/* Recent records table */}
       <SectionLabel>Recent Records</SectionLabel>
-      <div className="card fade-up-2">
+      <div className="card fade-up-2" style={{ overflowX: 'auto' }}>
         <table className="table">
           <thead><tr><th>Date</th><th>Subject</th><th>Status</th><th>Note</th></tr></thead>
           <tbody>
@@ -292,7 +292,7 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
       setRecords((data || []) as AttendanceRecord[])
       setRecordsInitialized(true)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load attendance', 'error')
+      toast((err as any)?.message ||'Failed to load attendance', 'error')
     } finally {
       if (!silent) setLoading(false)
     }
@@ -423,7 +423,7 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
       await fetchRecords(true)
       toast('Attendance saved', 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to save attendance', 'error')
+      toast((err as any)?.message ||'Failed to save attendance', 'error')
     } finally {
       setSaving(false)
     }
@@ -441,7 +441,7 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
       await fetchRecords(true)
       toast('Record updated', 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to update record', 'error')
+      toast((err as any)?.message ||'Failed to update record', 'error')
     }
   }
 
@@ -452,7 +452,7 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
       if (error) throw error
       await fetchRecords(true)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete record', 'error')
+      toast((err as any)?.message ||'Failed to delete record', 'error')
     }
   }
 
@@ -602,7 +602,7 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
             { label: 'Excused', value: histRecords.filter(r => r.status === 'excused').length },
           ]} columns={4} />
 
-          <div className="card">
+          <div className="card" style={{ overflowX: 'auto' }}>
             <table className="table">
               <thead><tr><th>Student</th><th>Subject</th><th>Status</th><th>Note</th><th style={{ width: 70 }}>Actions</th></tr></thead>
               <tbody>
@@ -638,7 +638,7 @@ export function TeacherAttendanceModule({ profile, students, timetable }: Teache
           ]} columns={4} />
 
           <SectionLabel>Student Breakdown</SectionLabel>
-          <div className="card">
+          <div className="card" style={{ overflowX: 'auto' }}>
             <table className="table">
               <thead><tr><th>Student</th><th>Present</th><th>Absent</th><th>Late</th><th>Excused</th><th>Rate</th></tr></thead>
               <tbody>

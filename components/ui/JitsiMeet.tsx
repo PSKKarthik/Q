@@ -17,14 +17,29 @@ interface JitsiMeetProps {
   actions?: React.ReactNode
 }
 
+const JITSI_SCRIPT_SRC = 'https://meet.jit.si/external_api.js'
+const CONNECTION_TIMEOUT_MS = 30_000
+
 export function JitsiMeet({ roomName, displayName, onClose, subject, height = 'calc(100vh - 180px)', actions }: JitsiMeetProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<any>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>()
+  const connectedRef = useRef(false)   // tracks join success — avoids stale `loading` closure
+  const onCloseRef = useRef(onClose)   // always up-to-date reference to onClose
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
 
+  // Keep onCloseRef current every render without re-running the effect
+  onCloseRef.current = onClose
+
   useEffect(() => {
-    let script: HTMLScriptElement | null = null
+    connectedRef.current = false
+
+    const handleError = () => {
+      clearTimeout(timeoutRef.current)
+      setLoadError(true)
+      setLoading(false)
+    }
 
     const initJitsi = () => {
       if (!containerRef.current || apiRef.current) return
@@ -36,56 +51,68 @@ export function JitsiMeet({ roomName, displayName, onClose, subject, height = 'c
           configOverwrite: {
             startWithAudioMuted: true,
             startWithVideoMuted: true,
-            prejoinPageEnabled: false,
+            // prejoinConfig replaces the deprecated prejoinPageEnabled
+            prejoinConfig: { enabled: false },
             disableDeepLinking: true,
-          },
-          interfaceConfigOverwrite: {
-            SHOW_JITSI_WATERMARK: false,
-            SHOW_BRAND_WATERMARK: false,
-            DEFAULT_BACKGROUND: '#000',
-            TOOLBAR_BUTTONS: [
+            // toolbarButtons replaces the deprecated interfaceConfigOverwrite.TOOLBAR_BUTTONS
+            toolbarButtons: [
               'microphone', 'camera', 'desktop', 'chat',
               'raisehand', 'participants-pane', 'tileview',
               'fullscreen', 'hangup',
             ],
           },
+          interfaceConfigOverwrite: {
+            SHOW_JITSI_WATERMARK: false,
+            SHOW_BRAND_WATERMARK: false,
+            DEFAULT_BACKGROUND: '#000',
+          },
         })
 
-        apiRef.current.addEventListener('videoConferenceJoined', () => setLoading(false))
-        apiRef.current.addEventListener('readyToClose', onClose)
+        // Use connectedRef (not `loading`) — `loading` is stale inside this closure
+        timeoutRef.current = setTimeout(() => {
+          if (!connectedRef.current) handleError()
+        }, CONNECTION_TIMEOUT_MS)
 
-        // Style the iframe to fill the container
-        setTimeout(() => {
-          const iframe = containerRef.current?.querySelector('iframe')
-          if (iframe) {
-            iframe.style.width = '100%'
-            iframe.style.height = '100%'
-            iframe.style.border = 'none'
-          }
-        }, 500)
+        apiRef.current.addEventListener('videoConferenceJoined', () => {
+          connectedRef.current = true
+          clearTimeout(timeoutRef.current)
+          setLoading(false)
+        })
+        // Use ref so we always call the current onClose even if parent re-renders
+        apiRef.current.addEventListener('readyToClose', () => onCloseRef.current())
+        apiRef.current.addEventListener('errorOccurred', handleError)
       } catch {
-        setLoadError(true)
-        setLoading(false)
+        handleError()
       }
     }
 
     if (window.JitsiMeetExternalAPI) {
       initJitsi()
     } else {
-      script = document.createElement('script')
-      script.src = 'https://meet.jit.si/external_api.js'
-      script.async = true
-      script.onload = initJitsi
-      script.onerror = () => {
-        setLoadError(true)
-        setLoading(false)
+      // Avoid injecting the script twice if another JitsiMeet is already loading it
+      const existing = document.querySelector<HTMLScriptElement>(`script[src="${JITSI_SCRIPT_SRC}"]`)
+      if (existing) {
+        // Script already in DOM — wait for it or use API if already loaded
+        if (window.JitsiMeetExternalAPI) {
+          initJitsi()
+        } else {
+          existing.addEventListener('load', initJitsi, { once: true })
+          existing.addEventListener('error', handleError, { once: true })
+        }
+      } else {
+        const script = document.createElement('script')
+        script.src = JITSI_SCRIPT_SRC
+        script.async = true
+        script.onload = initJitsi
+        script.onerror = handleError
+        document.head.appendChild(script)
       }
-      document.head.appendChild(script)
     }
 
     return () => {
+      clearTimeout(timeoutRef.current)
       if (apiRef.current) {
-        apiRef.current.dispose()
+        try { apiRef.current.dispose() } catch { /* ignore */ }
         apiRef.current = null
       }
     }
@@ -94,7 +121,7 @@ export function JitsiMeet({ roomName, displayName, onClose, subject, height = 'c
 
   const openInTab = () => {
     window.open(
-      `https://meet.jit.si/${encodeURIComponent(roomName)}#userInfo.displayName=${encodeURIComponent(JSON.stringify(displayName))}`,
+      `https://meet.jit.si/${encodeURIComponent(roomName)}`,
       '_blank',
       'noopener,noreferrer'
     )
@@ -114,11 +141,9 @@ export function JitsiMeet({ roomName, displayName, onClose, subject, height = 'c
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {actions}
-          {loadError && (
-            <button className="btn btn-sm btn-primary" onClick={openInTab}>
-              Open in Browser Tab ↗
-            </button>
-          )}
+          <button className="btn btn-sm" onClick={openInTab}>
+            Open in Tab ↗
+          </button>
           <button className="btn btn-sm" onClick={onClose}>← Back</button>
         </div>
       </div>
@@ -136,6 +161,12 @@ export function JitsiMeet({ roomName, displayName, onClose, subject, height = 'c
             <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', letterSpacing: '0.08em' }}>
               CONNECTING TO {roomName.toUpperCase()}...
             </span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)' }}>
+              Slow to load?{' '}
+              <button onClick={openInTab} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 10, textDecoration: 'underline', padding: 0 }}>
+                Open in browser tab ↗
+              </button>
+            </span>
           </div>
         )}
         {/* Error state */}
@@ -146,8 +177,11 @@ export function JitsiMeet({ roomName, displayName, onClose, subject, height = 'c
             background: '#000', zIndex: 2,
           }}>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--danger)', textAlign: 'center', maxWidth: 320 }}>
-              △ Could not load embedded call.<br />Click &quot;Open in Browser Tab&quot; above to join.
+              △ Could not load embedded call.
             </div>
+            <button className="btn btn-sm btn-primary" onClick={openInTab}>
+              Open in Browser Tab ↗
+            </button>
           </div>
         )}
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />

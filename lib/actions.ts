@@ -21,7 +21,7 @@ export async function pushNotification(
   message: string,
   type: string
 ): Promise<{ error: string | null }> {
-  if (!userId || !message) return { error: null }
+  if (!userId || !message) return { error: 'Missing userId or message' }
   try {
     const { error } = await supabase.from('notifications').insert({
       user_id: userId,
@@ -31,7 +31,7 @@ export async function pushNotification(
     })
     return { error: error?.message || null }
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Notification failed' }
+    return { error: (err as any)?.message || 'Notification failed' }
   }
 }
 
@@ -55,7 +55,7 @@ export async function pushNotificationBatch(
     if (error) return { error: error.message, failedCount: userIds.length }
     return { error: null, failedCount: 0 }
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Notification failed', failedCount: userIds.length }
+    return { error: (err as any)?.message || 'Notification failed', failedCount: userIds.length }
   }
 }
 

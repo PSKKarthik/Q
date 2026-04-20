@@ -2,9 +2,9 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { logActivity } from '@/lib/actions'
+import { logActivity, pushNotification } from '@/lib/actions'
 import { useToast } from '@/lib/toast'
-import type { Profile, Test, Course, Assignment, Submission, TimetableSlot, Announcement, Attempt, Quest, QuestProgress } from '@/types'
+import type { Profile, Test, Course, Assignment, Submission, TimetableSlot, Announcement, Attempt, Quest, QuestProgress, AbsenceExcuse } from '@/types'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { Icon } from '@/components/ui/Icon'
 import { AnnouncementCard } from '@/components/ui/AnnouncementCard'
@@ -28,6 +28,7 @@ import { LiveClassModule } from '@/components/modules/LiveClassModule'
 import { PlagiarismModule } from '@/components/modules/PlagiarismModule'
 import { MeetingSchedulerModule } from '@/components/modules/MeetingSchedulerModule'
 import { PredictiveAlertsModule } from '@/components/modules/PredictiveAlertsModule'
+import { ClassroomModule } from '@/components/modules/ClassroomModule'
 import { DashboardSkeleton } from '@/components/ui/DashboardSkeleton'
 
 function TeacherDashboardContent() {
@@ -47,6 +48,9 @@ function TeacherDashboardContent() {
   const [timetable, setTimetable]     = useState<TimetableSlot[]>([])
   const [teacherQuests, setTeacherQuests] = useState<Quest[]>([])
   const [questProgress, setQuestProgress] = useState<QuestProgress[]>([])
+  const [excuses, setExcuses] = useState<(AbsenceExcuse & { student_name?: string; parent_name?: string })[]>([])
+  const [excusesLoaded, setExcusesLoaded] = useState(false)
+  const [institutionName, setInstitutionName] = useState<string | null>(null)
 
   const [announceModal, setAnnounceModal] = useState(false)
   const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null)
@@ -59,10 +63,16 @@ function TeacherDashboardContent() {
   useEffect(() => {
     if (handledDeepLink.current) return
     const requestedTab = searchParams.get('tab')
-    const allowedTabs = new Set(['home','tests','timetable','courses','assignments','attendance','grades','analytics','quests','calendar','live-classes','announcements','forums','plagiarism','meetings','pred-alerts','messaging','report-card','batch-grades','profile'])
+    const allowedTabs = new Set(['home','tests','timetable','courses','assignments','attendance','grades','analytics','quests','calendar','live-classes','announcements','forums','plagiarism','meetings','pred-alerts','excuses','classrooms','messaging','report-card','batch-grades','profile'])
     if (requestedTab && allowedTabs.has(requestedTab)) setTab(requestedTab)
     handledDeepLink.current = true
   }, [searchParams])
+
+  useEffect(() => {
+    if (!profile?.institution_id) return
+    supabase.from('institutions').select('name').eq('id', profile.institution_id).single()
+      .then(({ data }) => { if (data) setInstitutionName(data.name) })
+  }, [profile?.institution_id])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -115,6 +125,23 @@ function TeacherDashboardContent() {
   }
 
 
+  useEffect(() => {
+    if (tab !== 'excuses' || excusesLoaded || !profile) return
+    supabase.from('absence_excuses').select('*').order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data) {
+          const enriched = (data as AbsenceExcuse[]).map(exc => ({
+            ...exc,
+            student_name: students.find(s => s.id === exc.student_id)?.name || exc.student_id,
+            parent_name: parents.find(p => p.id === exc.parent_id)?.name || exc.parent_id,
+          }))
+          setExcuses(enriched)
+        }
+        setExcusesLoaded(true)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, excusesLoaded, profile])
+
   const reloadAnnouncements = async () => {
     const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false })
     if (data) setAnnouncements(data as Announcement[])
@@ -152,7 +179,7 @@ function TeacherDashboardContent() {
       resetAnnouncementComposer()
       await reloadAnnouncements()
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to post announcement', 'error')
+      toast((err as any)?.message ||'Failed to post announcement', 'error')
     } finally {
       setAnnounceSubmitting(false)
     }
@@ -225,6 +252,8 @@ function TeacherDashboardContent() {
     { id:'plagiarism',    label:'Plagiarism Check', icon:'test'     },
     { id:'meetings',      label:'Meetings',         icon:'calendar' },
     { id:'pred-alerts',   label:'Risk Alerts',      icon:'bell'     },
+    { id:'excuses',       label:'Absence Excuses',  icon:'check'    },
+    { id:'classrooms',    label:'Classrooms',       icon:'users'    },
     { id:'messaging',     label:'Messages',         icon:'chat'     },
     { id:'report-card',   label:'Report Cards',     icon:'star'     },
     { id:'batch-grades',  label:'Batch Grades',     icon:'task'     },
@@ -321,7 +350,7 @@ function TeacherDashboardContent() {
       <div className="page">
         {tab==='home' && (
           <>
-            <PageHeader title="TEACHER OVERVIEW" subtitle={<>Welcome, {profile.name}</>} />
+            <PageHeader title="TEACHER OVERVIEW" subtitle={<>Welcome, {profile.name}{institutionName && <> · <span style={{ color:'var(--accent)' }}>{institutionName}</span></>}</>} />
             <StatGrid items={[['My Tests',myTests.length],['My Quizzes',myQuizzes.length],['Courses',courses.length],['Timetable Slots',timetable.length]].map(([lbl,val])=>({label:String(lbl),value:val as number}))} columns={4} />
             <SectionLabel>Announcements</SectionLabel>
             <div className="fade-up-3">
@@ -508,6 +537,73 @@ function TeacherDashboardContent() {
         {/* ── PREDICTIVE ALERTS ── */}
         {tab === 'pred-alerts' && (
           <PredictiveAlertsModule profile={profile} />
+        )}
+
+        {/* ── ABSENCE EXCUSES ── */}
+        {tab === 'excuses' && (() => {
+          if (!excusesLoaded) {
+            return <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)', marginTop: 40, textAlign: 'center' }}>Loading excuses...</div>
+          }
+
+          const pending = excuses.filter(e => e.status === 'pending')
+          const reviewed = excuses.filter(e => e.status !== 'pending')
+
+          const reviewExcuse = async (exc: AbsenceExcuse & { student_name?: string; parent_name?: string }, status: 'approved' | 'rejected') => {
+            if (!profile) return
+            const { error } = await supabase
+              .from('absence_excuses')
+              .update({ status, reviewed_by: profile.id })
+              .eq('id', exc.id)
+            if (error) { toast(error.message || 'Failed to update excuse', 'error'); return }
+            setExcuses(prev => prev.map(e => e.id === exc.id ? { ...e, status, reviewed_by: profile.id } : e))
+            // In-app notification to parent
+            await pushNotification(exc.parent_id, `Your absence excuse for ${exc.student_name} on ${exc.date} has been ${status}.`, 'excuse_reviewed')
+            // Email notification
+            await fetch('/api/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'excuse_reviewed', payload: { excuse_id: exc.id } }) })
+            toast(`Excuse ${status}`, 'success')
+          }
+
+          return (
+            <>
+              <PageHeader title="ABSENCE EXCUSES" subtitle="Review parent-submitted absence excuses" />
+              <SectionLabel>Pending ({pending.length})</SectionLabel>
+              <div className="fade-up-2" style={{ marginBottom: 24 }}>
+                {pending.length === 0 && <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>No pending excuses.</div>}
+                {pending.map(exc => (
+                  <div key={exc.id} className="card" style={{ marginBottom: 10, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 500, marginBottom: 2 }}>{exc.student_name}</div>
+                      <div style={{ fontSize: 13, color: 'var(--fg-dim)', marginBottom: 4 }}>{exc.reason}</div>
+                      <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)' }}>Date: {exc.date} · Submitted by {exc.parent_name}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <button className="btn btn-primary btn-sm" onClick={() => reviewExcuse(exc, 'approved')}>Approve</button>
+                      <button className="btn btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => reviewExcuse(exc, 'rejected')}>Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <SectionLabel>Reviewed ({reviewed.length})</SectionLabel>
+              <div className="fade-up-3">
+                {reviewed.length === 0 && <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>No reviewed excuses yet.</div>}
+                {reviewed.map(exc => (
+                  <div key={exc.id} className="card" style={{ marginBottom: 8, padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 500, marginBottom: 2 }}>{exc.student_name}</div>
+                      <div style={{ fontSize: 13, color: 'var(--fg-dim)', marginBottom: 2 }}>{exc.reason}</div>
+                      <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)' }}>Date: {exc.date} · {exc.parent_name}</div>
+                    </div>
+                    <span className={`tag ${exc.status === 'approved' ? 'tag-success' : 'tag-danger'}`}>{exc.status}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )
+        })()}
+
+        {/* ── CLASSROOMS ── */}
+        {tab === 'classrooms' && (
+          <ClassroomModule profile={profile} />
         )}
 
         {/* ── MESSAGING ── */}

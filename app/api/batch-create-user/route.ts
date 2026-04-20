@@ -3,12 +3,13 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { checkRateLimit } from '@/lib/ratelimit'
+import { sendEmail, userCredentialsEmail } from '@/lib/email'
 
 export async function POST(req: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.json({ error: 'Supabase URL/anon key not configured on server' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Supabase URL/anon key not configured on server' }, { status: 500 })
   }
 
   const cookieStore = cookies()
@@ -29,10 +30,10 @@ export async function POST(req: Request) {
 
   // Verify caller is authenticated admin
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 
   const { success: rateLimitOk } = await checkRateLimit(`batch-create:${user.id}`)
-  if (!rateLimitOk) return NextResponse.json({ error: 'Too many requests. Please wait a minute.' }, { status: 429 })
+  if (!rateLimitOk) return NextResponse.json({ success: false, error: 'Too many requests. Please wait a minute.' }, { status: 429 })
 
   const { data: callerProfile } = await supabase
     .from('profiles')
@@ -41,28 +42,28 @@ export async function POST(req: Request) {
     .single()
 
   if (!callerProfile || callerProfile.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden: admins only' }, { status: 403 })
+    return NextResponse.json({ success: false, error: 'Forbidden: admins only' }, { status: 403 })
   }
 
   const body = await req.json()
   const { name, email, role } = body || {}
 
   if (!name || !email || !role) {
-    return NextResponse.json({ error: 'Missing required fields: name, email, role' }, { status: 400 })
+    return NextResponse.json({ success: false, error: 'Missing required fields: name, email, role' }, { status: 400 })
   }
 
   if (typeof name !== 'string' || typeof email !== 'string' || typeof role !== 'string') {
-    return NextResponse.json({ error: 'Invalid field types' }, { status: 400 })
+    return NextResponse.json({ success: false, error: 'Invalid field types' }, { status: 400 })
   }
 
   const validRoles = ['admin', 'teacher', 'student', 'parent']
   if (!validRoles.includes(role)) {
-    return NextResponse.json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` }, { status: 400 })
+    return NextResponse.json({ success: false, error: `Invalid role. Must be one of: ${validRoles.join(', ')}` }, { status: 400 })
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(email)) {
-    return NextResponse.json({ error: 'Invalid email format' }, { status: 400 })
+    return NextResponse.json({ success: false, error: 'Invalid email format' }, { status: 400 })
   }
 
   const serviceKey =
@@ -72,6 +73,7 @@ export async function POST(req: Request) {
   if (!serviceKey) {
     return NextResponse.json(
       {
+        success: false,
         error: 'Service role key not configured. Set SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY / SERVICE_ROLE_KEY) and restart dev server.',
       },
       { status: 500 }
@@ -95,11 +97,11 @@ export async function POST(req: Request) {
   })
 
   if (createErr) {
-    return NextResponse.json({ error: createErr.message }, { status: 400 })
+    return NextResponse.json({ success: false, error: createErr.message }, { status: 400 })
   }
 
   if (!newUser.user) {
-    return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Failed to create user' }, { status: 500 })
   }
 
   // Generate QGX ID atomically via RPC to avoid race conditions
@@ -136,7 +138,7 @@ export async function POST(req: Request) {
   })
 
   if (upsertErr) {
-    return NextResponse.json({ error: `Profile setup failed: ${upsertErr.message}` }, { status: 500 })
+    return NextResponse.json({ success: false, error: `Profile setup failed: ${upsertErr.message}` }, { status: 500 })
   }
 
   // Audit trail
@@ -147,17 +149,35 @@ export async function POST(req: Request) {
     metadata: { created_user_id: newUser.user.id, email, role },
   })
 
+  const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+
   // Generate a password reset link so user can set their own password
   const { data: resetData } = await adminClient.auth.admin.generateLink({
     type: 'recovery',
     email,
+    options: { redirectTo: `${siteOrigin}/auth/callback?next=/reset-password` },
   })
+
+  const resetLink = resetData?.properties?.action_link || null
+
+  // Email credentials to the new user (fire-and-forget)
+  if (resetLink) {
+    await sendEmail({
+      to: { email, name },
+      subject: 'Your QGX Account — QGX Learning Platform',
+      html: userCredentialsEmail(name, email, role, resetLink),
+    })
+  }
 
   return NextResponse.json({
     success: true,
-    userId: newUser.user.id,
-    qgxId,
-    resetLink: resetData?.properties?.action_link || null,
-    message: 'User created. Share the reset link so they can set their password.',
+    data: {
+      userId: newUser.user.id,
+      qgxId,
+      resetLink,
+      message: resetLink
+        ? 'User created. Credentials email sent to their inbox.'
+        : 'User created. Share the reset link so they can set their password.',
+    },
   })
 }

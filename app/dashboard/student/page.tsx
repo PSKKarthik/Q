@@ -52,6 +52,13 @@ function StudentDashboardContent() {
   const [isExamMode, setIsExamMode]   = useState(false)
   const channelRefs = useRef<any[]>([])
   const [isOffline, setIsOffline]   = useState(false)
+  const [institutionName, setInstitutionName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!profile?.institution_id) return
+    supabase.from('institutions').select('name').eq('id', profile.institution_id).single()
+      .then(({ data }) => { if (data) setInstitutionName(data.name) })
+  }, [profile?.institution_id])
 
   useEffect(() => {
     if (handledDeepLink.current) return
@@ -211,7 +218,7 @@ function StudentDashboardContent() {
       <div className="page">
         {tab === 'home' && (
           <>
-            <PageHeader title="STUDENT DASHBOARD" subtitle={<>Welcome, {profile.name} · <span style={{ color:'var(--fg-dim)' }}>{profile.qgx_id}</span></>} />
+            <PageHeader title="STUDENT DASHBOARD" subtitle={<>Welcome, {profile.name} · <span style={{ color:'var(--fg-dim)' }}>{profile.qgx_id}</span>{institutionName && <> · <span style={{ color:'var(--accent)' }}>{institutionName}</span></>}</>} />
             {/* Level Card */}
             {(() => {
               const lvl = getLevel(profile.xp || 0, xpLevels)
@@ -289,6 +296,7 @@ function StudentDashboardContent() {
             assignments={assignments}
             enrolledIds={enrolledIds}
             onAssignmentsChange={setAssignments}
+            onProfileUpdate={p => setProfile(p)}
           />
         )}
 

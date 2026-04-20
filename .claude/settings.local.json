@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"quest_progress\\\\|attempt\" C:UserspolisOneDriveDesktopqgx-nextjs/SCHEMA*)",
+      "WebSearch",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npx next:*)",
+      "Bash(cd:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(sort -t: -k2 -V)",
+      "Bash(find /c/Users/polis/OneDrive/Desktop/qgx-nextjs -name *schema* -o -name *migration* -o -name *.sql)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(xargs grep:*)",
+      "Bash(grep -E \"\\\\.ts$\")",
+      "Bash(npx jest:*)",
+      "Bash(npm run:*)",
+      "Bash(node -e \"const { execSync } = require\\(''child_process''\\); try { execSync\\(''npx next --version'', {cwd: ''C:/Users/polis/OneDrive/Desktop/qgx-nextjs'', stdio: ''pipe''}\\); } catch\\(e\\) {}\")",
+      "Bash(node -e \"const v = require\\(''C:/Users/polis/OneDrive/Desktop/qgx-nextjs/node_modules/next/package.json''\\).version; console.log\\(''Next.js version:'', v\\)\")"
+    ]
+  }
+}

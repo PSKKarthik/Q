@@ -209,7 +209,7 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
     })
     setLoading(false)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to generate report', 'error')
+      toast((err as any)?.message ||'Failed to generate report', 'error')
       setLoading(false)
     }
   }
@@ -227,7 +227,7 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
       }).select().single()
       if (data) setReport(prev => prev ? { ...prev, comments: [data as ReportComment, ...prev.comments] } : prev)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to add comment', 'error')
+      toast((err as any)?.message ||'Failed to add comment', 'error')
     }
     setCommentText('')
     setConductNote('')
@@ -366,7 +366,7 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
           {report.tests.length > 0 && (
             <div className="card fade-up-3" style={{ marginBottom: 16 }}>
               <h2 style={{ fontFamily: 'var(--display)', fontSize: 18, letterSpacing: '0.08em', marginBottom: 12 }}>TEST SCORES</h2>
-              <div style={{ border: '1px solid var(--border)' }}>
+              <div style={{ border: '1px solid var(--border)', overflowX: 'auto' }}>
                 <table className="table">
                   <thead><tr><th>Subject</th><th>Test</th><th>Score</th><th>Grade</th><th>Date</th></tr></thead>
                   <tbody>
@@ -390,7 +390,7 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
           {report.assignments.length > 0 && (
             <div className="card fade-up-4" style={{ marginBottom: 16 }}>
               <h2 style={{ fontFamily: 'var(--display)', fontSize: 18, letterSpacing: '0.08em', marginBottom: 12 }}>ASSIGNMENT SCORES</h2>
-              <div style={{ border: '1px solid var(--border)' }}>
+              <div style={{ border: '1px solid var(--border)', overflowX: 'auto' }}>
                 <table className="table">
                   <thead><tr><th>Assignment</th><th>Score</th><th>Grade</th></tr></thead>
                   <tbody>

@@ -19,6 +19,36 @@ export interface Profile {
   reputation?: number
   badges?: string[]
   theme?: 'dark' | 'light'
+  institution_id?: string
+}
+
+export interface Institution {
+  id: string
+  name: string
+  code: string
+  description?: string
+  active: boolean
+  created_by: string
+  created_at: string
+}
+
+export interface Classroom {
+  id: string
+  institution_id: string
+  name: string
+  grade?: string
+  section?: string
+  academic_year?: string
+  created_by: string
+  created_at: string
+}
+
+export interface ClassroomMember {
+  id: string
+  classroom_id: string
+  user_id: string
+  role: 'teacher' | 'student'
+  joined_at: string
 }
 
 export interface Announcement {
@@ -97,6 +127,7 @@ export interface Course {
   teacher_name: string
   description: string
   status: 'draft' | 'published'
+  xp_reward?: number
   created_at: string
   files?: CourseFile[]
   enrolled?: string[]
@@ -146,6 +177,7 @@ export interface Assignment {
   attachment_name?: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   max_points: number
+  xp_reward?: number
   status: 'active' | 'closed'
   created_at: string
 }
@@ -200,6 +232,7 @@ export interface ForumComment {
   author_role: Role
   likes: string[]
   is_best_answer: boolean
+  edited_at?: string
   created_at: string
 }
 
@@ -211,6 +244,8 @@ export interface TimetableSlot {
   day: string
   time: string
   room: string
+  xp_reward?: number
+  locked?: boolean
 }
 
 export interface Notification {
@@ -376,5 +411,19 @@ export interface MeetingSlot {
   parent_name?: string
   student_id?: string
   status: 'available' | 'booked' | 'completed' | 'cancelled'
+  created_at: string
+}
+
+export interface MeetingRequest {
+  id: string
+  teacher_id: string
+  teacher_name: string
+  parent_id: string
+  parent_name: string
+  proposed_date: string
+  proposed_start: string
+  proposed_end: string
+  message?: string
+  status: 'pending' | 'approved' | 'rejected'
   created_at: string
 }

@@ -76,7 +76,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
         onTestsChange(tests.map(t => t.id === data.id ? data as Test : t))
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load questions', 'error')
+      toast((err as any)?.message ||'Failed to load questions', 'error')
     }
     setView('bank')
   }
@@ -107,7 +107,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
       setNewTest({ title: '', subject: '', scheduledDate: '', scheduledTime: '', duration: 60, type: 'test', xpReward: 100 })
       setAntiCheat({ ...DEFAULT_ANTICHEAT })
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to create test', 'error')
+      toast((err as any)?.message ||'Failed to create test', 'error')
     } finally {
       setCreating(false)
     }
@@ -120,7 +120,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
       onTestsChange(tests.filter(t => t.id !== id))
       if (questionBank?.id === id) { setQuestionBank(null); setView('list') }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete test', 'error')
+      toast((err as any)?.message ||'Failed to delete test', 'error')
     }
   }
 
@@ -132,7 +132,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
       onTestsChange(tests.map(x => x.id === t.id ? { ...x, status: next } : x))
       toast(`Test ${next === 'locked' ? 'locked' : 'activated'}`, 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to update status', 'error')
+      toast((err as any)?.message ||'Failed to update status', 'error')
     }
   }
 
@@ -187,7 +187,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
       setQForm({ text: '', options: ['', '', '', ''], answer: 0, marks: 2, pairs: [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }] })
       setQStep(1)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to save question', 'error')
+      toast((err as any)?.message ||'Failed to save question', 'error')
     }
   }
 
@@ -212,7 +212,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
       const totalMarks = questionBank.questions?.reduce((s, x) => s + (x.marks || 1), 0) || 0
       await supabase.from('tests').update({ total_marks: totalMarks }).eq('id', questionBank.id).eq('teacher_id', profile.id)
       toast('Question updated', 'success')
-    } catch (err) { toast(err instanceof Error ? err.message : 'Failed to save', 'error') }
+    } catch (err) { toast((err as any)?.message ||'Failed to save', 'error') }
     setBankEditIdx(null)
   }
 
@@ -224,7 +224,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
       setQuestionBank(updatedQB)
       onTestsChange(tests.map(t => t.id === questionBank.id ? updatedQB : t))
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete question', 'error')
+      toast((err as any)?.message ||'Failed to delete question', 'error')
     }
   }
 
@@ -248,9 +248,10 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
     setAiLoading(true); setAiResult(null); setAiError(null)
     try {
       const res = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: aiTopic, type: aiType, count: aiCount, difficulty: aiDifficulty, bloom: aiBloom, file: aiFile ? { name: aiFile.name, type: aiFile.type, data: aiFile.data, mimeType: aiFile.mimeType } : undefined }) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || `AI error: ${res.status}`)
-      setAiResult(Array.isArray(data.questions) ? data.questions : [])
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || `AI error: ${res.status}`)
+      const questions = json.data?.questions ?? json.questions
+      setAiResult(Array.isArray(questions) ? questions : [])
     } catch (e: any) { setAiError(`AI generation failed. (${e.message})`) }
     setAiLoading(false)
   }
@@ -272,7 +273,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
         onTestsChange(tests.map(t => t.id === data.id ? data as Test : t))
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to inject AI questions', 'error')
+      toast((err as any)?.message ||'Failed to inject AI questions', 'error')
     }
   }
 
@@ -356,7 +357,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
             <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', marginBottom: 16 }}>SELECT QUESTION TYPE</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {[['mcq', 'MCQ — Single Correct'], ['msq', 'MSQ — Multi Select'], ['tf', 'True / False'], ['fib', 'Fill in the Blank'], ['match', 'Match the Following']].map(([t, lbl]) => (
-                <button key={t} className={`btn btn-sm ${qType === t ? 'btn-primary' : ''}`} onClick={() => { setQType(t as any); setQStep(2) }}>{lbl}</button>
+                <button key={t} className={`btn btn-sm ${qType === t ? 'btn-primary' : ''}`} onClick={() => { setQType(t as any); setQForm(f => ({ ...f, answer: t === 'tf' ? false : t === 'fib' ? '' : 0, msqAnswers: [] })); setQStep(2) }}>{lbl}</button>
               ))}
             </div>
           </>

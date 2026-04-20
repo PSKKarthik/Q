@@ -186,11 +186,12 @@ export function AiTutorModule({ profile, courses, enrolledIds }: Props) {
           }
         }
       } else {
-        const data = await res.json()
+        const json = await res.json()
+        const reply = json.data?.reply || json.reply || json.error || 'Sorry, I could not process that request.'
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: data.reply || data.error || 'Sorry, I could not process that request.',
+          content: reply,
           timestamp: new Date(),
         }])
       }

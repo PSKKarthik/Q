@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
   }
 
   // Only teachers can generate AI questions
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 
   const { success: rateLimitOk } = await checkRateLimit(user.id)
   if (!rateLimitOk) {
-    return NextResponse.json({ error: 'Too many requests. Please wait a minute.' }, { status: 429 })
+    return NextResponse.json({ success: false, error: 'Too many requests. Please wait a minute.' }, { status: 429 })
   }
 
   const body = await req.json()
@@ -65,16 +65,16 @@ export async function POST(req: Request) {
   // AI Tutor mode (student-facing)
   if (body.mode === 'tutor') {
     if (!profile || profile.role !== 'student') {
-      return NextResponse.json({ error: 'Forbidden: students only for tutor mode' }, { status: 403 })
+      return NextResponse.json({ success: false, error: 'Forbidden: students only for tutor mode' }, { status: 403 })
     }
 
     const { message, courseContext, history, file } = body
     if ((!message || typeof message !== 'string' || message.length > 2000) && !file) {
-      return NextResponse.json({ error: 'Invalid message' }, { status: 400 })
+      return NextResponse.json({ success: false, error: 'Invalid message' }, { status: 400 })
     }
 
     const GROQ_API_KEY = process.env.GROQ_API_KEY
-    if (!GROQ_API_KEY) return NextResponse.json({ error: 'AI service not configured' }, { status: 500 })
+    if (!GROQ_API_KEY) return NextResponse.json({ success: false, error: 'AI service not configured' }, { status: 500 })
 
     // Process uploaded file if present
     let fileContext = ''
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
     if (file && typeof file === 'object' && file.data && file.type) {
       // Validate base64 data size (max ~5MB decoded)
       if (typeof file.data !== 'string' || file.data.length > 7_000_000) {
-        return NextResponse.json({ error: 'File too large (max 5MB)' }, { status: 400 })
+        return NextResponse.json({ success: false, error: 'File too large (max 5MB)' }, { status: 400 })
       }
 
       if (file.type === 'image') {
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
           const pdfData = await pdfParse(buffer)
           fileContext = pdfData.text.slice(0, 8000)
         } catch {
-          return NextResponse.json({ error: 'Could not read PDF file' }, { status: 400 })
+          return NextResponse.json({ success: false, error: 'Could not read PDF file' }, { status: 400 })
         }
       } else if (file.type === 'ppt') {
         try {
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
           }
           fileContext = text.slice(0, 8000)
         } catch {
-          return NextResponse.json({ error: 'Could not read PPT file' }, { status: 400 })
+          return NextResponse.json({ success: false, error: 'Could not read PPT file' }, { status: 400 })
         }
       }
     }
@@ -147,11 +147,11 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
           body: JSON.stringify({ model: 'meta-llama/llama-4-scout-17b-16e-instruct', max_tokens: 1500, temperature: 0.7, messages: visionMessages }),
         })
-        if (!res.ok) return NextResponse.json({ error: 'AI vision service error' }, { status: res.status })
+        if (!res.ok) return NextResponse.json({ success: false, error: 'AI vision service error' }, { status: res.status })
         const data = await res.json()
-        return NextResponse.json({ reply: data.choices?.[0]?.message?.content || 'No response generated.' })
+        return NextResponse.json({ success: true, data: { reply: data.choices?.[0]?.message?.content || 'No response generated.' } })
       } catch {
-        return NextResponse.json({ error: 'AI vision generation failed' }, { status: 500 })
+        return NextResponse.json({ success: false, error: 'AI vision generation failed' }, { status: 500 })
       }
     }
 
@@ -170,9 +170,9 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
       })
       if (!streamRes.ok) {
         const errBody = await streamRes.json().catch(() => ({}))
-        return NextResponse.json({ error: (errBody as { error?: { message?: string } }).error?.message || 'AI service error' }, { status: streamRes.status })
+        return NextResponse.json({ success: false, error: (errBody as { error?: { message?: string } }).error?.message || 'AI service error' }, { status: streamRes.status })
       }
-      if (!streamRes.body) return NextResponse.json({ error: 'Stream unavailable' }, { status: 500 })
+      if (!streamRes.body) return NextResponse.json({ success: false, error: 'Stream unavailable' }, { status: 500 })
       return new Response(streamRes.body, {
         headers: {
           'Content-Type': 'text/event-stream',
@@ -181,33 +181,33 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
         },
       })
     } catch {
-      return NextResponse.json({ error: 'AI generation failed' }, { status: 500 })
+      return NextResponse.json({ success: false, error: 'AI generation failed' }, { status: 500 })
     }
   }
 
   // Teacher question generation mode (original)
   if (!profile || profile.role !== 'teacher') {
-    return NextResponse.json({ error: 'Forbidden: teachers only for question generation' }, { status: 403 })
+    return NextResponse.json({ success: false, error: 'Forbidden: teachers only for question generation' }, { status: 403 })
   }
 
   const { topic, type, count, difficulty, bloom, file: teacherFile } = body
 
   if (!topic && !teacherFile) {
-    return NextResponse.json({ error: 'Provide a topic or upload a file' }, { status: 400 })
+    return NextResponse.json({ success: false, error: 'Provide a topic or upload a file' }, { status: 400 })
   }
   if (!type || !count) {
-    return NextResponse.json({ error: 'Missing required fields: type, count' }, { status: 400 })
+    return NextResponse.json({ success: false, error: 'Missing required fields: type, count' }, { status: 400 })
   }
 
   // Reject excessively long topic strings
   if (topic && (typeof topic !== 'string' || topic.length > 500)) {
-    return NextResponse.json({ error: 'Topic must be a string under 500 characters' }, { status: 400 })
+    return NextResponse.json({ success: false, error: 'Topic must be a string under 500 characters' }, { status: 400 })
   }
 
   // Server-side only — never exposed to client
   const GROQ_API_KEY = process.env.GROQ_API_KEY
   if (!GROQ_API_KEY) {
-    return NextResponse.json({ error: 'AI service not configured' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'AI service not configured' }, { status: 500 })
   }
 
   // Extract text from uploaded file if present
@@ -218,7 +218,7 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
 
   if (teacherFile && typeof teacherFile === 'object' && teacherFile.data && teacherFile.type) {
     if (typeof teacherFile.data !== 'string' || teacherFile.data.length > 7_000_000) {
-      return NextResponse.json({ error: 'File too large (max 5MB)' }, { status: 400 })
+      return NextResponse.json({ success: false, error: 'File too large (max 5MB)' }, { status: 400 })
     }
     if (teacherFile.type === 'image') {
       teacherUseVision = true
@@ -231,7 +231,7 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
         const pdfData = await pdfParse(buffer)
         teacherFileContext = pdfData.text.slice(0, 8000)
       } catch {
-        return NextResponse.json({ error: 'Could not read PDF file' }, { status: 400 })
+        return NextResponse.json({ success: false, error: 'Could not read PDF file' }, { status: 400 })
       }
     } else if (teacherFile.type === 'ppt') {
       try {
@@ -249,7 +249,7 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
         }
         teacherFileContext = text.slice(0, 8000)
       } catch {
-        return NextResponse.json({ error: 'Could not read PPT file' }, { status: 400 })
+        return NextResponse.json({ success: false, error: 'Could not read PPT file' }, { status: 400 })
       }
     }
   }
@@ -285,7 +285,7 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
       })
       if (!res.ok) {
         const err = await res.json()
-        return NextResponse.json({ error: err.error?.message || `AI vision error: ${res.status}` }, { status: res.status })
+        return NextResponse.json({ success: false, error: err.error?.message || `AI vision error: ${res.status}` }, { status: res.status })
       }
       const data = await res.json()
       const text = data.choices?.[0]?.message?.content || '[]'
@@ -293,11 +293,11 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
       const end = text.lastIndexOf(']')
       const jsonStr = (start !== -1 && end > start) ? text.slice(start, end + 1) : '[]'
       let parsed
-      try { parsed = JSON.parse(jsonStr) } catch { return NextResponse.json({ questions: [] }) }
+      try { parsed = JSON.parse(jsonStr) } catch { return NextResponse.json({ success: true, data: { questions: [] } }) }
       const validated = (Array.isArray(parsed) ? parsed : []).filter((q: any) => validateQuestion(q, type))
-      return NextResponse.json({ questions: validated })
+      return NextResponse.json({ success: true, data: { questions: validated } })
     } catch {
-      return NextResponse.json({ error: 'AI vision generation failed' }, { status: 500 })
+      return NextResponse.json({ success: false, error: 'AI vision generation failed' }, { status: 500 })
     }
   }
 
@@ -319,7 +319,7 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
     if (!res.ok) {
       const err = await res.json()
       return NextResponse.json(
-        { error: err.error?.message || `AI service error: ${res.status}` },
+        { success: false, error: err.error?.message || `AI service error: ${res.status}` },
         { status: res.status }
       )
     }
@@ -334,14 +334,14 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
     try {
       parsed = JSON.parse(jsonStr)
     } catch {
-      return NextResponse.json({ questions: [] })
+      return NextResponse.json({ success: true, data: { questions: [] } })
     }
 
     const validated = (Array.isArray(parsed) ? parsed : []).filter((q: any) => validateQuestion(q, type))
-    return NextResponse.json({ questions: validated })
+    return NextResponse.json({ success: true, data: { questions: validated } })
   } catch {
     return NextResponse.json(
-      { error: 'AI generation failed' },
+      { success: false, error: 'AI generation failed' },
       { status: 500 }
     )
   }

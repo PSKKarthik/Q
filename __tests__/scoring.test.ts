@@ -2,7 +2,10 @@
  * Tests for the server-side scoring logic used in /api/submit-test.
  * We extract and test the scoring algorithm independently since the actual
  * API route requires Supabase auth context.
+ *
+ * Also covers checkAnswer (client-side review display logic).
  */
+import { checkAnswer } from '@/lib/checkAnswer'
 
 interface Question {
   id: string
@@ -229,5 +232,49 @@ describe('XP Calculation Logic', () => {
   it('handles perfect re-attempt correctly', () => {
     const xp = calculateXP({ percent: 100, testXPReward: 100, prevPercent: 100, isDoubleXP: false, maxXPPerTest: MAX_XP })
     expect(xp).toBe(0) // no improvement
+  })
+})
+
+// ─── Minimal Question stub ────────────────────────────────────────────────────
+type QStub = { id: string; test_id: string; type: any; text: string; answer: any; marks: number; order_index: number }
+
+describe('checkAnswer (client-side review logic)', () => {
+  const q = (type: string, answer: any): QStub => ({
+    id: 'q1', test_id: 't1', type, text: 'Q', answer, marks: 1, order_index: 0,
+  })
+
+  describe('MCQ', () => {
+    it('correct numeric index returns true', () => expect(checkAnswer(q('mcq', 2), 2)).toBe(true))
+    it('wrong index returns false', () => expect(checkAnswer(q('mcq', 2), 1)).toBe(false))
+    it('undefined returns false', () => expect(checkAnswer(q('mcq', 0), undefined)).toBe(false))
+    it('null returns false', () => expect(checkAnswer(q('mcq', 0), null)).toBe(false))
+  })
+
+  describe('True/False', () => {
+    it('true === true', () => expect(checkAnswer(q('tf', true), true)).toBe(true))
+    it('false !== true', () => expect(checkAnswer(q('tf', true), false)).toBe(false))
+  })
+
+  describe('Fill-in-blank', () => {
+    it('exact match', () => expect(checkAnswer(q('fib', 'Newton'), 'Newton')).toBe(true))
+    it('case-insensitive', () => expect(checkAnswer(q('fib', 'Newton'), 'NEWTON')).toBe(true))
+    it('trims whitespace', () => expect(checkAnswer(q('fib', 'Newton'), '  newton  ')).toBe(true))
+    it('wrong answer', () => expect(checkAnswer(q('fib', 'Newton'), 'Einstein')).toBe(false))
+  })
+
+  describe('MSQ', () => {
+    it('exact match regardless of order', () => expect(checkAnswer(q('msq', [0, 2]), [2, 0])).toBe(true))
+    it('partial match returns false', () => expect(checkAnswer(q('msq', [0, 1, 2]), [0, 1])).toBe(false))
+    it('extra option returns false', () => expect(checkAnswer(q('msq', [0, 1]), [0, 1, 2])).toBe(false))
+    it('empty answer returns false', () => expect(checkAnswer(q('msq', [0]), [])).toBe(false))
+  })
+
+  describe('Match', () => {
+    const pairs = [{ left: 'A', right: 'alpha' }, { left: 'B', right: 'beta' }]
+    it('all correct', () => expect(checkAnswer(q('match', pairs), { A: 'alpha', B: 'beta' })).toBe(true))
+    it('case-insensitive', () => expect(checkAnswer(q('match', pairs), { A: 'ALPHA', B: 'BETA' })).toBe(true))
+    it('one wrong pair returns false', () => expect(checkAnswer(q('match', pairs), { A: 'alpha', B: 'gamma' })).toBe(false))
+    it('missing pair returns false', () => expect(checkAnswer(q('match', pairs), { A: 'alpha' })).toBe(false))
+    it('non-object answer returns false', () => expect(checkAnswer(q('match', pairs), 'wrong')).toBe(false))
   })
 })

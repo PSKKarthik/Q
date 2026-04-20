@@ -70,11 +70,12 @@ function PriorityPill({ priority }: { priority: string }) {
    STUDENT ASSIGNMENT MODULE
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export function StudentAssignmentModule({ profile, assignments, enrolledIds, onAssignmentsChange }: {
+export function StudentAssignmentModule({ profile, assignments, enrolledIds, onAssignmentsChange, onProfileUpdate }: {
   profile: Profile
   assignments: (Assignment & { submissions?: Submission[] })[]
   enrolledIds: string[]
   onAssignmentsChange: (a: any[]) => void
+  onProfileUpdate?: (p: Profile) => void
 }) {
   const [view, setView] = useState<'board' | 'list'>('board')
   const [search, setSearch] = useState('')
@@ -137,10 +138,9 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
         const ext = submitFile.name.split('.').pop()
         const path = `submissions/${profile.id}/${Date.now()}.${ext}`
         const { error: upErr } = await supabase.storage.from('course-files').upload(path, submitFile)
-        if (!upErr) {
-          const { data: urlData } = supabase.storage.from('course-files').getPublicUrl(path)
-          file_url = urlData.publicUrl; file_name = submitFile.name
-        }
+        if (upErr) throw upErr
+        const { data: urlData } = supabase.storage.from('course-files').getPublicUrl(path)
+        file_url = urlData.publicUrl; file_name = submitFile.name
       }
       const isLate = !draft && activeAssign.due_date && new Date(activeAssign.due_date + 'T23:59:59') < new Date()
       const existing = activeAssign.submissions?.find((s: any) => s.student_id === profile.id)
@@ -154,19 +154,37 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
         const { error } = await supabase.from('submissions').update(payload).eq('id', existing.id)
         if (error) throw error
       } else {
-        const { error } = await supabase.from('submissions').insert({ assignment_id: activeAssign.id, student_id: profile.id, ...payload })
+        const { error } = await supabase.from('submissions').insert({
+          assignment_id: activeAssign.id,
+          student_id: profile.id,
+          student_name: profile.name,
+          ...payload,
+        })
         if (error) throw error
       }
+      let successMsg = draft ? '▪ Draft saved!' : '✓ Submitted!'
       if (!draft) {
         if (activeAssign.teacher_id) await pushNotification(activeAssign.teacher_id, `▫ ${profile.name} submitted: "${activeAssign.title}"`, 'submission')
         await logActivity(`${profile.name} submitted assignment: ${activeAssign.title}`, 'submission')
+        // Award XP on first real submission (not draft, not re-submission of already-submitted work)
+        const isFirstSubmission = !existing || existing.is_draft
+        if (isFirstSubmission && (activeAssign.xp_reward ?? 0) > 0) {
+          const xpToAward = activeAssign.xp_reward!
+          const newXP = (profile.xp || 0) + xpToAward
+          await supabase.from('profiles').update({ xp: newXP }).eq('id', profile.id)
+          onProfileUpdate?.({ ...profile, xp: newXP })
+          successMsg = `✓ Submitted! +${xpToAward} XP`
+        }
       }
-      setSubmitStatus(draft ? '▪ Draft saved!' : '✓ Submitted!')
+      setSubmitStatus(successMsg)
       if (!draft) { setSubmitText(''); setSubmitFile(null); if (submitFileRef.current) submitFileRef.current.value = '' }
-      // Refresh — non-blocking: submission already saved, never overwrite success with refresh error
+      // Refresh just this assignment — non-blocking
       try {
-        const { data } = await supabase.from('assignments').select('*, submissions(*)').order('created_at', { ascending: false })
-        if (data) { onAssignmentsChange(data); const r = data.find((a: any) => a.id === activeAssign.id); if (r) setActiveAssign(r) }
+        const { data: refreshed } = await supabase.from('assignments').select('*, submissions(*)').eq('id', activeAssign.id).single()
+        if (refreshed) {
+          setActiveAssign(refreshed)
+          onAssignmentsChange(assignments.map((a: any) => a.id === activeAssign.id ? refreshed : a))
+        }
       } catch { /* swallow refresh errors */ }
       if (!draft) setTimeout(() => { setSubmitModal(false); setSubmitStatus('') }, 1200)
       else setTimeout(() => setSubmitStatus(''), 2000)
@@ -208,6 +226,7 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
           {sub?.is_late && <span className="tag" style={{ fontSize: 9, borderColor: 'var(--danger)', color: 'var(--danger)' }}>LATE</span>}
           {a.attachment_name && <span style={{ fontSize: 10, color: 'var(--fg-dim)' }}>▸</span>}
           {a.max_points && <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--fg-dim)' }}>{a.max_points}pts</span>}
+          {(a.xp_reward ?? 0) > 0 && !mySub(a)?.grade && <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--warn)' }}>◈ {a.xp_reward} XP</span>}
         </div>
       </div>
     )
@@ -228,6 +247,7 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
                 {getCountdown(activeAssign.due_date).text}
               </span>
               {activeAssign.max_points && <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)' }}>Max: {activeAssign.max_points}pts</span>}
+              {(activeAssign.xp_reward ?? 0) > 0 && <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--warn)' }}>◈ {activeAssign.xp_reward} XP on submit</span>}
               {activeAssign.status === 'closed' && <span className="tag" style={{ fontSize: 9, borderColor: 'var(--fg-dim)', color: 'var(--fg-dim)' }}>CLOSED</span>}
             </div>
 
@@ -264,7 +284,12 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
             )}
 
             {/* Submit form */}
-            {!isGraded && (<>
+            {!isGraded && activeAssign.status === 'closed' && (
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', padding: '10px 14px', border: '1px solid var(--border)', marginBottom: 16 }}>
+                This assignment is closed. Submissions are no longer accepted.
+              </div>
+            )}
+            {!isGraded && activeAssign.status !== 'closed' && (<>
               <div style={{ marginBottom: 14 }}>
                 <label className="label">Your Response</label>
                 <textarea className="input" rows={5} value={submitText} onChange={e => setSubmitText(e.target.value)} placeholder="Type your answer..." />
@@ -298,7 +323,11 @@ export function StudentAssignmentModule({ profile, assignments, enrolledIds, onA
 
             {isGraded && (
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-xs" onClick={() => { setActiveAssign({ ...activeAssign, submissions: activeAssign.submissions?.map((s: any) => s.student_id === profile.id ? { ...s, grade: undefined, score: undefined } : s) }) }}>
+                <button className="btn btn-xs" onClick={() => {
+                  setActiveAssign({ ...activeAssign, submissions: activeAssign.submissions?.map((s: any) => s.student_id === profile.id ? { ...s, grade: undefined, score: undefined } : s) })
+                  setSubmitText(''); setSubmitFile(null); setSubmitStatus('')
+                  if (submitFileRef.current) submitFileRef.current.value = ''
+                }}>
                   ↺ Resubmit
                 </button>
                 <button className="btn" onClick={() => setSubmitModal(false)}>Close</button>
@@ -434,8 +463,8 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
   const [assignFile, setAssignFile] = useState<File | null>(null)
   const [assignUploading, setAssignUploading] = useState(false)
   const assignFileRef = useRef<HTMLInputElement>(null)
-  const [newAssign, setNewAssign] = useState({ title: '', description: '', due_date: '', priority: 'medium', max_points: '100' })
-  const [editForm, setEditForm] = useState({ title: '', description: '', due_date: '', priority: 'medium', max_points: '100', status: 'active' })
+  const [newAssign, setNewAssign] = useState({ title: '', description: '', due_date: '', priority: 'medium', max_points: '100', xp_reward: '25' })
+  const [editForm, setEditForm] = useState({ title: '', description: '', due_date: '', priority: 'medium', max_points: '100', xp_reward: '25', status: 'active' })
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<'newest' | 'due' | 'submissions'>('newest')
   const { toast } = useToast()
@@ -461,7 +490,7 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
         onAssignmentsChange(assignments.map(a => a.id === id ? data : a))
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to refresh assignment', 'error')
+      toast((err as any)?.message ||'Failed to refresh assignment', 'error')
     }
   }
 
@@ -487,6 +516,7 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
         due_date: newAssign.due_date || null, teacher_id: profile.id,
         teacher_name: profile.name, attachment_url, attachment_name,
         priority: newAssign.priority, max_points: parseInt(newAssign.max_points) || 100,
+        xp_reward: parseInt(newAssign.xp_reward) || 0,
       }).select('*, submissions(*)').single()
       if (error) throw error
       if (data) {
@@ -494,13 +524,13 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
         await pushNotificationBatch(students.map(s => s.id), `▫ New assignment: "${newAssign.title}"`, 'assignment')
         await logActivity(`Teacher ${profile.name} created assignment: ${newAssign.title}`, 'assignment')
       }
-      setNewAssign({ title: '', description: '', due_date: '', priority: 'medium', max_points: '100' })
+      setNewAssign({ title: '', description: '', due_date: '', priority: 'medium', max_points: '100', xp_reward: '25' })
       setAssignFile(null)
       if (assignFileRef.current) assignFileRef.current.value = ''
       setCreateModal(false)
       toast('Assignment created', 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to create assignment', 'error')
+      toast((err as any)?.message ||'Failed to create assignment', 'error')
     } finally {
       setAssignUploading(false)
     }
@@ -516,16 +546,18 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
         title: editForm.title, description: editForm.description,
         due_date: editForm.due_date || null, priority: editForm.priority,
         max_points: parseInt(editForm.max_points) || 100,
+        xp_reward: parseInt(editForm.xp_reward) || 0,
         status: editForm.status,
       }).eq('id', activeAssign.id).eq('teacher_id', profile.id)
       if (error) throw error
-      const updated = { ...activeAssign, ...editForm, max_points: parseInt(editForm.max_points) || 100, status: editForm.status as Assignment['status'], priority: editForm.priority as Assignment['priority'] }
+      const numericEdits = { max_points: parseInt(editForm.max_points) || 100, xp_reward: parseInt(editForm.xp_reward) || 0, status: editForm.status as Assignment['status'], priority: editForm.priority as Assignment['priority'] }
+      const updated = { ...activeAssign, ...editForm, ...numericEdits }
       setActiveAssign(updated)
-      onAssignmentsChange(assignments.map(a => a.id === activeAssign.id ? { ...a, ...editForm, max_points: parseInt(editForm.max_points) || 100, status: editForm.status as Assignment['status'], priority: editForm.priority as Assignment['priority'] } : a))
+      onAssignmentsChange(assignments.map(a => a.id === activeAssign.id ? { ...a, ...editForm, ...numericEdits } : a))
       setEditModal(false)
       toast('Assignment updated', 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to update assignment', 'error')
+      toast((err as any)?.message ||'Failed to update assignment', 'error')
     }
   }
 
@@ -538,25 +570,43 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
       if (activeAssign?.id === id) setActiveAssign(null)
       toast('Assignment deleted', 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete assignment', 'error')
+      toast((err as any)?.message ||'Failed to delete assignment', 'error')
     }
   }
 
   const submitGrade = async () => {
     if (!gradingSubmission || !gradeForm.score) return
     try {
-      const score = parseInt(gradeForm.score)
+      const rawScore = parseInt(gradeForm.score)
+      const maxPts = activeAssign?.max_points || 100
+      const percent = Math.min(100, Math.round((rawScore / maxPts) * 100))
+      const gradeLabel = maxPts === 100 ? `${rawScore}%` : `${rawScore}/${maxPts}`
       const { error } = await supabase.from('submissions').update({
-        score, grade: score + '%', feedback: gradeForm.feedback,
+        score: percent, grade: gradeLabel, feedback: gradeForm.feedback,
       }).eq('id', gradingSubmission.id)
       if (error) throw error
-      if (gradingSubmission.student_id)
-        await pushNotification(gradingSubmission.student_id, `▫ "${activeAssign?.title}" graded: ${score}%`, 'grade')
+      if (gradingSubmission.student_id) {
+        await pushNotification(gradingSubmission.student_id, `▫ "${activeAssign?.title}" graded: ${gradeLabel}`, 'grade')
+        // Fire-and-forget grade email
+        fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'grade_posted',
+            payload: {
+              student_id: gradingSubmission.student_id,
+              assignment_title: activeAssign?.title || 'Assignment',
+              grade: gradeLabel,
+              feedback: gradeForm.feedback || undefined,
+            },
+          }),
+        }).catch(() => { /* silent */ })
+      }
       setGradingSubmission(null); setGradeForm({ score: '', feedback: '' })
       if (activeAssign) await refreshAssign(activeAssign.id)
       toast('Grade submitted', 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to submit grade', 'error')
+      toast((err as any)?.message ||'Failed to submit grade', 'error')
     }
   }
 
@@ -637,6 +687,10 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
           <div style={{ flex: 1 }}>
             <label className="label">Max Points</label>
             <input className="input" type="number" min={1} value={editForm.max_points} onChange={e => setEditForm(f => ({ ...f, max_points: e.target.value }))} />
+          </div>
+          <div style={{ width: 100 }}>
+            <label className="label">◈ XP Reward</label>
+            <input className="input" type="number" min={0} max={500} value={editForm.xp_reward} onChange={e => setEditForm(f => ({ ...f, xp_reward: e.target.value }))} placeholder="25" />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
@@ -723,7 +777,9 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
             setEditForm({
               title: activeAssign.title, description: activeAssign.description || '',
               due_date: activeAssign.due_date || '', priority: activeAssign.priority || 'medium',
-              max_points: String(activeAssign.max_points || 100), status: activeAssign.status || 'active'
+              max_points: String(activeAssign.max_points || 100),
+              xp_reward: String(activeAssign.xp_reward ?? 25),
+              status: activeAssign.status || 'active'
             }); setEditModal(true)
           }}><Icon name="edit" size={10} /> Edit</button>
           <button className="btn btn-xs" onClick={() => refreshAssign(activeAssign.id)}>↻ Refresh</button>
@@ -828,6 +884,10 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
           <label className="label">Max Points</label>
           <input className="input" type="number" min={1} value={newAssign.max_points} onChange={e => setNewAssign(a => ({ ...a, max_points: e.target.value }))} />
         </div>
+        <div style={{ width: 100 }}>
+          <label className="label">◈ XP Reward</label>
+          <input className="input" type="number" min={0} max={500} value={newAssign.xp_reward} onChange={e => setNewAssign(a => ({ ...a, xp_reward: e.target.value }))} placeholder="25" />
+        </div>
       </div>
       <div style={{ marginBottom: 14 }}>
         <label className="label">Priority</label>
@@ -890,7 +950,7 @@ export function TeacherAssignmentModule({ profile, assignments, students, onAssi
               </div>
               <div className="assign-card-title">{a.title}</div>
               <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginBottom: 8 }}>
-                {a.max_points || 100}pts · Due: {a.due_date || 'None'}
+                {a.max_points || 100}pts · Due: {a.due_date || 'None'}{(a.xp_reward ?? 0) > 0 ? ` · ◈ ${a.xp_reward} XP` : ''}
               </div>
               <div style={{ marginBottom: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--fg-dim)', marginBottom: 3 }}>

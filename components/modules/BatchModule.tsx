@@ -256,7 +256,7 @@ export function TeacherBatchGradeModule({ profile, assignments, students, onAssi
               </button>
             </div>
           </div>
-          <div style={{ border: '1px solid var(--border)' }}>
+          <div style={{ border: '1px solid var(--border)', overflowX: 'auto' }}>
             <table className="table">
               <thead><tr><th>Student</th><th>Submitted</th><th>Score (/{assignment.max_points})</th><th>Feedback</th></tr></thead>
               <tbody>

@@ -42,7 +42,7 @@ export function ProfileModal({ profile, onClose, onUpdate }: {
       setForm(f => ({ ...f, avatar_url: path }))
       toast('Avatar uploaded', 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to upload avatar', 'error')
+      toast((err as any)?.message ||'Failed to upload avatar', 'error')
     } finally {
       setUploadingAvatar(false)
     }

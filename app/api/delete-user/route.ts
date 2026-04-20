@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.json({ error: 'Supabase URL/anon key not configured on server' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Supabase URL/anon key not configured on server' }, { status: 500 })
   }
 
   const cookieStore = cookies()
@@ -29,10 +29,10 @@ export async function POST(req: Request) {
 
   // Verify caller is authenticated admin
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
 
   const { success: rateLimitOk } = await checkRateLimit(`delete-user:${user.id}`)
-  if (!rateLimitOk) return NextResponse.json({ error: 'Too many requests. Please wait a minute.' }, { status: 429 })
+  if (!rateLimitOk) return NextResponse.json({ success: false, error: 'Too many requests. Please wait a minute.' }, { status: 429 })
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -41,17 +41,17 @@ export async function POST(req: Request) {
     .single()
 
   if (!profile || profile.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden: admins only' }, { status: 403 })
+    return NextResponse.json({ success: false, error: 'Forbidden: admins only' }, { status: 403 })
   }
 
   const { userId } = await req.json()
   if (!userId || typeof userId !== 'string') {
-    return NextResponse.json({ error: 'Missing userId' }, { status: 400 })
+    return NextResponse.json({ success: false, error: 'Missing userId' }, { status: 400 })
   }
 
   // Prevent self-deletion
   if (userId === user.id) {
-    return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 })
+    return NextResponse.json({ success: false, error: 'Cannot delete your own account' }, { status: 400 })
   }
 
   // Prevent deleting the last admin
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   if (targetProfile?.role === 'admin') {
     const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin')
     if ((count || 0) <= 1) {
-      return NextResponse.json({ error: 'Cannot delete the last admin account' }, { status: 403 })
+      return NextResponse.json({ success: false, error: 'Cannot delete the last admin account' }, { status: 403 })
     }
   }
 
@@ -71,6 +71,7 @@ export async function POST(req: Request) {
   if (!serviceKey) {
     return NextResponse.json(
       {
+        success: false,
         error: 'Service role key not configured. Set SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY / SERVICE_ROLE_KEY) and restart dev server.',
       },
       { status: 500 }
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
   // Delete auth user (cascade will delete profile via FK)
   const { error } = await adminClient.auth.admin.deleteUser(userId)
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 
   // Audit trail

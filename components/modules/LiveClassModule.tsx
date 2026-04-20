@@ -35,7 +35,7 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
       if (error) throw error
       if (data) setClasses(data as LiveClass[])
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Failed to load classes', 'error')
+      toast((err as any)?.message ||'Failed to load classes', 'error')
     }
     setLoading(false)
   }, [isTeacher, profile.id, toast])
@@ -69,7 +69,7 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
       setCreateModal(false)
       toast('Class scheduled', 'success')
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Failed to create class', 'error')
+      toast((err as any)?.message ||'Failed to create class', 'error')
     }
     setBusy(null)
   }
@@ -88,7 +88,7 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
       }
       joinClass(liveClass)
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Failed to start class', 'error')
+      toast((err as any)?.message ||'Failed to start class', 'error')
     }
     setBusy(null)
   }
@@ -103,7 +103,7 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
       setActiveClass(null)
       toast('Class ended', 'success')
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Failed to end class', 'error')
+      toast((err as any)?.message ||'Failed to end class', 'error')
     }
     setBusy(null)
   }
@@ -236,7 +236,7 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
       {missed.length > 0 && (
         <>
           <SectionLabel>Missed / Unstarted</SectionLabel>
-          <div className="fade-up-4" style={{ border: '1px solid var(--border)', marginBottom: 18 }}>
+          <div className="fade-up-4" style={{ border: '1px solid var(--border)', marginBottom: 18, overflowX: 'auto' }}>
             <table className="table">
               <thead><tr><th>Title</th><th>Subject</th><th>Teacher</th><th>Scheduled</th><th>Status</th></tr></thead>
               <tbody>
@@ -266,7 +266,7 @@ export function LiveClassModule({ profile, isTeacher }: Props) {
       {past.length > 0 && (
         <>
           <SectionLabel>Past Sessions</SectionLabel>
-          <div className="fade-up-4" style={{ border: '1px solid var(--border)' }}>
+          <div className="fade-up-4" style={{ border: '1px solid var(--border)', overflowX: 'auto' }}>
             <table className="table">
               <thead><tr><th>Title</th><th>Subject</th><th>Teacher</th><th>Date</th><th>Duration</th></tr></thead>
               <tbody>

@@ -110,6 +110,7 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
   })
   const [userId, setUserId] = useState<string | null>(null)
   const [prefsLoaded, setPrefsLoaded] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [personalEvents, setPersonalEvents] = useState<PersonalEventRow[]>([])
   const [showAddPersonal, setShowAddPersonal] = useState(false)
   const [addingPersonal, setAddingPersonal] = useState(false)
@@ -133,10 +134,12 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
     let cancelled = false
 
     ;(async () => {
+      setLoading(true)
       const { data: userData } = await supabase.auth.getUser()
       const uid = userData.user?.id || null
       if (!uid || cancelled) {
         setPrefsLoaded(true)
+        setLoading(false)
         return
       }
 
@@ -171,6 +174,7 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
       }
 
       setPrefsLoaded(true)
+      setLoading(false)
     })()
 
     return () => {
@@ -438,7 +442,7 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
       })
       toast('Personal event saved', 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to save event', 'error')
+      toast((err as any)?.message ||'Failed to save event', 'error')
     } finally {
       setAddingPersonal(false)
     }
@@ -457,6 +461,12 @@ export function CalendarModule({ tests, assignments, timetable }: Props) {
     }
     toast('Personal event deleted', 'success')
   }
+
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+      <div className="spinner" />
+    </div>
+  )
 
   return (
     <>

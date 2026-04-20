@@ -154,7 +154,7 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
         setEnrollCounts(counts)
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load course data', 'error')
+      toast((err as any)?.message ||'Failed to load course data', 'error')
     }
   }, [profile.id, toast])
 
@@ -230,7 +230,7 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
         setActiveCourse(data)
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load course', 'error')
+      toast((err as any)?.message ||'Failed to load course', 'error')
     } finally {
       setLoading(false)
     }
@@ -244,7 +244,7 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
       setEnrollCounts(prev => ({ ...prev, [courseId]: (prev[courseId] || 0) + 1 }))
       await logActivity(`${profile.name} enrolled in course`, 'enrollment')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to enroll', 'error')
+      toast((err as any)?.message ||'Failed to enroll', 'error')
     }
   }
 
@@ -256,7 +256,7 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
       setEnrollCounts(prev => ({ ...prev, [courseId]: Math.max(0, (prev[courseId] || 1) - 1) }))
       if (activeCourse?.id === courseId) setActiveCourse(null)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to unenroll', 'error')
+      toast((err as any)?.message ||'Failed to unenroll', 'error')
     }
   }
 
@@ -279,16 +279,20 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
         const newCompleted = progress.filter(p => p.course_id === activeCourse.id).length + 1
         if (newCompleted >= fileCount && fileCount > 0) {
           // Award XP once per student+course, guarded server-side.
+          const courseXP = activeCourse.xp_reward ?? 50
           const { data: awarded } = await supabase.rpc('award_course_completion_xp', {
             p_user_id: profile.id,
             p_course_id: activeCourse.id,
-            p_xp_delta: 100,
+            p_xp_delta: courseXP,
           })
-          if (awarded) await logActivity(`${profile.name} completed course: ${activeCourse.title} (+100 XP)`, 'achievement')
+          if (awarded) {
+            toast(`◈ Course complete! +${courseXP} XP`, 'success')
+            await logActivity(`${profile.name} completed course: ${activeCourse.title} (+${courseXP} XP)`, 'achievement')
+          }
         }
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to update progress', 'error')
+      toast((err as any)?.message ||'Failed to update progress', 'error')
     }
   }
 
@@ -311,7 +315,7 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
       }
       setRateModal(false)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to submit rating', 'error')
+      toast((err as any)?.message ||'Failed to submit rating', 'error')
     } finally {
       setRateSubmitting(false)
     }
@@ -383,8 +387,8 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
                   onTimeUpdate={(e) => {
                     const vid = e.currentTarget
                     if (vid.duration && vid.currentTime / vid.duration >= 0.8 && !isFileCompleted(file.id)) {
-                      supabase.from('course_progress').upsert({ student_id: profile.id, course_id: activeCourse?.id, file_id: file.id }).then(() => {
-                        setProgress(prev => prev.some(p => p.file_id === file.id) ? prev : [...prev, { id: '', student_id: profile.id, course_id: activeCourse?.id || '', file_id: file.id, completed_at: new Date().toISOString() } as CourseProgress])
+                      supabase.from('course_progress').upsert({ student_id: profile.id, course_id: activeCourse?.id, file_id: file.id }).then(({ error }) => {
+                        if (!error) setProgress(prev => prev.some(p => p.file_id === file.id) ? prev : [...prev, { id: '', student_id: profile.id, course_id: activeCourse?.id || '', file_id: file.id, completed_at: new Date().toISOString() } as CourseProgress])
                       })
                     }
                   }}
@@ -472,6 +476,7 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
               {stats.ratingCount > 0 && (
                 <span style={{ color: '#f59e0b' }}>★ {stats.avgRating.toFixed(1)} ({stats.ratingCount})</span>
               )}
+              <span style={{ color: 'var(--warn)', fontFamily: 'var(--mono)', fontSize: 11 }}>◈ {activeCourse.xp_reward ?? 50} XP on completion</span>
             </div>
             {activeCourse.description && (
               <div className="course-hero-desc">{activeCourse.description}</div>
@@ -688,6 +693,9 @@ export function StudentCourseModule({ profile, courses, enrolledIds, onEnrolledC
                   <div className="course-card-stats">
                     <span><Icon name="users" size={10} /> {stats.enrollCount}</span>
                     {stats.ratingCount > 0 && <span style={{ color: '#f59e0b' }}>★ {stats.avgRating.toFixed(1)}</span>}
+                    {(c.xp_reward ?? 50) > 0 && (
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--warn)' }}>◈ {c.xp_reward ?? 50} XP</span>
+                    )}
                   </div>
                   {isEnrolled ? (
                     <div className="course-card-enrolled">
@@ -750,8 +758,8 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
   const [loading, setLoading] = useState(false)
   const [createModal, setCreateModal] = useState(false)
   const [editModal, setEditModal] = useState(false)
-  const [newCourse, setNewCourse] = useState({ title: '', subject: '', description: '' })
-  const [editForm, setEditForm] = useState({ title: '', subject: '', description: '', status: 'published' as string })
+  const [newCourse, setNewCourse] = useState({ title: '', subject: '', description: '', xpReward: '50' })
+  const [editForm, setEditForm] = useState({ title: '', subject: '', description: '', status: 'published' as string, xpReward: '50' })
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [status, setStatus] = useState('')
@@ -778,7 +786,7 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
         onCoursesChange(courses.map(c => c.id === courseId ? { ...c, _fileCount: data.course_files?.length || 0 } : c))
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load course', 'error')
+      toast((err as any)?.message ||'Failed to load course', 'error')
     } finally {
       setLoading(false)
     }
@@ -790,7 +798,8 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
       const { data, error } = await supabase.from('courses').insert({
         title: newCourse.title, subject: newCourse.subject, description: newCourse.description,
         teacher_id: profile.id, teacher_name: profile.name, status: 'published',
-      }).select('id, title, subject, description, teacher_id, teacher_name, created_at, status').single()
+        xp_reward: parseInt(newCourse.xpReward) || 50,
+      }).select('id, title, subject, description, teacher_id, teacher_name, created_at, status, xp_reward').single()
       if (error) throw error
       if (data) {
         const courseWithFiles = { ...data, course_files: [], _fileCount: 0 }
@@ -800,9 +809,9 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
         await logActivity(`Teacher ${profile.name} created course: ${newCourse.title}`, 'course')
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to create course', 'error')
+      toast((err as any)?.message ||'Failed to create course', 'error')
     } finally {
-      setNewCourse({ title: '', subject: '', description: '' })
+      setNewCourse({ title: '', subject: '', description: '', xpReward: '50' })
       setCreateModal(false)
     }
   }
@@ -813,13 +822,14 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
       const { error } = await supabase.from('courses').update({
         title: editForm.title, subject: editForm.subject,
         description: editForm.description, status: editForm.status,
+        xp_reward: parseInt(editForm.xpReward) || 50,
       }).eq('id', activeCourse.id).eq('teacher_id', profile.id)
       if (error) throw error
       const updated = { ...activeCourse, ...editForm, status: editForm.status as Course['status'] }
       setActiveCourse(updated)
       onCoursesChange(courses.map(c => c.id === activeCourse.id ? { ...c, ...editForm } : c))
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to update course', 'error')
+      toast((err as any)?.message ||'Failed to update course', 'error')
     } finally {
       setEditModal(false)
     }
@@ -838,7 +848,7 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
       onCoursesChange(courses.filter(c => c.id !== id))
       if (activeCourse?.id === id) setActiveCourse(null)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete course', 'error')
+      toast((err as any)?.message ||'Failed to delete course', 'error')
     }
   }
 
@@ -890,7 +900,7 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
       if (error) throw error
       await refreshActiveCourse(activeCourse.id)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete file', 'error')
+      toast((err as any)?.message ||'Failed to delete file', 'error')
     }
   }
 
@@ -908,7 +918,7 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
       ])
       await refreshActiveCourse(activeCourse!.id)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to reorder files', 'error')
+      toast((err as any)?.message ||'Failed to reorder files', 'error')
     }
   }
 
@@ -919,7 +929,7 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
       setEditingFileId(null)
       await refreshActiveCourse(activeCourse!.id)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to update section', 'error')
+      toast((err as any)?.message ||'Failed to update section', 'error')
     }
   }
 
@@ -937,7 +947,7 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
       })
       setAnalyticsView(true)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load analytics', 'error')
+      toast((err as any)?.message ||'Failed to load analytics', 'error')
     }
   }
 
@@ -967,12 +977,20 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
             <label className="label">Description</label>
             <textarea className="input" rows={3} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
           </div>
-          <div style={{ marginBottom: 20 }}>
-            <label className="label">Status</label>
-            <select className="input" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
-              <option value="published">Published (visible to students)</option>
-              <option value="draft">Draft (hidden from students)</option>
-            </select>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+            <div style={{ flex: 1 }}>
+              <label className="label">Status</label>
+              <select className="input" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
+                <option value="published">Published (visible to students)</option>
+                <option value="draft">Draft (hidden from students)</option>
+              </select>
+            </div>
+            <div style={{ width: 120 }}>
+              <label className="label">◈ XP Reward</label>
+              <input className="input" type="number" min={0} max={500} value={editForm.xpReward}
+                onChange={e => setEditForm(f => ({ ...f, xpReward: e.target.value }))}
+                placeholder="50" />
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-primary" onClick={updateCourse}>Save Changes</button>
@@ -1062,7 +1080,7 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
               <span>{activeCourse.subject}</span>
             </div>
             <div className="course-hero-actions">
-              <button className="btn btn-sm" onClick={() => { setEditForm({ title: activeCourse.title, subject: activeCourse.subject || '', description: activeCourse.description || '', status: activeCourse.status || 'published' }); setEditModal(true) }}>
+              <button className="btn btn-sm" onClick={() => { setEditForm({ title: activeCourse.title, subject: activeCourse.subject || '', description: activeCourse.description || '', status: activeCourse.status || 'published', xpReward: String(activeCourse.xp_reward ?? 50) }); setEditModal(true) }}>
                 <Icon name="edit" size={12} /> Edit
               </button>
               <button className="btn btn-sm" onClick={() => fetchAnalytics(activeCourse.id)}>
@@ -1176,9 +1194,15 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
           <label className="label">Subject</label>
           <input className="input" value={newCourse.subject} onChange={e => setNewCourse(c => ({ ...c, subject: e.target.value }))} placeholder="e.g. Mathematics" />
         </div>
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 14 }}>
           <label className="label">Description</label>
           <textarea className="input" rows={3} value={newCourse.description} onChange={e => setNewCourse(c => ({ ...c, description: e.target.value }))} placeholder="What will students learn?" />
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <label className="label">◈ XP Reward (on completion)</label>
+          <input className="input" type="number" min={0} max={500} value={newCourse.xpReward}
+            onChange={e => setNewCourse(c => ({ ...c, xpReward: e.target.value }))}
+            placeholder="50" style={{ maxWidth: 120 }} />
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-primary" onClick={createCourse}>Create Course</button>
@@ -1208,6 +1232,7 @@ export function TeacherCourseModule({ profile, courses, students, onCoursesChang
               <div className="course-card-footer">
                 <div className="course-card-stats">
                   <span style={{ fontFamily: 'var(--mono)', fontSize: 10 }}>{c._fileCount ?? '—'} files</span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--warn)' }}>◈ {c.xp_reward ?? 50} XP</span>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button className="btn btn-xs" onClick={e => { e.stopPropagation(); refreshActiveCourse(c.id) }} disabled={loading}>

@@ -123,7 +123,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
   const [slotModal, setSlotModal] = useState(false)
   const [jitsiRoom, setJitsiRoom] = useState<TimetableSlot | null>(null)
   const [editSlot, setEditSlot] = useState<TimetableSlot | null>(null)
-  const [form, setForm] = useState({ subject: '', day: 'Monday', time: '', room: '' })
+  const [form, setForm] = useState({ subject: '', day: 'Monday', time: '', room: '', xp_reward: '10' })
   const [searchQ, setSearchQ] = useState('')
   const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set())
   const [checkingIn, setCheckingIn] = useState<string | null>(null)
@@ -170,6 +170,8 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
       toast('Check-in only available during live class', 'error'); return
     }
     setCheckingIn(slot.id)
+    // Use per-slot XP if set, otherwise fall back to module prop then default
+    const slotXP = slot.xp_reward ?? xpReward
     try {
       const todayStr = new Date().toISOString().slice(0, 10)
       // Server-side deduplication: check if attendance row already exists for this slot+date
@@ -190,7 +192,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
         toast('Already checked in for this class today', 'info')
         return
       }
-      const newXP = (profile.xp || 0) + xpReward
+      const newXP = (profile.xp || 0) + slotXP
       await supabase.from('profiles').update({ xp: newXP }).eq('id', profile.id)
       // Record attendance as server-side check-in proof
       await supabase.from('attendance').insert({
@@ -200,7 +202,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
         subject: slot.subject,
         date: todayStr,
         status: 'present',
-        note: `Auto check-in +${xpReward} XP`,
+        note: `Auto check-in +${slotXP} XP`,
       })
       const key = `qgx-checkins-${profile.id}-${todayStr}`
       const updated = new Set(checkedIn)
@@ -208,7 +210,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
       setCheckedIn(updated)
       localStorage.setItem(key, JSON.stringify(Array.from(updated)))
       if (onProfileUpdate) onProfileUpdate({ ...profile, xp: newXP })
-      toast(`✓ Checked in! +${xpReward} XP`, 'success')
+      toast(`✓ Checked in! +${slotXP} XP`, 'success')
     } catch {
       toast('Check-in failed', 'error')
     } finally {
@@ -236,13 +238,13 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
   /* ── CRUD (teacher only) ── */
   const openAdd = () => {
     setEditSlot(null)
-    setForm({ subject: '', day: selectedDay || 'Monday', time: '', room: '' })
+    setForm({ subject: '', day: selectedDay || 'Monday', time: '', room: '', xp_reward: '10' })
     setSlotModal(true)
   }
 
   const openEdit = (slot: TimetableSlot) => {
     setEditSlot(slot)
-    setForm({ subject: slot.subject, day: slot.day, time: slot.time, room: slot.room })
+    setForm({ subject: slot.subject, day: slot.day, time: slot.time, room: slot.room, xp_reward: String(slot.xp_reward ?? 10) })
     setSlotModal(true)
   }
 
@@ -253,19 +255,21 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
     }
     try {
       const room = form.room || `qgx-${form.subject.toLowerCase().replace(/\s+/g, '-')}-${crypto.randomUUID().slice(0, 8)}`
+      const slotXP = parseInt(form.xp_reward) || DEFAULT_CHECKIN_XP
       if (editSlot) {
-        const { data } = await supabase.from('timetable').update({ ...form, room })
+        const { data } = await supabase.from('timetable').update({ subject: form.subject, day: form.day, time: form.time, room, xp_reward: slotXP })
           .eq('id', editSlot.id).eq('teacher_id', profile.id).select().single()
         if (data) setTimetable(prev => prev.map(s => s.id === editSlot.id ? data : s))
       } else {
         const { data } = await supabase.from('timetable').insert({
-          ...form, room, teacher_id: profile.id, teacher_name: profile.name,
+          subject: form.subject, day: form.day, time: form.time, room,
+          teacher_id: profile.id, teacher_name: profile.name, xp_reward: slotXP,
         }).select().single()
         if (data) setTimetable(prev => [...prev, data])
       }
       setSlotModal(false)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to save slot', 'error')
+      toast((err as any)?.message ||'Failed to save slot', 'error')
     }
   }
 
@@ -275,7 +279,20 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
       await supabase.from('timetable').delete().eq('id', id).eq('teacher_id', profile.id)
       setTimetable(prev => prev.filter(s => s.id !== id))
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete slot', 'error')
+      toast((err as any)?.message ||'Failed to delete slot', 'error')
+    }
+  }
+
+  const toggleLock = async (slot: TimetableSlot) => {
+    try {
+      const { data } = await supabase.from('timetable')
+        .update({ locked: !slot.locked })
+        .eq('id', slot.id).eq('teacher_id', profile.id)
+        .select().single()
+      if (data) setTimetable(prev => prev.map(s => s.id === slot.id ? data : s))
+      toast(slot.locked ? 'Slot unlocked' : 'Slot locked', 'success')
+    } catch (err) {
+      toast((err as any)?.message ||'Failed to update slot', 'error')
     }
   }
 
@@ -305,9 +322,14 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
     timetable.reduce((sum, s) => sum + getDurationMins(s.time), 0)
   , [timetable])
 
-  /* ── Jitsi room slug helper ── */
-  const getJitsiSlug = (slot: TimetableSlot) =>
-    `qgx-${slot.subject}-${slot.room}-${slot.day}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+  /* ── Jitsi room slug helper ──
+     slot.room is already the Jitsi room ID set at creation time.
+     Just sanitize it — do NOT prefix again with subject/day. ── */
+  const getJitsiSlug = (slot: TimetableSlot) => {
+    const sanitized = (slot.room || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    // Fallback if room is somehow empty
+    return sanitized || `qgx-${slot.subject.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${slot.day.toLowerCase()}`
+  }
 
   /* ── Embedded Jitsi view ── */
   if (jitsiRoom) {
@@ -327,14 +349,17 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
     const live = isNowInSlot(slot.day, slot.time)
     const dur = getDurationMins(slot.time)
     const didCheckIn = checkedIn.has(slot.id)
+    const slotXP = slot.xp_reward ?? xpReward
+    const isLocked = !!slot.locked
     return (
-      <div className={`tt-slot ${live ? 'tt-slot-live' : ''} ${compact ? 'tt-slot-compact' : ''}`}
-        style={{ borderLeftColor: color }}>
+      <div className={`tt-slot ${live ? 'tt-slot-live' : ''} ${compact ? 'tt-slot-compact' : ''} ${isLocked ? 'tt-slot-locked' : ''}`}
+        style={{ borderLeftColor: isLocked ? 'var(--fg-dim)' : color, opacity: isLocked && isStudent ? 0.65 : 1 }}>
         <div className="tt-slot-header">
           <div className="tt-slot-header-left">
-            {live && <div className="tt-live-badge"><span className="tt-live-dot" /> LIVE NOW</div>}
-            {didCheckIn && <div className="tt-checkin-badge">✓ Checked In · +{xpReward} XP</div>}
-            <div className="tt-slot-subject" style={{ color }}>
+            {isLocked && <div className="tt-locked-badge">⊘ LOCKED</div>}
+            {live && !isLocked && <div className="tt-live-badge"><span className="tt-live-dot" /> LIVE NOW</div>}
+            {didCheckIn && <div className="tt-checkin-badge">✓ Checked In · +{slotXP} XP</div>}
+            <div className="tt-slot-subject" style={{ color: isLocked ? 'var(--fg-dim)' : color }}>
               {periodNum !== undefined && <span className="tt-period-num">P{periodNum}</span>}
               {slot.subject}
             </div>
@@ -343,7 +368,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
               <span className="tt-slot-dur-pill">{formatDuration(dur)}</span>
             </div>
           </div>
-          <div className="tt-slot-color-dot" style={{ background: color }} />
+          <div className="tt-slot-color-dot" style={{ background: isLocked ? 'var(--fg-dim)' : color }} />
         </div>
         {!compact && (
           <div className="tt-slot-detail">
@@ -358,18 +383,27 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
           </div>
         )}
         <div className="tt-slot-actions">
-          <button className="btn btn-xs" style={{ borderColor: color, color }}
-            onClick={e => { e.stopPropagation(); setJitsiRoom(slot) }}>
-            <Icon name="video" size={10} /> Join
-          </button>
-          {isStudent && live && !didCheckIn && (
+          {!isLocked || isTeacher ? (
+            <button className="btn btn-xs" style={{ borderColor: color, color }}
+              onClick={e => { e.stopPropagation(); setJitsiRoom(slot) }}>
+              <Icon name="video" size={10} /> Join
+            </button>
+          ) : (
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)' }}>Join unavailable</span>
+          )}
+          {isStudent && live && !didCheckIn && !isLocked && (
             <button className="btn btn-xs tt-checkin-btn" disabled={checkingIn === slot.id}
               onClick={e => { e.stopPropagation(); handleCheckIn(slot) }}>
-              {checkingIn === slot.id ? '...' : `◈ Check In +${xpReward} XP`}
+              {checkingIn === slot.id ? '...' : `◈ Check In +${slotXP} XP`}
             </button>
           )}
           {isTeacher && (
             <>
+              <button className="btn btn-xs" title={isLocked ? 'Unlock slot' : 'Lock slot'}
+                onClick={e => { e.stopPropagation(); toggleLock(slot) }}
+                style={isLocked ? { color: 'var(--warning)', borderColor: 'var(--warning)' } : {}}>
+                {isLocked ? '🔓' : '🔒'}
+              </button>
               <button className="btn btn-xs" onClick={e => { e.stopPropagation(); openEdit(slot) }}>
                 <Icon name="edit" size={10} />
               </button>
@@ -427,7 +461,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
                     onClick={() => {
                       if (isTeacher && !slots.length) {
                         setEditSlot(null)
-                        setForm({ subject: '', day, time: `${hour}:00 - ${hour + 1}:00`, room: '' })
+                        setForm({ subject: '', day, time: `${hour}:00 - ${hour + 1}:00`, room: '', xp_reward: '10' })
                         setSlotModal(true)
                       }
                     }}>
@@ -437,23 +471,32 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
                       const color = getSubjectColor(slot.subject)
                       const live = isNowInSlot(slot.day, slot.time)
                       return (
-                        <div key={slot.id} className={`tt-week-slot ${live ? 'tt-week-slot-live' : ''}`}
+                        <div key={slot.id} className={`tt-week-slot ${live ? 'tt-week-slot-live' : ''} ${slot.locked ? 'tt-week-slot-locked' : ''}`}
                           style={{
-                            background: `${color}18`, borderLeft: `3px solid ${color}`,
+                            background: slot.locked ? 'var(--surface-2)' : `${color}18`,
+                            borderLeft: `3px solid ${slot.locked ? 'var(--fg-dim)' : color}`,
                             height: `${Math.max(duration * 100, 100)}%`,
                             cursor: 'pointer',
+                            opacity: slot.locked && isStudent ? 0.6 : 1,
                           }}
                           onClick={e => { e.stopPropagation(); setSelectedDay(slot.day); setView('day') }}>
-                          {live && <span className="tt-live-dot-sm" />}
-                          <div className="tt-week-slot-subject" style={{ color }}>{slot.subject}</div>
+                          {slot.locked && <span style={{ fontFamily: 'var(--mono)', fontSize: 8, color: 'var(--fg-dim)' }}>⊘ LOCKED</span>}
+                          {live && !slot.locked && <span className="tt-live-dot-sm" />}
+                          <div className="tt-week-slot-subject" style={{ color: slot.locked ? 'var(--fg-dim)' : color }}>{slot.subject}</div>
                           <div className="tt-week-slot-time">{slot.time}</div>
                           <div className="tt-week-slot-dur">{formatDuration(getDurationMins(slot.time))}</div>
                           {!isTeacher && <div className="tt-week-slot-teacher">{slot.teacher_name}</div>}
                           <div className="tt-week-slot-actions" onClick={e => e.stopPropagation()}>
-                            <button className="tt-micro-btn" style={{ borderColor: color, color }}
-                              onClick={() => setJitsiRoom(slot)} title="Join video call">▶</button>
+                            {(!slot.locked || isTeacher) && (
+                              <button className="tt-micro-btn" style={{ borderColor: color, color }}
+                                onClick={() => setJitsiRoom(slot)} title="Join video call">▶</button>
+                            )}
                             {isTeacher && (
                               <>
+                                <button className="tt-micro-btn" onClick={() => toggleLock(slot)}
+                                  title={slot.locked ? 'Unlock' : 'Lock'}>
+                                  {slot.locked ? '🔓' : '🔒'}
+                                </button>
                                 <button className="tt-micro-btn" onClick={() => openEdit(slot)}>✎</button>
                                 <button className="tt-micro-btn tt-micro-danger" onClick={() => deleteSlot(slot.id)}>×</button>
                               </>
@@ -585,12 +628,21 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
               placeholder="09:00 - 10:30" />
           </div>
         </div>
-        <div style={{ marginBottom: 20 }}>
-          <label className="label">Jitsi Room ID (optional)</label>
-          <input className="input" value={form.room} onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
-            placeholder="auto-generated if empty" />
-          <div className="tt-room-hint">
-            Join link: meet.jit.si/<strong>{form.room || 'auto-generated'}</strong>
+        <div className="grid-2" style={{ marginBottom: 14 }}>
+          <div>
+            <label className="label">Jitsi Room ID (optional)</label>
+            <input className="input" value={form.room} onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
+              placeholder="auto-generated if empty" />
+            <div className="tt-room-hint">
+              Join link: meet.jit.si/<strong>{form.room || 'auto-generated'}</strong>
+            </div>
+          </div>
+          <div>
+            <label className="label">◈ Check-in XP</label>
+            <input className="input" type="number" min={0} max={100} value={form.xp_reward}
+              onChange={e => setForm(f => ({ ...f, xp_reward: e.target.value }))}
+              placeholder="10" />
+            <div className="tt-room-hint">XP students earn by checking in</div>
           </div>
         </div>
         <div className="tt-modal-actions">
@@ -616,13 +668,17 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
                 <span>{formatDuration(getDurationMins(liveSlot.time))}</span>
               </div>
               <div className="tt-next-up-actions">
-                <button className="btn btn-sm btn-primary" onClick={() => setJitsiRoom(liveSlot)}>
-                  <Icon name="video" size={11} /> Join Class
-                </button>
-                {isStudent && !checkedIn.has(liveSlot.id) && (
+                {liveSlot.locked && isStudent ? (
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)' }}>⊘ Class locked by teacher</span>
+                ) : (
+                  <button className="btn btn-sm btn-primary" onClick={() => setJitsiRoom(liveSlot)}>
+                    <Icon name="video" size={11} /> Join Class
+                  </button>
+                )}
+                {isStudent && !liveSlot.locked && !checkedIn.has(liveSlot.id) && (
                   <button className="btn btn-sm tt-checkin-btn" disabled={checkingIn === liveSlot.id}
                     onClick={() => handleCheckIn(liveSlot)}>
-                    {checkingIn === liveSlot.id ? '...' : `◈ Check In +${xpReward} XP`}
+                    {checkingIn === liveSlot.id ? '...' : `◈ Check In +${liveSlot.xp_reward ?? xpReward} XP`}
                   </button>
                 )}
                 {checkedIn.has(liveSlot.id) && (
@@ -674,7 +730,7 @@ export function TimetableModule({ profile, timetable, setTimetable, onProfileUpd
         {isStudent && (
           <div className="tt-stat tt-stat-xp">
             <div className="tt-stat-icon">◈</div>
-            <div className="tt-stat-value">{weeklyCheckIns * xpReward}</div>
+            <div className="tt-stat-value">{weeklyCheckIns * xpReward} est.</div>
             <div className="tt-stat-label">Weekly XP</div>
           </div>
         )}

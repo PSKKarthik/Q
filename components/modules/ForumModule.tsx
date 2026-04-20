@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/lib/toast'
+import { pushNotification } from '@/lib/actions'
 import type { Profile, ForumPost, ForumComment, ForumFlair } from '@/types'
 import { Icon } from '@/components/ui/Icon'
 import { Modal } from '@/components/ui/Modal'
@@ -42,15 +43,15 @@ const roleColor = (r: string) => r === 'teacher' ? 'var(--warn)' : r === 'admin'
 const roleBadge = (r: string) => r === 'teacher' ? 'T' : r === 'admin' ? 'A' : 'S'
 
 function getAttachmentIcon(type?: string) {
-  if (!type) return '▸'
-  if (type.includes('pdf')) return '▪'
-  if (type.includes('image') || type.includes('jpg') || type.includes('png') || type.includes('gif') || type.includes('jpeg')) return '▪'
-  if (type.includes('video') || type.includes('mp4')) return '▪'
-  if (type.includes('zip') || type.includes('archive')) return '▪'
-  if (type.includes('doc') || type.includes('word')) return '▪'
-  if (type.includes('ppt') || type.includes('presentation')) return '▪'
-  if (type.includes('xls') || type.includes('sheet')) return '▪'
-  return '▸'
+  if (!type) return '📎'
+  if (type.includes('pdf')) return '📄'
+  if (type.includes('image') || type.includes('jpg') || type.includes('png') || type.includes('gif') || type.includes('jpeg')) return '🖼'
+  if (type.includes('video') || type.includes('mp4')) return '🎬'
+  if (type.includes('zip') || type.includes('archive')) return '🗜'
+  if (type.includes('doc') || type.includes('word')) return '📝'
+  if (type.includes('ppt') || type.includes('presentation')) return '📊'
+  if (type.includes('xls') || type.includes('sheet')) return '📈'
+  return '📎'
 }
 
 function isImage(type?: string, name?: string) {
@@ -165,8 +166,14 @@ export function ForumModule({ profile }: ForumModuleProps) {
   const [postActionBusy, setPostActionBusy] = useState<Record<string, boolean>>({})
   const [commentActionBusy, setCommentActionBusy] = useState<Record<string, boolean>>({})
 
+  const [editingComment, setEditingComment] = useState<ForumComment | null>(null)
+  const [editCommentBody, setEditCommentBody] = useState('')
+
   const channelRef = useRef<any>(null)
   const commentChannelRef = useRef<any>(null)
+  const composerRef = useRef<HTMLTextAreaElement>(null)
+
+  const [loadingPosts, setLoadingPosts] = useState(true)
 
   /* ── data fetching ── */
   const fetchPosts = useCallback(async () => {
@@ -177,7 +184,9 @@ export function ForumModule({ profile }: ForumModuleProps) {
       if (error) throw error
       if (data) setPosts(data as ForumPost[])
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load posts', 'error')
+      toast((err as any)?.message || 'Failed to load posts', 'error')
+    } finally {
+      setLoadingPosts(false)
     }
   }, [toast])
 
@@ -185,7 +194,19 @@ export function ForumModule({ profile }: ForumModuleProps) {
   useEffect(() => {
     fetchPosts()
     channelRef.current = supabase.channel(`forum-${profile.role}-${Date.now()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_posts' }, () => fetchPosts())
+      // INSERT / DELETE → full refetch (new/removed posts)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'forum_posts' }, () => fetchPosts())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'forum_posts' }, (payload) => {
+        const oldId = (payload.old as { id?: string })?.id
+        if (oldId) setPosts(prev => prev.filter(p => p.id !== oldId))
+      })
+      // UPDATE → patch only the changed post in-place (view_count, likes, pinned, etc.)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'forum_posts' }, (payload) => {
+        const updated = payload.new as ForumPost
+        if (!updated?.id) return
+        setPosts(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p))
+        setActivePost(prev => prev?.id === updated.id ? { ...prev, ...updated } : prev)
+      })
       .subscribe()
     return () => {
       if (channelRef.current) supabase.removeChannel(channelRef.current)
@@ -218,8 +239,11 @@ export function ForumModule({ profile }: ForumModuleProps) {
 
   const openPost = async (post: ForumPost) => {
     setPostLoading(true)
-    setActivePost(post)
     setCommentSort('oldest')
+    // Optimistically show incremented view count immediately
+    const optimistic = { ...post, view_count: (post.view_count || 0) + 1 }
+    setActivePost(optimistic)
+    setPosts(prev => prev.map(p => p.id === post.id ? optimistic : p))
     supabase.rpc('increment_view_count', { p_post_id: post.id })
     try {
       const { data, error } = await supabase.from('forum_comments').select('*')
@@ -227,7 +251,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
       if (error) throw error
       if (data) setComments(data as ForumComment[])
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load comments', 'error')
+      toast((err as any)?.message || 'Failed to load comments', 'error')
     } finally {
       setPostLoading(false)
     }
@@ -356,7 +380,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
     }
     setPostModal(false)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to save post', 'error')
+      toast((err as any)?.message || 'Failed to save post', 'error')
     } finally {
       setUploading(false)
     }
@@ -379,7 +403,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
       setPosts(prev => prev.filter(p => p.id !== postId))
       if (activePost?.id === postId) { setActivePost(null); setComments([]) }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete post', 'error')
+      toast((err as any)?.message || 'Failed to delete post', 'error')
     } finally {
       setPostActionBusy(prev => ({ ...prev, [postId]: false }))
     }
@@ -403,7 +427,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
         supabase.rpc('increment_reputation', { target_user: post.author_id, delta })
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to like post', 'error')
+      toast((err as any)?.message || 'Failed to like post', 'error')
     } finally {
       setPostActionBusy(prev => ({ ...prev, [post.id]: false }))
     }
@@ -412,9 +436,9 @@ export function ForumModule({ profile }: ForumModuleProps) {
   const toggleCommentLike = async (comment: ForumComment) => {
     if (commentActionBusy[comment.id]) return
     setCommentActionBusy(prev => ({ ...prev, [comment.id]: true }))
-    const wasLiked = (comment.likes || []).includes(profile.id)
-    const { data, error } = await supabase.rpc('toggle_comment_like', { comment_id: comment.id, user_id: profile.id })
     try {
+      const wasLiked = (comment.likes || []).includes(profile.id)
+      const { data, error } = await supabase.rpc('toggle_comment_like', { comment_id: comment.id, user_id: profile.id })
       if (error) { toast(error.message || 'Failed to like comment', 'error'); return }
       const newLikes: string[] = data ?? []
       setComments(prev => prev.map(c => c.id === comment.id ? { ...c, likes: newLikes } : c))
@@ -423,6 +447,8 @@ export function ForumModule({ profile }: ForumModuleProps) {
         const delta = wasLiked ? -1 : 1
         supabase.rpc('increment_reputation', { target_user: comment.author_id, delta })
       }
+    } catch (err) {
+      toast((err as any)?.message || 'Failed to like comment', 'error')
     } finally {
       setCommentActionBusy(prev => ({ ...prev, [comment.id]: false }))
     }
@@ -440,7 +466,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
       setPosts(prev => prev.map(p => p.id === updated.id ? updated : p))
       if (activePost?.id === updated.id) setActivePost(updated)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to update bookmark', 'error')
+      toast((err as any)?.message || 'Failed to update bookmark', 'error')
     } finally {
       setPostActionBusy(prev => ({ ...prev, [post.id]: false }))
     }
@@ -459,7 +485,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
       if (activePost?.id === post.id) setActivePost(updated)
       toast(newPinned ? '● Post pinned' : '● Post unpinned', 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to pin post', 'error')
+      toast((err as any)?.message || 'Failed to pin post', 'error')
     } finally {
       setPostActionBusy(prev => ({ ...prev, [post.id]: false }))
     }
@@ -500,7 +526,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
         }
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to mark best answer', 'error')
+      toast((err as any)?.message || 'Failed to mark best answer', 'error')
     } finally {
       setPostActionBusy(prev => ({ ...prev, [activePost.id]: false }))
     }
@@ -523,6 +549,14 @@ export function ForumModule({ profile }: ForumModuleProps) {
         setComments(prev => [...prev, data as ForumComment])
         setActivePost(prev => prev ? { ...prev, comment_count: (prev.comment_count || 0) + 1 } : prev)
         setPosts(prev => prev.map(p => p.id === activePost.id ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p))
+        // Notify post author (unless commenting on own post)
+        if (activePost.author_id !== profile.id) {
+          pushNotification(
+            activePost.author_id,
+            `${profile.name} commented on your post: "${activePost.title.slice(0, 60)}${activePost.title.length > 60 ? '…' : ''}"`,
+            'forum_comment'
+          ).catch(() => {})
+        }
         // Award +3 XP for commenting
         const { error: xpErr } = await supabase.rpc('atomic_xp_update', { p_user_id: profile.id, p_xp_delta: 3, p_best_score: 0, p_ghost_win_increment: 0 })
         if (xpErr) {
@@ -533,7 +567,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
         if (profile.role === 'student') incrementSocialQuests(profile.id)
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to add comment', 'error')
+      toast((err as any)?.message || 'Failed to add comment', 'error')
     }
     setNewComment(''); setReplyTo(null); setCommentLoading(false)
   }
@@ -563,9 +597,28 @@ export function ForumModule({ profile }: ForumModuleProps) {
         }
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete comment', 'error')
+      toast((err as any)?.message || 'Failed to delete comment', 'error')
     } finally {
       setCommentActionBusy(prev => ({ ...prev, [commentId]: false }))
+    }
+  }
+
+  const saveEditComment = async () => {
+    if (!editingComment || !editCommentBody.trim()) return
+    setCommentActionBusy(prev => ({ ...prev, [editingComment.id]: true }))
+    try {
+      const { data, error } = await supabase.from('forum_comments')
+        .update({ body: editCommentBody.trim(), edited_at: new Date().toISOString() })
+        .eq('id', editingComment.id).eq('author_id', profile.id)
+        .select().single()
+      if (error) throw error
+      if (data) setComments(prev => prev.map(c => c.id === editingComment.id ? data as ForumComment : c))
+      setEditingComment(null)
+      setEditCommentBody('')
+    } catch (err) {
+      toast((err as any)?.message || 'Failed to edit comment', 'error')
+    } finally {
+      setCommentActionBusy(prev => ({ ...prev, [editingComment.id]: false }))
     }
   }
 
@@ -635,6 +688,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
   const renderComment = (c: ForumComment, childMap: Record<string, ForumComment[]>, depth = 0) => {
     const isBest = activePost?.best_answer_id === c.id
     const canMarkBest = activePost?.author_id === profile.id && activePost?.flair === 'question' && !c.parent_id
+    const isEditing = editingComment?.id === c.id
     return (
       <div key={c.id} className={`fm-comment ${depth > 0 ? 'fm-comment-nested' : ''} ${isBest ? 'fm-best-answer' : ''}`} style={{ marginLeft: Math.min(depth * 24, 72) }}>
         {isBest && <div className="fm-best-badge">✓ Best Answer</div>}
@@ -643,16 +697,38 @@ export function ForumModule({ profile }: ForumModuleProps) {
             <div className="fm-thread-line" />
           </div>
           <div className="fm-comment-body">
-            <AuthorBadge name={c.author_name} role={c.author_role} date={c.created_at} />
-            <MdBody text={c.body} className="fm-comment-text" />
+            <AuthorBadge name={c.author_name} role={c.author_role} date={c.created_at} edited={c.edited_at} />
+            {isEditing ? (
+              <div style={{ marginBottom: 8 }}>
+                <textarea className="input fm-compose-input" rows={3} value={editCommentBody}
+                  onChange={e => setEditCommentBody(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveEditComment() } }}
+                  style={{ marginBottom: 6 }} />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-primary btn-sm" onClick={saveEditComment} disabled={!!commentActionBusy[c.id]}>Save</button>
+                  <button className="btn btn-sm" onClick={() => { setEditingComment(null); setEditCommentBody('') }}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <MdBody text={c.body} className="fm-comment-text" />
+            )}
             <div className="fm-comment-actions">
               <VoteBar likes={c.likes || []} onVote={() => toggleCommentLike(c)} vertical={false} disabled={!!commentActionBusy[c.id]} />
-              <button className="fm-action-btn" onClick={() => { setReplyTo(c); setNewComment(`@${c.author_name} `) }} disabled={!!commentActionBusy[c.id]}>
+              <button className="fm-action-btn" onClick={() => {
+                setReplyTo(c)
+                setNewComment(`@${c.author_name} `)
+                setTimeout(() => { composerRef.current?.focus(); composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }, 50)
+              }} disabled={!!commentActionBusy[c.id]}>
                 <Icon name="chat" size={11} /> Reply
               </button>
               {canMarkBest && (
                 <button className={`fm-action-btn ${isBest ? 'fm-action-best-active' : ''}`} onClick={() => markBestAnswer(c.id)} disabled={!!activePost && !!postActionBusy[activePost.id]}>
                   {isBest ? '✓ Unmark' : '✓ Best Answer'}
+                </button>
+              )}
+              {c.author_id === profile.id && !isEditing && (
+                <button className="fm-action-btn" onClick={() => { setEditingComment(c); setEditCommentBody(c.body) }} disabled={!!commentActionBusy[c.id]}>
+                  <Icon name="edit" size={11} /> Edit
                 </button>
               )}
               {(c.author_id === profile.id || profile.role === 'admin' || profile.role === 'teacher') && (
@@ -785,7 +861,12 @@ export function ForumModule({ profile }: ForumModuleProps) {
         </div>
 
         {/* ── Feed ── */}
-        {sortedPosts.length === 0 && (
+        {loadingPosts && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+            <div className="spinner" />
+          </div>
+        )}
+        {!loadingPosts && sortedPosts.length === 0 && (
           <div className="fm-empty fade-up">
             <div style={{ fontSize: 32, marginBottom: 8 }}>{showBookmarks ? '◈' : '◇'}</div>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>
@@ -948,7 +1029,7 @@ export function ForumModule({ profile }: ForumModuleProps) {
             <button className="fm-clear-btn" onClick={() => { setReplyTo(null); setNewComment('') }}>×</button>
           </div>
         )}
-        <textarea className="input fm-compose-input" rows={3} value={newComment}
+        <textarea ref={composerRef} className="input fm-compose-input" rows={3} value={newComment}
           onChange={e => setNewComment(e.target.value)}
           placeholder={replyTo ? `Reply to ${replyTo.author_name}...` : 'Write a comment... (supports **bold**, *italic*, `code`)'}
           onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); addComment() } }}

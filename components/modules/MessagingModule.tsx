@@ -130,7 +130,7 @@ export function MessagingModule({ profile, contacts }: Props) {
       setThreads(allThreads)
       setLoading(false)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load messages', 'error')
+      toast((err as any)?.message ||'Failed to load messages', 'error')
       setLoading(false)
     }
   }
@@ -159,7 +159,7 @@ export function MessagingModule({ profile, contacts }: Props) {
       setThreads(prev => prev.map(t => t.type === 'dm' && t.contact.id === contactId ? { ...t, unread: 0 } : t))
       setupChannel(`dm-${[profile.id, contactId].sort().join('-')}`, contactId)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load conversation', 'error')
+      toast((err as any)?.message ||'Failed to load conversation', 'error')
     }
   }
 
@@ -178,7 +178,7 @@ export function MessagingModule({ profile, contacts }: Props) {
 
       setupChannel(`grp-${groupId}`)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load group conversation', 'error')
+      toast((err as any)?.message ||'Failed to load group conversation', 'error')
     }
   }
 
@@ -250,7 +250,7 @@ export function MessagingModule({ profile, contacts }: Props) {
       setUploading(false)
       return { url: urlData.publicUrl, name: attachment.name, type: attachment.type }
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to upload attachment', 'error')
+      toast((err as any)?.message ||'Failed to upload attachment', 'error')
       setUploading(false)
       return null
     }
@@ -283,7 +283,7 @@ export function MessagingModule({ profile, contacts }: Props) {
       broadcastTyping(false)
       loadThreads()
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to send message', 'error')
+      toast((err as any)?.message ||'Failed to send message', 'error')
     }
   }
 
@@ -294,7 +294,7 @@ export function MessagingModule({ profile, contacts }: Props) {
       setEditingMsg(null)
       setEditDraft('')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to edit message', 'error')
+      toast((err as any)?.message ||'Failed to edit message', 'error')
     }
   }
 
@@ -304,7 +304,7 @@ export function MessagingModule({ profile, contacts }: Props) {
       await supabase.from('messages').update({ deleted: true, body: '' }).eq('id', msgId).eq('sender_id', profile.id)
       setMessages(prev => prev.filter(m => m.id !== msgId))
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to delete message', 'error')
+      toast((err as any)?.message ||'Failed to delete message', 'error')
     }
   }
 
@@ -369,7 +369,7 @@ export function MessagingModule({ profile, contacts }: Props) {
       setGroupMembers([])
       loadThreads()
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to create group', 'error')
+      toast((err as any)?.message ||'Failed to create group', 'error')
     }
   }
 
@@ -423,7 +423,12 @@ export function MessagingModule({ profile, contacts }: Props) {
           </div>
           <div className="messaging-thread-list">
             {loading && <div style={{ padding: 20, textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)' }}>Loading...</div>}
-            {filteredThreads.slice(threadPage * PAGE_SIZE, (threadPage + 1) * PAGE_SIZE).map((t, i) => {
+            {!loading && filteredThreads.length === 0 && (
+              <div style={{ padding: 24, textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)' }}>
+                No conversations yet.
+              </div>
+            )}
+            {filteredThreads.slice(threadPage * PAGE_SIZE, (threadPage + 1) * PAGE_SIZE).map((t) => {
               const isActive = t.type === 'dm' ? activeContact?.id === t.contact.id : activeGroup?.id === t.group.id
               const name = t.type === 'dm' ? t.contact.name : `◇ ${t.group.name}`
               const avatar = t.type === 'dm' ? t.contact.avatar : '◇'
@@ -466,6 +471,12 @@ export function MessagingModule({ profile, contacts }: Props) {
                 )}
               </div>
               <div className="messaging-messages">
+                {messages.length === 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, color: 'var(--fg-dim)', fontFamily: 'var(--mono)', fontSize: 12 }}>
+                    <Icon name="chat" size={28} />
+                    No messages yet. Say hello!
+                  </div>
+                )}
                 {messages.map(m => {
                   const isMine = m.sender_id === profile.id
                   return (

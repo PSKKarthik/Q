@@ -11,7 +11,7 @@ if (!url || !key) {
 
 export const supabase = createBrowserClient(url, key, {
   auth: {
-    flowType: 'implicit',
+    flowType: 'pkce',
   },
 })
 

@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { SectionLabel } from '@/components/ui/SectionLabel'
 import type { Profile, Test, Question, Attempt, AntiCheat } from '@/types'
 import { fisher_yates, formatTimer } from '@/lib/utils'
+import { checkAnswer } from '@/lib/checkAnswer'
 
 /* ─── types ─── */
 interface StudentTestModuleProps {
@@ -201,8 +202,8 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
     })
     if (ac.fullscreen) { try { await document.documentElement.requestFullscreen() } catch {} }
 
-    const prev = attempts.find(a => a.test_id === test.id)
-    setGhostScore(prev ? prev.percent : 0)
+    const bestPrevPercent = attempts.filter(a => a.test_id === test.id).reduce((max, a) => Math.max(max, a.percent || 0), 0)
+    setGhostScore(bestPrevPercent)
     setDoubleXPLocked(!!(doubleXP.active && doubleXP.ends_at && Date.now() < doubleXP.ends_at))
 
     // Tab switch detection: warn first, auto-submit on 2nd
@@ -291,7 +292,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
     if (visHandlerRef.current) { document.removeEventListener('visibilitychange', visHandlerRef.current); visHandlerRef.current = null }
     if (fsHandlerRef.current) { document.removeEventListener('fullscreenchange', fsHandlerRef.current); fsHandlerRef.current = null }
     if (keyHandlerRef.current) { document.removeEventListener('keydown', keyHandlerRef.current); keyHandlerRef.current = null }
-    try { localStorage.removeItem(`qgx-test-${activeTest.id}`); localStorage.removeItem(`qgx-start-${activeTest.id}`) } catch {}
+    // Note: localStorage is cleared only on success — keeps answers available if submission fails
 
     const answerMap: Record<string, any> = {}
     questions.forEach(q => { answerMap[q.id] = answers[q.id] })
@@ -312,10 +313,10 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ test_id: activeTest.id, answer_map: answerMap, is_double_xp: doubleXPLocked }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Submission failed')
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Submission failed')
 
-      const { score, total, percent, xpEarned, isDoubleXP, ghostMsg, ghostBonus, newXP } = data
+      const { score, total, percent, xpEarned, isDoubleXP, ghostMsg, ghostBonus, newXP } = json.data || json
 
       // Fetch quest progress that advanced from this submission (DB trigger fires asynchronously)
       let questsCompleted: Array<{ title: string; xp_reward: number }> = []
@@ -334,11 +335,19 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
         }
       } catch { /* non-blocking */ }
 
+      // Clear saved answers only after confirmed success
+      try { localStorage.removeItem(`qgx-test-${activeTest.id}`); localStorage.removeItem(`qgx-start-${activeTest.id}`) } catch {}
       setTestResult({ score, total, percent, date: new Date().toISOString().slice(0, 10), xpEarned, isDoubleXP, ghostMsg, ghostBonus, answerMap, questsCompleted })
-      onAttemptDone({ id: '', student_id: profile.id, test_id: activeTest.id, score, total, percent, xp_earned: xpEarned, answer_map: answerMap, submitted_at: new Date().toISOString() }, { newXP })
+      onAttemptDone({ id: `temp-${Date.now()}`, student_id: profile.id, test_id: activeTest.id, score, total, percent, xp_earned: xpEarned, answer_map: answerMap, submitted_at: new Date().toISOString() }, { newXP })
       setView('result')
     } catch (e: any) {
-      toast(`Submission error: ${e.message}`, 'error')
+      // If network dropped mid-submission, queue for auto-retry when reconnected
+      if (isOfflineRef.current) {
+        pendingSubmitRef.current = true
+        toast('You went offline during submission — will auto-retry when reconnected.', 'error')
+      } else {
+        toast(`Submission error: ${e.message}`, 'error')
+      }
     }
     submittingRef.current = false; setConfirmSubmit(false)
   }
@@ -385,7 +394,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
           <div className="tm-filter-pills">
             {(['all', 'available', 'attempted'] as const).map(f => (
               <button key={f} className={`tm-pill ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
-                {f === 'all' ? `All (${tests.length})` : f === 'available' ? `Available (${tests.filter(t => !attempted.includes(t.id)).length})` : `Attempted (${attempts.length})`}
+                {f === 'all' ? `All (${tests.length})` : f === 'available' ? `Available (${tests.filter(t => !attempted.includes(t.id)).length})` : `Attempted (${Array.from(new Set(attempts.map(a => a.test_id))).length})`}
               </button>
             ))}
           </div>
@@ -962,25 +971,3 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
   return null
 }
 
-/* ── Answer checker for review ── */
-function checkAnswer(q: Question, userAnswer: any): boolean {
-  if (userAnswer === undefined || userAnswer === null) return false
-  switch (q.type) {
-    case 'mcq':
-    case 'tf':
-      return userAnswer === q.answer
-    case 'fib':
-      return String(userAnswer).trim().toLowerCase() === String(q.answer).trim().toLowerCase()
-    case 'msq': {
-      const correct = Array.isArray(q.answer) ? [...q.answer as number[]].sort() : []
-      const user = Array.isArray(userAnswer) ? [...userAnswer as number[]].sort() : []
-      return JSON.stringify(correct) === JSON.stringify(user)
-    }
-    case 'match': {
-      if (!userAnswer || typeof userAnswer !== 'object') return false
-      const pairs = Array.isArray(q.answer) ? q.answer as { left: string; right: string }[] : []
-      return pairs.every(p => String(userAnswer[p.left] || '').trim().toLowerCase() === p.right.trim().toLowerCase())
-    }
-    default: return false
-  }
-}

@@ -192,7 +192,7 @@ export function CertificateModule({ profile, courses, enrolledIds }: Props) {
 
       setEligibleCourses(eligible)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to load certificates', 'error')
+      toast((err as any)?.message ||'Failed to load certificates', 'error')
     } finally {
       setLoading(false)
     }
@@ -226,7 +226,7 @@ export function CertificateModule({ profile, courses, enrolledIds }: Props) {
       downloadCertificate(profile.name, course.title, new Date().toLocaleDateString(), credentialId)
       toast('Certificate generated!', 'success')
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Failed to generate certificate', 'error')
+      toast((err as any)?.message ||'Failed to generate certificate', 'error')
     } finally {
       setBusy(null)
     }
@@ -403,7 +403,11 @@ export function CertificateModule({ profile, courses, enrolledIds }: Props) {
     }
   }
 
-  if (loading) return <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>Loading certificates...</div>
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+      <div className="spinner" />
+    </div>
+  )
 
   return (
     <>

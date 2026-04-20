@@ -6,22 +6,34 @@ import { Icon } from '@/components/ui/Icon'
 
 export function NotificationBell({ userId }: { userId: string }) {
   const [notifs, setNotifs]     = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
   const [open, setOpen]         = useState(false)
   const dropRef                 = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase
-        .from('notifications').select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(10)
+      const [{ data }, { count }] = await Promise.all([
+        supabase
+          .from('notifications').select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(20),
+        supabase
+          .from('notifications')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('read', false),
+      ])
       if (data) setNotifs(data)
+      setUnreadCount(count || 0)
     }
     load()
     const ch = supabase.channel('notifs-' + userId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-        (p: { new: Notification }) => setNotifs(prev => [p.new, ...prev].slice(0, 10)))
+        (p: { new: Notification }) => {
+          setNotifs(prev => [p.new, ...prev].slice(0, 20))
+          setUnreadCount(c => c + 1)
+        })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [userId])
@@ -34,16 +46,22 @@ export function NotificationBell({ userId }: { userId: string }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const unread = notifs.filter(n => !n.read).length
+  const unread = unreadCount
 
   const markAll = async () => {
-    await supabase.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false)
-    setNotifs(n => n.map(x => ({ ...x, read: true })))
+    const { error } = await supabase.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false)
+    if (!error) {
+      setNotifs(n => n.map(x => ({ ...x, read: true })))
+      setUnreadCount(0)
+    }
   }
 
   const markOne = async (id: string) => {
-    await supabase.from('notifications').update({ read: true }).eq('id', id)
-    setNotifs(n => n.map(x => x.id === id ? { ...x, read: true } : x))
+    const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id)
+    if (!error) {
+      setNotifs(n => n.map(x => x.id === id ? { ...x, read: true } : x))
+      setUnreadCount(c => Math.max(0, c - 1))
+    }
   }
 
   return (

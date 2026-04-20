@@ -64,6 +64,7 @@ export function NotificationsModule({ userId }: { userId: string }) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [searchQ, setSearchQ] = useState('')
   const [page, setPage] = useState(0)
+  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [showPrefs, setShowPrefs] = useState(false)
   const [mutedTypes, setMutedTypes] = useState<Set<string>>(() => {
@@ -74,6 +75,7 @@ export function NotificationsModule({ userId }: { userId: string }) {
   })
 
   const fetchNotifs = useCallback(async () => {
+    setLoading(true)
     try {
       const { data, error } = await supabase
         .from('notifications').select('*')
@@ -82,7 +84,9 @@ export function NotificationsModule({ userId }: { userId: string }) {
       if (error) throw error
       if (data) setNotifs(data)
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Failed to load notifications', 'error')
+      toast((err as any)?.message ||'Failed to load notifications', 'error')
+    } finally {
+      setLoading(false)
     }
   }, [userId, toast])
 
@@ -140,7 +144,7 @@ export function NotificationsModule({ userId }: { userId: string }) {
       setNotifs(n => n.map(x => ({ ...x, read: true })))
       toast('All marked as read', 'success')
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Failed to mark all read', 'error')
+      toast((err as any)?.message ||'Failed to mark all read', 'error')
     }
     setBusy(null)
   }
@@ -152,7 +156,7 @@ export function NotificationsModule({ userId }: { userId: string }) {
       if (error) throw error
       setNotifs(n => n.map(x => x.id === id ? { ...x, read: true } : x))
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Failed to mark as read', 'error')
+      toast((err as any)?.message ||'Failed to mark as read', 'error')
     }
     setBusy(null)
   }
@@ -165,7 +169,7 @@ export function NotificationsModule({ userId }: { userId: string }) {
       if (error) throw error
       setNotifs(n => n.filter(x => x.id !== id))
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Failed to delete notification', 'error')
+      toast((err as any)?.message ||'Failed to delete notification', 'error')
     }
     setBusy(null)
   }
@@ -179,7 +183,7 @@ export function NotificationsModule({ userId }: { userId: string }) {
       setNotifs(n => n.filter(x => !x.read))
       toast('Read notifications cleared', 'success')
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Failed to clear notifications', 'error')
+      toast((err as any)?.message ||'Failed to clear notifications', 'error')
     }
     setBusy(null)
   }
@@ -192,6 +196,12 @@ export function NotificationsModule({ userId }: { userId: string }) {
       return next
     })
   }
+
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+      <div className="spinner" />
+    </div>
+  )
 
   return (
     <>
