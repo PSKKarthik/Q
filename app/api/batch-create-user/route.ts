@@ -85,6 +85,20 @@ export async function POST(req: Request) {
     serviceKey
   )
 
+  // Check if email already exists in profiles (including soft-deleted)
+  const { data: existingProfile } = await adminClient
+    .from('profiles')
+    .select('id, deleted_at')
+    .eq('email', email)
+    .maybeSingle()
+
+  if (existingProfile) {
+    if (existingProfile.deleted_at) {
+      return NextResponse.json({ success: false, error: 'An account with this email exists in the deleted users bin. Restore it from the admin Users tab.' }, { status: 409 })
+    }
+    return NextResponse.json({ success: false, error: 'An account with this email already exists.' }, { status: 409 })
+  }
+
   // Generate a secure random password for the new user
   const tempPassword = crypto.randomUUID().slice(0, 8) + 'Aa1!'
 

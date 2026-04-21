@@ -65,6 +65,13 @@ function AdminDashboardContent() {
   const [userSort, setUserSort] = useState<'latest' | 'oldest' | 'xp_desc' | 'xp_asc' | 'name_az'>('latest')
   const [activitySearch, setActivitySearch] = useState('')
   const [activityTypeFilter, setActivityTypeFilter] = useState('all')
+  const [deletedUsers, setDeletedUsers] = useState<Profile[]>([])
+  const [usersBinView, setUsersBinView] = useState(false)
+  const [courseEditModal, setCourseEditModal] = useState<Course | null>(null)
+  const [assignmentEditModal, setAssignmentEditModal] = useState<(Assignment & { submissions?: Submission[] }) | null>(null)
+  const [courseEditForm, setCourseEditForm] = useState<Record<string, string>>({})
+  const [assignmentEditForm, setAssignmentEditForm] = useState<Record<string, string>>({})
+  const [attendanceReportLoading, setAttendanceReportLoading] = useState(false)
   const handledDeepLink = useRef(false)
 
   const fetchAnnouncements = useCallback(async () => {
@@ -79,9 +86,12 @@ function AdminDashboardContent() {
 
   const fetchAll = useCallback(async () => {
     fetchAnnouncements()
+    // Fetch deleted (soft-deleted) users separately
+    supabase.from('profiles').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false })
+      .then(({ data }) => { if (data) setDeletedUsers(data as Profile[]) })
     try {
       const results = await Promise.allSettled([
-        supabase.from('profiles').select('*').order('joined', { ascending: false }).limit(200),
+        supabase.from('profiles').select('*').is('deleted_at', null).order('joined', { ascending: false }).limit(200),
         supabase.from('tests').select('*').order('created_at', { ascending: false }),
         supabase.from('platform_settings').select('*').eq('key', 'double_xp').single(),
         supabase.from('activity_log').select('*').order('created_at', { ascending: false }).limit(500),
@@ -258,7 +268,7 @@ function AdminDashboardContent() {
   const deleteUser = async (id: string) => {
     if (!profile || profile.role !== 'admin') return
     if (id === profile.id) { toast('You cannot delete your own account.', 'error'); return }
-    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return
+    if (!confirm('Move this user to the Bin? You can restore or permanently delete them from the Bin tab.')) return
     try {
       const res = await fetch('/api/delete-user', {
         method: 'POST',
@@ -270,11 +280,70 @@ function AdminDashboardContent() {
         toast(`Delete failed: ${error || 'Unknown error'}`, 'error')
         return
       }
+      const moved = users.find(u => u.id === id)
       setUsers(u => u.filter(x => x.id !== id))
+      if (moved) setDeletedUsers(d => [{ ...moved, deleted_at: new Date().toISOString() }, ...d])
       if (userModal?.id === id) setUserModal(null)
+      toast('User moved to Bin', 'success')
     } catch (err) {
-      toast((err as any)?.message ||'Failed to delete user', 'error')
+      toast((err as any)?.message || 'Failed to delete user', 'error')
     }
+  }
+
+  const restoreUser = async (id: string) => {
+    try {
+      const res = await fetch('/api/restore-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: id }),
+      })
+      if (!res.ok) { const { error } = await res.json(); toast(`Restore failed: ${error || 'Unknown error'}`, 'error'); return }
+      const restored = deletedUsers.find(u => u.id === id)
+      setDeletedUsers(d => d.filter(x => x.id !== id))
+      if (restored) setUsers(u => [{ ...restored, deleted_at: null }, ...u])
+      toast('User restored', 'success')
+    } catch (err) {
+      toast((err as any)?.message || 'Failed to restore user', 'error')
+    }
+  }
+
+  const permanentDeleteUser = async (id: string) => {
+    if (!confirm('Permanently delete this user? This cannot be undone and will remove all their data.')) return
+    try {
+      const res = await fetch('/api/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: id, permanent: true }),
+      })
+      if (!res.ok) { const { error } = await res.json(); toast(`Delete failed: ${error || 'Unknown error'}`, 'error'); return }
+      setDeletedUsers(d => d.filter(x => x.id !== id))
+      toast('User permanently deleted', 'success')
+    } catch (err) {
+      toast((err as any)?.message || 'Failed to delete user', 'error')
+    }
+  }
+
+  const toggleUserActive = async (u: Profile) => {
+    const newActive = u.active === false ? true : false // toggle — default undefined means active
+    const { error } = await supabase.from('profiles').update({ active: newActive }).eq('id', u.id)
+    if (error) { toast(error.message, 'error'); return }
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, active: newActive } : x))
+    const action = newActive ? 'activated' : 'deactivated'
+    toast(`User ${action}`, 'success')
+    // Send email notification
+    fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: u.email,
+        subject: newActive ? 'Your QGX Account Has Been Activated' : 'Your QGX Account Has Been Deactivated',
+        template: newActive ? 'Account Activated' : 'Account Deactivated',
+        message: newActive
+          ? `Hi <strong>${u.name}</strong>, your QGX account has been activated. You can now sign in.`
+          : `Hi <strong>${u.name}</strong>, your QGX account has been deactivated by an administrator.`,
+      }),
+    }).catch(() => {})
+    await logActivity(`Admin ${action} user ${u.name} (${u.email})`, `user_${action}`)
   }
 
   const saveUser = async () => {
@@ -296,8 +365,27 @@ function AdminDashboardContent() {
       if (xp !== undefined && xp !== '') updates.xp = Number(xp)
       const { error } = await supabase.from('profiles').update(updates).eq('id', userModal.id)
       if (error) { toast(`Save failed: ${error.message}`, 'error'); return }
-      setUsers(u => u.map(x => x.id === userModal.id ? { ...x, name: name ?? x.name, phone: phone ?? x.phone, bio: bio ?? x.bio, role: (role as Profile['role']) ?? x.role, email: (updates.email as string) ?? x.email, xp: updates.xp !== undefined ? Number(updates.xp) : x.xp } : x))
+      const updatedUser = { ...userModal, name: name ?? userModal.name, phone: phone ?? userModal.phone, bio: bio ?? userModal.bio, role: (role as Profile['role']) ?? userModal.role, email: (updates.email as string) ?? userModal.email, xp: updates.xp !== undefined ? Number(updates.xp) : userModal.xp }
+      setUsers(u => u.map(x => x.id === userModal.id ? updatedUser : x))
+      toast('User saved', 'success')
       setUserModal(null)
+      // Send update notification email
+      const changedFields: string[] = []
+      if (name && name !== userModal.name) changedFields.push(`Name: ${name}`)
+      if (email && email !== userModal.email) changedFields.push(`Email: ${email}`)
+      if (role && role !== userModal.role) changedFields.push(`Role: ${role}`)
+      if (changedFields.length > 0) {
+        fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: updatedUser.email,
+            subject: 'Your QGX Account Has Been Updated',
+            template: 'Account Updated',
+            message: `Hi <strong>${updatedUser.name}</strong>, your account details have been updated by an administrator.<br><br>Changes: ${changedFields.join(', ')}`,
+          }),
+        }).catch(() => {})
+      }
     } catch (err) {
       toast((err as any)?.message ||'Failed to save user', 'error')
     } finally {
@@ -576,6 +664,52 @@ function AdminDashboardContent() {
         </form>
       </Modal>
 
+      {/* Course Edit Modal */}
+      <Modal open={!!courseEditModal} onClose={() => setCourseEditModal(null)} title="Edit Course">
+        <form onSubmit={async e => {
+          e.preventDefault()
+          if (!courseEditModal) return
+          const xp = parseInt(courseEditForm.xp_reward || '0') || 0
+          const { error } = await supabase.from('courses').update({ title: courseEditForm.title, subject: courseEditForm.subject, xp_reward: xp }).eq('id', courseEditModal.id)
+          if (error) { toast(error.message, 'error'); return }
+          setCourses(prev => prev.map(c => c.id === courseEditModal.id ? { ...c, title: courseEditForm.title, subject: courseEditForm.subject, xp_reward: xp } : c))
+          toast('Course updated', 'success')
+          setCourseEditModal(null)
+        }}>
+          <div style={{ marginBottom: 14 }}><label className="label">Title</label><input className="input" required value={courseEditForm.title || ''} onChange={e => setCourseEditForm(f => ({ ...f, title: e.target.value }))} /></div>
+          <div style={{ marginBottom: 14 }}><label className="label">Subject</label><input className="input" value={courseEditForm.subject || ''} onChange={e => setCourseEditForm(f => ({ ...f, subject: e.target.value }))} /></div>
+          <div style={{ marginBottom: 14 }}><label className="label">XP Reward</label><input className="input" type="number" min={0} value={courseEditForm.xp_reward || '0'} onChange={e => setCourseEditForm(f => ({ ...f, xp_reward: e.target.value }))} /></div>
+          <div className="modal-form-actions">
+            <button className="btn btn-primary" type="submit">Save</button>
+            <button className="btn" type="button" onClick={() => setCourseEditModal(null)}>Cancel</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Assignment Edit Modal */}
+      <Modal open={!!assignmentEditModal} onClose={() => setAssignmentEditModal(null)} title="Edit Assignment">
+        <form onSubmit={async e => {
+          e.preventDefault()
+          if (!assignmentEditModal) return
+          const xp = parseInt(assignmentEditForm.xp_reward || '0') || 0
+          const updates: Record<string, unknown> = { title: assignmentEditForm.title, xp_reward: xp }
+          if (assignmentEditForm.due_date) updates.due_date = assignmentEditForm.due_date
+          const { error } = await supabase.from('assignments').update(updates).eq('id', assignmentEditModal.id)
+          if (error) { toast(error.message, 'error'); return }
+          setAssignments(prev => prev.map(a => a.id === assignmentEditModal.id ? { ...a, title: assignmentEditForm.title, xp_reward: xp, due_date: assignmentEditForm.due_date || a.due_date } : a))
+          toast('Assignment updated', 'success')
+          setAssignmentEditModal(null)
+        }}>
+          <div style={{ marginBottom: 14 }}><label className="label">Title</label><input className="input" required value={assignmentEditForm.title || ''} onChange={e => setAssignmentEditForm(f => ({ ...f, title: e.target.value }))} /></div>
+          <div style={{ marginBottom: 14 }}><label className="label">Due Date</label><input className="input" type="date" value={assignmentEditForm.due_date || ''} onChange={e => setAssignmentEditForm(f => ({ ...f, due_date: e.target.value }))} /></div>
+          <div style={{ marginBottom: 14 }}><label className="label">XP Reward</label><input className="input" type="number" min={0} value={assignmentEditForm.xp_reward || '0'} onChange={e => setAssignmentEditForm(f => ({ ...f, xp_reward: e.target.value }))} /></div>
+          <div className="modal-form-actions">
+            <button className="btn btn-primary" type="submit">Save</button>
+            <button className="btn" type="button" onClick={() => setAssignmentEditModal(null)}>Cancel</button>
+          </div>
+        </form>
+      </Modal>
+
       <div className="page">
         {/* HOME */}
         {tab === 'home' && (
@@ -626,27 +760,55 @@ function AdminDashboardContent() {
             <div className="page-title fade-up">USER MANAGEMENT</div>
             <div className="page-sub fade-up-1" style={{ marginBottom: 24 }}>Manage all platform users</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }} className="fade-up-2">
-              <div className="search-wrap">
-                <Icon name="search" size={13} />
-                <input className="search-input" placeholder="Search users..." value={search} onChange={e => {
-                  setSearch(e.target.value)
-                  if (searchTimer.current) clearTimeout(searchTimer.current)
-                  searchTimer.current = setTimeout(() => { setDebouncedSearch(e.target.value); setUserPage(0) }, DEBOUNCE_MS)
-                }} />
-              </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-sm" onClick={() => {
-                  const headers = ['Name', 'Email', 'QGX ID', 'Role', 'XP', 'Joined']
-                  const rows = filteredUsers.map(u => [u.name || '', u.email || '', u.qgx_id || '', u.role || '', u.xp ?? 0, u.joined || ''])
-                  exportCSV('qgx-users.csv', headers, rows)
-                }}>
-                  <Icon name="download" size={10} /> Export CSV
-                </button>
-                <button className="btn btn-sm" onClick={() => setCreateUserModal(true)}>
-                  <Icon name="plus" size={10} /> Create User
-                </button>
+                <button className={`btn btn-sm ${!usersBinView ? 'btn-primary' : ''}`} onClick={() => setUsersBinView(false)}>Active Users ({users.length})</button>
+                <button className={`btn btn-sm ${usersBinView ? 'btn-primary' : ''}`} onClick={() => setUsersBinView(true)}>Bin ({deletedUsers.length})</button>
               </div>
+              {!usersBinView && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-sm" onClick={() => {
+                    const headers = ['Name', 'Email', 'QGX ID', 'Role', 'XP', 'Joined', 'Active']
+                    const rows = filteredUsers.map(u => [u.name || '', u.email || '', u.qgx_id || '', u.role || '', u.xp ?? 0, u.joined || '', u.active !== false ? 'Yes' : 'No'])
+                    exportCSV('qgx-users.csv', headers, rows)
+                  }}>
+                    <Icon name="download" size={10} /> Export CSV
+                  </button>
+                  <button className="btn btn-sm" onClick={() => setCreateUserModal(true)}>
+                    <Icon name="plus" size={10} /> Create User
+                  </button>
+                </div>
+              )}
             </div>
+            {/* BIN VIEW */}
+            {usersBinView && (
+              <div className="fade-up-2" style={{ border: '1px solid var(--border)' }}>
+                {deletedUsers.length === 0 ? (
+                  <div style={{ padding: 32, textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--fg-dim)' }}>No users in the bin.</div>
+                ) : (
+                  <table className="table">
+                    <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Deleted</th><th>Actions</th></tr></thead>
+                    <tbody>
+                      {deletedUsers.map(u => (
+                        <tr key={u.id}>
+                          <td><div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div className="avatar" style={{ width: 28, height: 28, fontSize: 10 }}>{u.avatar}</div>{u.name}</div></td>
+                          <td><span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{u.email}</span></td>
+                          <td><span className={`tag ${u.role === 'admin' ? 'tag-danger' : u.role === 'teacher' ? 'tag-warn' : 'tag-success'}`}>{u.role}</span></td>
+                          <td><span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{u.deleted_at?.slice(0, 10)}</span></td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button className="btn btn-xs" onClick={() => restoreUser(u.id)} title="Restore">Restore</button>
+                              <button className="btn btn-xs btn-danger" onClick={() => permanentDeleteUser(u.id)} title="Permanently Delete">Delete Forever</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+
+            {!usersBinView && (<>
             <div className="fade-up-3" style={{ border: '1px solid var(--border)', padding: 12, marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
                 <span className="mono" style={{ fontSize: 10, color: 'var(--fg-dim)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Role</span>
@@ -714,7 +876,7 @@ function AdminDashboardContent() {
             </div>
             <div className="fade-up-3" style={{ border: '1px solid var(--border)' }}>
               <table className="table">
-                <thead><tr><th>User</th><th>QGX ID</th><th>Email</th><th>Role</th><th>XP</th><th>Joined</th><th>Actions</th></tr></thead>
+                <thead><tr><th>User</th><th>QGX ID</th><th>Email</th><th>Role</th><th>XP</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>
                   {pagedUsers.map(u => (
                     <tr key={u.id}>
@@ -724,10 +886,12 @@ function AdminDashboardContent() {
                       <td><span className={`tag ${u.role === 'admin' ? 'tag-danger' : u.role === 'teacher' ? 'tag-warn' : 'tag-success'}`}>{u.role}</span></td>
                       <td><span className="mono" style={{ fontSize: 12, color: 'var(--warn)' }}>{u.xp}</span></td>
                       <td><span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{u.joined}</span></td>
+                      <td><span className={`tag ${u.active === false ? 'tag-danger' : 'tag-success'}`}>{u.active === false ? 'Inactive' : 'Active'}</span></td>
                       <td>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn btn-xs" onClick={() => { setEditUser({ name: u.name, phone: u.phone || '', bio: u.bio || '', role: u.role, email: u.email || '', xp: String(u.xp || 0) }); setUserModal(u) }}><Icon name="edit" size={10} /></button>
-                          <button className="btn btn-xs btn-danger" onClick={() => deleteUser(u.id)}><Icon name="trash" size={10} /></button>
+                          <button className="btn btn-xs" onClick={() => { setEditUser({ name: u.name, phone: u.phone || '', bio: u.bio || '', role: u.role, email: u.email || '', xp: String(u.xp || 0) }); setUserModal(u) }} title="Edit"><Icon name="edit" size={10} /></button>
+                          <button className="btn btn-xs" onClick={() => toggleUserActive(u)} title={u.active === false ? 'Activate' : 'Deactivate'} style={{ color: u.active === false ? 'var(--success)' : 'var(--warn)' }}>{u.active === false ? '▶' : '⏸'}</button>
+                          <button className="btn btn-xs btn-danger" onClick={() => deleteUser(u.id)} title="Move to Bin"><Icon name="trash" size={10} /></button>
                         </div>
                       </td>
                     </tr>
@@ -736,6 +900,7 @@ function AdminDashboardContent() {
               </table>
             </div>
             <Pagination page={userPage} totalPages={totalUserPages} onPageChange={setUserPage} />
+            </>)}  {/* end !usersBinView */}
           </>
         )}
 
@@ -754,7 +919,7 @@ function AdminDashboardContent() {
 
         {/* TESTS OVERVIEW */}
         {tab === 'tests' && (
-          <AdminTestModule tests={tests} allAttempts={allAttempts} users={users} />
+          <AdminTestModule tests={tests} allAttempts={allAttempts} users={users} onTestsChange={setTests} />
         )}
 
         {/* COURSES */}
@@ -784,17 +949,19 @@ function AdminDashboardContent() {
             </div>
             <div className="fade-up-3" style={{ border: '1px solid var(--border)' }}>
               <table className="table">
-                <thead><tr><th>Course</th><th>Subject</th><th>Teacher</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Course</th><th>Subject</th><th>Teacher</th><th>XP</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
                 <tbody>
                   {courses.map(c => (
                     <tr key={c.id}>
                       <td style={{ fontWeight: 500 }}>{c.title}</td>
                       <td><span className="tag">{c.subject}</span></td>
                       <td><span className="mono" style={{ fontSize: 11 }}>{c.teacher_name}</span></td>
+                      <td><span className="mono" style={{ fontSize: 12, color: 'var(--warn)' }}>{c.xp_reward ?? 0}</span></td>
                       <td><span className={`tag ${c.status === 'published' ? 'tag-success' : 'tag-warn'}`}>{c.status}</span></td>
                       <td><span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{c.created_at?.slice(0, 10)}</span></td>
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="btn btn-xs" onClick={() => { setCourseEditForm({ title: c.title, subject: c.subject || '', xp_reward: String(c.xp_reward ?? 0) }); setCourseEditModal(c) }} title="Edit"><Icon name="edit" size={10} /></button>
                           {c.status === 'draft' && (
                             <button className="btn btn-xs" onClick={async () => {
                               const { error } = await supabase.from('courses').update({ status: 'published' }).eq('id', c.id)
@@ -803,7 +970,7 @@ function AdminDashboardContent() {
                             }} title="Publish"><Icon name="check" size={10} /></button>
                           )}
                           {c.status === 'published' && (
-                          <button className="btn btn-xs" onClick={async () => {
+                            <button className="btn btn-xs" onClick={async () => {
                               const { error } = await supabase.from('courses').update({ status: 'draft' }).eq('id', c.id)
                               if (error) { toast(error.message, 'error'); return }
                               setCourses(prev => prev.map(x => x.id === c.id ? { ...x, status: 'draft' } : x))
@@ -814,6 +981,7 @@ function AdminDashboardContent() {
                             const { error } = await supabase.from('courses').delete().eq('id', c.id)
                             if (error) { toast(error.message, 'error'); return }
                             setCourses(prev => prev.filter(x => x.id !== c.id))
+                            await logActivity(`Admin deleted course: ${c.title}`, 'course_deleted')
                           }}><Icon name="trash" size={10} /></button>
                         </div>
                       </td>
@@ -851,18 +1019,20 @@ function AdminDashboardContent() {
             </div>
             <div className="fade-up-3" style={{ border: '1px solid var(--border)' }}>
               <table className="table">
-                <thead><tr><th>Assignment</th><th>Teacher</th><th>Due</th><th>Priority</th><th>Submissions</th><th>Status</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Assignment</th><th>Teacher</th><th>Due</th><th>XP</th><th>Priority</th><th>Submissions</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>
                   {assignments.map(a => (
                     <tr key={a.id}>
                       <td style={{ fontWeight: 500 }}>{a.title}</td>
                       <td><span className="mono" style={{ fontSize: 11 }}>{a.teacher_name}</span></td>
                       <td><span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>{a.due_date?.slice(0, 10)}</span></td>
+                      <td><span className="mono" style={{ fontSize: 12, color: 'var(--warn)' }}>{a.xp_reward ?? 0}</span></td>
                       <td><span className={`tag ${a.priority === 'critical' ? 'tag-danger' : a.priority === 'high' ? 'tag-warn' : 'tag-success'}`}>{a.priority}</span></td>
                       <td><span className="mono" style={{ fontSize: 12 }}>{a.submissions?.length || 0}</span></td>
                       <td><span className={`tag ${a.status === 'active' ? 'tag-success' : 'tag-warn'}`}>{a.status}</span></td>
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="btn btn-xs" onClick={() => { setAssignmentEditForm({ title: a.title, xp_reward: String(a.xp_reward ?? 0), due_date: a.due_date?.slice(0, 10) || '' }); setAssignmentEditModal(a) }} title="Edit"><Icon name="edit" size={10} /></button>
                           {a.status === 'active' && (
                             <button className="btn btn-xs" onClick={async () => {
                               const { error } = await supabase.from('assignments').update({ status: 'closed' }).eq('id', a.id)
@@ -870,11 +1040,19 @@ function AdminDashboardContent() {
                               setAssignments(prev => prev.map(x => x.id === a.id ? { ...x, status: 'closed' } : x))
                             }} title="Close"><Icon name="check" size={10} /></button>
                           )}
+                          {a.status === 'closed' && (
+                            <button className="btn btn-xs" onClick={async () => {
+                              const { error } = await supabase.from('assignments').update({ status: 'active' }).eq('id', a.id)
+                              if (error) { toast(error.message, 'error'); return }
+                              setAssignments(prev => prev.map(x => x.id === a.id ? { ...x, status: 'active' } : x))
+                            }} title="Re-open">▶</button>
+                          )}
                           <button className="btn btn-xs btn-danger" onClick={async () => {
                             if (!confirm(`Delete assignment "${a.title}"?`)) return
                             const { error } = await supabase.from('assignments').delete().eq('id', a.id)
                             if (error) { toast(error.message, 'error'); return }
                             setAssignments(prev => prev.filter(x => x.id !== a.id))
+                            await logActivity(`Admin deleted assignment: ${a.title}`, 'assignment_deleted')
                           }}><Icon name="trash" size={10} /></button>
                         </div>
                       </td>
@@ -902,9 +1080,62 @@ function AdminDashboardContent() {
           return (
             <>
               <PageHeader title="ATTENDANCE OVERVIEW" subtitle="Platform-wide attendance statistics" />
-              <div style={{ marginBottom: 12 }}>
+              <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button className="btn btn-sm" onClick={() => exportCSV('attendance-export.csv', ['Student', 'Subject', 'Date', 'Status'], attendance.map(a => [a.student_name, a.subject, a.date, a.status]))}>
                   <Icon name="download" size={11} /> Export CSV
+                </button>
+                <button
+                  className="btn btn-sm"
+                  disabled={attendanceReportLoading}
+                  onClick={async () => {
+                    setAttendanceReportLoading(true)
+                    try {
+                      // Group attendance by student, send report to each parent linked to a student
+                      const studentMap: Record<string, { name: string; records: typeof attendance }> = {}
+                      attendance.forEach(a => {
+                        if (!studentMap[a.student_id]) studentMap[a.student_id] = { name: a.student_name, records: [] }
+                        studentMap[a.student_id].records.push(a)
+                      })
+                      const parentUsers = users.filter(u => u.role === 'parent')
+                      const teacherUsers = users.filter(u => u.role === 'teacher')
+                      // Send summary to all teachers and parents
+                      const recipients = [...parentUsers, ...teacherUsers].map(u => u.email).filter(Boolean)
+                      if (recipients.length === 0) { toast('No parent or teacher emails found', 'error'); return }
+                      const totalPct = attendance.length ? Math.round((attendance.filter(a => a.status === 'present').length / attendance.length) * 100) : 0
+                      await fetch('/api/send-email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          to: recipients,
+                          subject: 'QGX Attendance Report',
+                          template: 'Attendance Report',
+                          message: `<strong>Platform Attendance Summary</strong><br><br>Overall attendance rate: <strong>${totalPct}%</strong><br>Total records: ${attendance.length}<br>Present: ${attendance.filter(a => a.status === 'present').length}<br>Absent: ${attendance.filter(a => a.status === 'absent').length}<br><br>This report was generated by the QGX Admin.`,
+                        }),
+                      })
+                      toast('Attendance report sent to parents and teachers', 'success')
+                    } catch (err) {
+                      toast((err as any)?.message || 'Failed to send report', 'error')
+                    } finally {
+                      setAttendanceReportLoading(false)
+                    }
+                  }}
+                >
+                  {attendanceReportLoading ? <span className="spinner" /> : <><Icon name="bell" size={11} /> Send Report to Parents & Teachers</>}
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={async () => {
+                    const absentStudents = Array.from(new Set(attendance.filter(a => a.status === 'absent').map(a => a.student_id)))
+                    if (!absentStudents.length) { toast('No absent students found', 'info'); return }
+                    const parentIds = users.filter(u => u.role === 'parent').map(u => u.id)
+                    if (parentIds.length > 0) {
+                      await pushNotificationBatch(parentIds, `⚠ Attendance Alert: ${absentStudents.length} student(s) have recent absences. Please check the attendance report.`, 'attendance_alert')
+                    }
+                    toast(`Alert sent to ${parentIds.length} parents`, 'success')
+                    await logActivity(`Admin sent attendance alert for ${absentStudents.length} absent students`, 'attendance_alert')
+                  }}
+                >
+                  <Icon name="bell" size={11} /> Send Absence Alerts
                 </button>
               </div>
               <StatGrid items={[
@@ -1027,9 +1258,56 @@ function AdminDashboardContent() {
         {tab === 'analytics' && (
           <>
             <PageHeader title="PLATFORM ANALYTICS" subtitle="Real-time platform insights" />
-            <div style={{ marginBottom: 12 }}>
-              <button className="btn btn-sm" onClick={() => exportCSV('users-export.csv', ['Name', 'Email', 'Role', 'XP', 'Joined'], users.map(u => [u.name, u.email, u.role, u.xp, u.joined]))}>
+            <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-sm" onClick={() => exportCSV('users-export.csv', ['Name', 'Email', 'QGX ID', 'Role', 'XP', 'Joined', 'Active'], users.map(u => [u.name, u.email, u.qgx_id, u.role, u.xp, u.joined, u.active !== false ? 'Yes' : 'No']))}>
                 <Icon name="download" size={11} /> Export Users CSV
+              </button>
+              <button className="btn btn-sm" onClick={() => {
+                // Export full analytics as multi-sheet-style CSV
+                const rows: (string | number)[][] = [
+                  ['=== PLATFORM ANALYTICS REPORT ==='],
+                  [`Generated: ${new Date().toLocaleString()}`],
+                  [],
+                  ['USERS'],
+                  ['Total', 'Students', 'Teachers', 'Admins', 'Parents'],
+                  [users.length, students.length, teachers.length, users.filter(u => u.role === 'admin').length, users.filter(u => u.role === 'parent').length],
+                  [],
+                  ['TEST PERFORMANCE'],
+                  ['Total Tests', 'Total Attempts', 'Avg Score', 'Pass Rate'],
+                  [tests.length, allAttempts.length, `${avgScore}%`, `${allAttempts.length ? Math.round(allAttempts.filter(a => (a.percent || 0) >= 60).length / allAttempts.length * 100) : 0}%`],
+                  [],
+                  ['TOP STUDENTS'],
+                  ['Name', 'QGX ID', 'XP', 'Role'],
+                  ...[...students].sort((a, b) => (b.xp || 0) - (a.xp || 0)).slice(0, 10).map(s => [s.name, s.qgx_id, s.xp, s.role]),
+                ]
+                exportCSV('analytics-report.csv', [], rows)
+              }}>
+                <Icon name="download" size={11} /> Export Full Report CSV
+              </button>
+              <button className="btn btn-sm" onClick={async () => {
+                const teacherIds = users.filter(u => u.role === 'teacher').map(u => u.id)
+                if (!teacherIds.length) { toast('No teachers found', 'error'); return }
+                const teacherEmails = users.filter(u => u.role === 'teacher').map(u => u.email).filter(Boolean)
+                await fetch('/api/send-email', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    to: teacherEmails,
+                    subject: 'QGX Platform Analytics Report',
+                    template: 'Analytics Report',
+                    message: `<strong>Platform Analytics Summary</strong><br><br>
+                      Total Users: <strong>${users.length}</strong><br>
+                      Students: ${students.length} | Teachers: ${teachers.length}<br>
+                      Total Tests: ${tests.length} | Total Attempts: ${allAttempts.length}<br>
+                      Platform Average Score: <strong>${avgScore}%</strong><br>
+                      Pass Rate: <strong>${allAttempts.length ? Math.round(allAttempts.filter(a => (a.percent || 0) >= 60).length / allAttempts.length * 100) : 0}%</strong><br><br>
+                      This report was sent by the QGX Admin.`,
+                  }),
+                }).catch(() => {})
+                toast('Analytics report sent to all teachers', 'success')
+                await logActivity('Admin sent analytics report to all teachers', 'analytics_report_sent')
+              }}>
+                <Icon name="bell" size={11} /> Send to All Teachers
               </button>
             </div>
 

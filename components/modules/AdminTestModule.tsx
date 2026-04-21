@@ -1,5 +1,8 @@
 'use client'
 import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import { useToast } from '@/lib/toast'
+import { pushNotification, logActivity } from '@/lib/actions'
 import type { Profile, Test, Attempt } from '@/types'
 import { Icon } from '@/components/ui/Icon'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -10,6 +13,7 @@ interface AdminTestModuleProps {
   tests: Test[]
   allAttempts: Attempt[]
   users: Profile[]
+  onTestsChange?: (tests: Test[]) => void
 }
 
 function ScoreRing({ pct, size = 48 }: { pct: number; size?: number }) {
@@ -27,11 +31,59 @@ function ScoreRing({ pct, size = 48 }: { pct: number; size?: number }) {
   )
 }
 
-export function AdminTestModule({ tests, allAttempts, users }: AdminTestModuleProps) {
+export function AdminTestModule({ tests, allAttempts, users, onTestsChange }: AdminTestModuleProps) {
+  const { toast } = useToast()
   const [view, setView] = useState<'overview' | 'detail'>('overview')
   const [selectedTest, setSelectedTest] = useState<Test | null>(null)
   const [searchQ, setSearchQ] = useState('')
   const [sortBy, setSortBy] = useState<'date' | 'attempts' | 'avg'>('date')
+  const [localTests, setLocalTests] = useState<Test[]>(tests)
+  const [xpEditId, setXpEditId] = useState<string | null>(null)
+  const [xpEditValue, setXpEditValue] = useState('')
+
+  // Sync local tests when prop changes
+  const testsToUse = onTestsChange ? tests : localTests
+
+  const deleteTest = async (t: Test) => {
+    if (!confirm(`Delete test "${t.title}"? Students who have taken this test will retain their scores, but the test will no longer be accessible.`)) return
+    const { error } = await supabase.from('tests').delete().eq('id', t.id)
+    if (error) { toast(error.message, 'error'); return }
+    if (onTestsChange) {
+      onTestsChange(tests.filter(x => x.id !== t.id))
+    } else {
+      setLocalTests(prev => prev.filter(x => x.id !== t.id))
+    }
+    // Notify the teacher
+    if (t.teacher_id) {
+      await pushNotification(t.teacher_id, `Your test "${t.title}" has been removed by an administrator.`, 'test_deleted')
+      fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: users.find(u => u.id === t.teacher_id)?.email,
+          subject: 'Your Test Has Been Removed — QGX',
+          template: 'Test Removed',
+          message: `Hi <strong>${t.teacher_name}</strong>, your test "<strong>${t.title}</strong>" has been removed from the platform by an administrator. If you believe this was in error, please contact your administrator.`,
+        }),
+      }).catch(() => {})
+    }
+    await logActivity(`Admin deleted test: ${t.title} (teacher: ${t.teacher_name})`, 'test_deleted')
+    toast('Test deleted and teacher notified', 'success')
+    if (view === 'detail') setView('overview')
+  }
+
+  const saveXP = async (t: Test) => {
+    const xp = parseInt(xpEditValue) || 0
+    const { error } = await supabase.from('tests').update({ xp_reward: xp }).eq('id', t.id)
+    if (error) { toast(error.message, 'error'); return }
+    if (onTestsChange) {
+      onTestsChange(tests.map(x => x.id === t.id ? { ...x, xp_reward: xp } : x))
+    } else {
+      setLocalTests(prev => prev.map(x => x.id === t.id ? { ...x, xp_reward: xp } : x))
+    }
+    setXpEditId(null)
+    toast('XP updated', 'success')
+  }
 
   const students = users.filter(u => u.role === 'student')
   const teachers = users.filter(u => u.role === 'teacher')
@@ -89,6 +141,22 @@ export function AdminTestModule({ tests, allAttempts, users }: AdminTestModulePr
               {selectedTest.id} · {selectedTest.type} · {selectedTest.duration} min
             </span>
           </div>
+          {/* XP Edit */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-dim)' }}>XP:</span>
+            {xpEditId === selectedTest.id ? (
+              <>
+                <input className="input" type="number" min={0} value={xpEditValue} onChange={e => setXpEditValue(e.target.value)} style={{ width: 80, height: 32 }} autoFocus />
+                <button className="btn btn-xs" onClick={() => saveXP(selectedTest)}>Save</button>
+                <button className="btn btn-xs" onClick={() => setXpEditId(null)}>×</button>
+              </>
+            ) : (
+              <button className="btn btn-xs" onClick={() => { setXpEditId(selectedTest.id); setXpEditValue(String(selectedTest.xp_reward ?? 0)) }}>
+                <span style={{ color: 'var(--warn)', marginRight: 4 }}>{selectedTest.xp_reward ?? 0}</span> Edit XP
+              </button>
+            )}
+          </div>
+          <button className="btn btn-xs btn-danger" onClick={() => deleteTest(selectedTest)}><Icon name="trash" size={10} /> Delete Test</button>
         </div>
 
         {/* Teacher + Meta */}
@@ -233,13 +301,14 @@ export function AdminTestModule({ tests, allAttempts, users }: AdminTestModulePr
           const teacher = users.find(u => u.id === t.teacher_id)
 
           return (
-            <div key={t.id} className="tm-teacher-card" style={{ cursor: 'pointer' }} onClick={() => openDetail(t)}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+            <div key={t.id} className="tm-teacher-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, cursor: 'pointer' }} onClick={() => openDetail(t)}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                     <span className="mono" style={{ fontSize: 9, color: 'var(--fg-dim)' }}>{t.id}</span>
                     <span className={`tag ${t.type === 'quiz' ? 'tag-warn' : 'tag-info'}`}>{t.type}</span>
                     <span className="tag tag-success">{t.status}</span>
+                    <span className="mono" style={{ fontSize: 10, color: 'var(--warn)' }}>+{t.xp_reward ?? 0} XP</span>
                   </div>
                   <div style={{ fontWeight: 500, fontSize: 15, marginBottom: 2 }}>{t.title}</div>
                   {t.subject && <div className="mono" style={{ fontSize: 10, color: 'var(--fg-dim)' }}>{t.subject}</div>}
@@ -247,11 +316,23 @@ export function AdminTestModule({ tests, allAttempts, users }: AdminTestModulePr
                 {tAvg !== null && <ScoreRing pct={tAvg} size={52} />}
               </div>
 
-              <div style={{ display: 'flex', gap: 12, fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginTop: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 12, fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)', marginTop: 8, flexWrap: 'wrap', cursor: 'pointer' }} onClick={() => openDetail(t)}>
                 <span><Icon name="user" size={9} /> {teacher?.name || t.teacher_name || '—'}</span>
                 <span><Icon name="clock" size={9} /> {t.duration} min</span>
                 <span><Icon name="users" size={9} /> {tAttempts.length} attempts</span>
                 {t.questions?.length ? <span><Icon name="test" size={9} /> {t.questions.length} Q&apos;s</span> : null}
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                {xpEditId === t.id ? (
+                  <>
+                    <input className="input" type="number" min={0} value={xpEditValue} onChange={e => setXpEditValue(e.target.value)} style={{ width: 80, height: 30 }} autoFocus onClick={e => e.stopPropagation()} />
+                    <button className="btn btn-xs" onClick={e => { e.stopPropagation(); saveXP(t) }}>Save XP</button>
+                    <button className="btn btn-xs" onClick={e => { e.stopPropagation(); setXpEditId(null) }}>×</button>
+                  </>
+                ) : (
+                  <button className="btn btn-xs" onClick={e => { e.stopPropagation(); setXpEditId(t.id); setXpEditValue(String(t.xp_reward ?? 0)) }}>Edit XP</button>
+                )}
+                <button className="btn btn-xs btn-danger" onClick={e => { e.stopPropagation(); deleteTest(t) }}><Icon name="trash" size={10} /></button>
               </div>
             </div>
           )

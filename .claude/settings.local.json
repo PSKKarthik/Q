@@ -17,7 +17,8 @@
       "Bash(npx jest:*)",
       "Bash(npm run:*)",
       "Bash(node -e \"const { execSync } = require\\(''child_process''\\); try { execSync\\(''npx next --version'', {cwd: ''C:/Users/polis/OneDrive/Desktop/qgx-nextjs'', stdio: ''pipe''}\\); } catch\\(e\\) {}\")",
-      "Bash(node -e \"const v = require\\(''C:/Users/polis/OneDrive/Desktop/qgx-nextjs/node_modules/next/package.json''\\).version; console.log\\(''Next.js version:'', v\\)\")"
+      "Bash(node -e \"const v = require\\(''C:/Users/polis/OneDrive/Desktop/qgx-nextjs/node_modules/next/package.json''\\).version; console.log\\(''Next.js version:'', v\\)\")",
+      "Bash(git push:*)"
     ]
   }
 }

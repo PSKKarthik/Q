@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { logActivity } from '@/lib/actions'
 import { Icon } from '@/components/ui/Icon'
 import type { Role, Institution } from '@/types'
 
@@ -69,57 +68,40 @@ export default function RegisterPage() {
 
     setLoading(true); setError(''); setNotice('')
 
-    const { data, error: signUpErr } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: {
-        data: { name: form.name, role: form.role },
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=/login`,
-      },
-    })
-    if (signUpErr) { setError(signUpErr.message); setLoading(false); return }
-    if (!data.user) { setError('Check your email to confirm your account before logging in.'); setLoading(false); return }
-
-    if (!data.session) {
-      if ((data.user?.identities?.length ?? 0) === 0) {
-        setError('An account with this email already exists. Please sign in instead.')
-        setLoading(false); return
-      }
-      await fetch('/api/setup-profile', {
+    try {
+      const res = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: data.user.id, name: form.name, email: form.email, role: form.role, phone: form.phone, institution_id: institutionId }),
-      }).catch(() => {})
-      setNotice('Account created. Please confirm your email, then sign in to continue.')
-      setLoading(false); return
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          role: form.role,
+          phone: form.phone || undefined,
+          institution_id: institutionId || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error || 'Registration failed')
+        setLoading(false); return
+      }
+
+      // Sign in automatically since email is pre-confirmed
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: form.email,
+        password: form.password,
+      })
+      if (signInErr) {
+        setNotice('Account created! A welcome email has been sent. Please sign in to continue.')
+        setLoading(false); return
+      }
+
+      router.push(`/dashboard/${form.role}`)
+    } catch {
+      setError('Registration failed. Please try again.')
+      setLoading(false)
     }
-
-    const profileRes = await fetch('/api/setup-profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: data.user.id, name: form.name, email: form.email, role: form.role, phone: form.phone, institution_id: institutionId }),
-    })
-    if (!profileRes.ok) {
-      const { error: profileErr } = await profileRes.json().catch(() => ({ error: 'Profile setup failed' }))
-      setError(profileErr || 'Profile setup failed')
-      setLoading(false); return
-    }
-
-    await logActivity(`New ${form.role} registered: ${form.name}`, 'user_registered')
-
-    fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: form.email,
-        subject: 'Welcome to QGX',
-        template: 'Welcome to QGX',
-        message: `Hi <strong>${form.name}</strong>,<br><br>Your <strong>${form.role}</strong> account has been created on the QGX Learning Platform. Sign in to get started.`,
-      }),
-    }).catch(() => {})
-
-    setLoading(false)
-    router.push(`/dashboard/${form.role}`)
   }
 
   const selectedInst = institutions.find(i => i.id === form.institution_id)

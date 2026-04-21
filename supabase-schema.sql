@@ -42,7 +42,9 @@ create table if not exists profiles (
   ghost_wins integer default 0,
   badges text[] default '{}',
   reputation integer default 0,
-  joined date default now()
+  joined date default now(),
+  active boolean default true,
+  deleted_at timestamptz default null
 );
 
 -- ANNOUNCEMENTS
@@ -316,6 +318,12 @@ alter table enrollments add column if not exists student_id uuid references prof
 alter table course_progress add column if not exists student_id uuid references profiles(id) on delete cascade;
 alter table course_ratings add column if not exists student_id uuid references profiles(id) on delete cascade;
 alter table submissions add column if not exists student_id uuid references profiles(id) on delete cascade;
+
+-- Add soft-delete and activation columns to profiles
+alter table profiles add column if not exists active boolean default true;
+alter table profiles add column if not exists deleted_at timestamptz default null;
+create index if not exists idx_profiles_deleted_at on profiles(deleted_at) where deleted_at is not null;
+create index if not exists idx_profiles_active on profiles(active) where active = false;
 
 -- ============================================================
 -- ROW LEVEL SECURITY

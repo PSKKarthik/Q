@@ -20,6 +20,8 @@ export interface Profile {
   badges?: string[]
   theme?: 'dark' | 'light'
   institution_id?: string
+  active?: boolean
+  deleted_at?: string | null
 }
 
 export interface Institution {

@@ -46,12 +46,15 @@ function LoginForm() {
 
     // If input looks like a QGX ID (starts with QGX-), resolve to email
     if (loginEmail.toUpperCase().startsWith('QGX-')) {
-      const { data: profile, error: lookupErr } = await supabase
-        .from('profiles').select('email').eq('qgx_id', loginEmail.toUpperCase()).single()
-      if (lookupErr || !profile) {
-        setError('QGX ID not found'); setLoading(false); return
+      const { data: qProfile } = await supabase
+        .from('profiles').select('email, deleted_at').eq('qgx_id', loginEmail.toUpperCase()).maybeSingle()
+      if (!qProfile) {
+        setError('QGX ID not found. Check your ID or sign in with your email address.'); setLoading(false); return
       }
-      loginEmail = profile.email
+      if (qProfile.deleted_at) {
+        setError('This account has been deleted. Please contact an administrator.'); setLoading(false); return
+      }
+      loginEmail = qProfile.email
     }
 
     const { data, error: err } = await supabase.auth.signInWithPassword({ email: loginEmail, password })
@@ -59,10 +62,24 @@ function LoginForm() {
 
     // Get profile to determine role
     const { data: profile } = await supabase
-      .from('profiles').select('role, qgx_id').eq('id', data.user.id).single()
+      .from('profiles').select('role, qgx_id, deleted_at, active').eq('id', data.user.id).maybeSingle()
 
     if (!profile?.role) {
       setError('Account setup incomplete. Please contact an administrator.')
+      await supabase.auth.signOut()
+      setLoading(false)
+      return
+    }
+
+    if (profile.deleted_at) {
+      setError('This account has been deleted. Please contact an administrator.')
+      await supabase.auth.signOut()
+      setLoading(false)
+      return
+    }
+
+    if (profile.active === false) {
+      setError('Your account has been deactivated. Please contact an administrator.')
       await supabase.auth.signOut()
       setLoading(false)
       return

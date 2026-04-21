@@ -44,7 +44,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: 'Forbidden: admins only' }, { status: 403 })
   }
 
-  const { userId } = await req.json()
+  const body = await req.json()
+  const { userId, permanent } = body
   if (!userId || typeof userId !== 'string') {
     return NextResponse.json({ success: false, error: 'Missing userId' }, { status: 400 })
   }
@@ -54,48 +55,59 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: 'Cannot delete your own account' }, { status: 400 })
   }
 
-  // Prevent deleting the last admin
-  const { data: targetProfile } = await supabase.from('profiles').select('role').eq('id', userId).single()
-  if (targetProfile?.role === 'admin') {
-    const { count } = await supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin')
-    if ((count || 0) <= 1) {
-      return NextResponse.json({ success: false, error: 'Cannot delete the last admin account' }, { status: 403 })
-    }
-  }
-
-  // Service role client for auth.admin operations
   const serviceKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_SERVICE_KEY ||
     process.env.SERVICE_ROLE_KEY
   if (!serviceKey) {
     return NextResponse.json(
-      {
-        success: false,
-        error: 'Service role key not configured. Set SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY / SERVICE_ROLE_KEY) and restart dev server.',
-      },
+      { success: false, error: 'Service role key not configured.' },
       { status: 500 }
     )
   }
 
-  const adminClient = createClient(
-    supabaseUrl,
-    serviceKey
-  )
+  const adminClient = createClient(supabaseUrl, serviceKey)
 
-  // Delete auth user (cascade will delete profile via FK)
-  const { error } = await adminClient.auth.admin.deleteUser(userId)
-  if (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+  // Prevent deleting the last admin
+  const { data: targetProfile } = await adminClient.from('profiles').select('role, name, email').eq('id', userId).single()
+  if (targetProfile?.role === 'admin') {
+    const { count } = await adminClient.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin').is('deleted_at', null)
+    if ((count || 0) <= 1) {
+      return NextResponse.json({ success: false, error: 'Cannot delete the last admin account' }, { status: 403 })
+    }
   }
 
-  // Audit trail
-  await supabase.from('activity_log').insert({
-    message: `Admin ${user.id} deleted user ${userId}`,
-    type: 'admin_delete',
-    actor_id: user.id,
-    metadata: { deleted_user_id: userId },
-  })
+  if (permanent) {
+    // Permanent delete — removes from auth (cascade deletes profile via FK)
+    const { error } = await adminClient.auth.admin.deleteUser(userId)
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+
+    await supabase.from('activity_log').insert({
+      message: `Admin permanently deleted user ${targetProfile?.name || userId} (${targetProfile?.email || ''})`,
+      type: 'admin_permanent_delete',
+      actor_id: user.id,
+      metadata: { deleted_user_id: userId, email: targetProfile?.email, role: targetProfile?.role },
+    })
+  } else {
+    // Soft delete — sets deleted_at timestamp on profile
+    const { error } = await adminClient
+      .from('profiles')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', userId)
+
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+
+    await supabase.from('activity_log').insert({
+      message: `Admin moved user ${targetProfile?.name || userId} (${targetProfile?.email || ''}) to bin`,
+      type: 'admin_soft_delete',
+      actor_id: user.id,
+      metadata: { deleted_user_id: userId, email: targetProfile?.email, role: targetProfile?.role },
+    })
+  }
 
   return NextResponse.json({ success: true })
 }

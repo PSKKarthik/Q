@@ -209,6 +209,56 @@ export function excuseReviewedEmail(parentName: string, studentName: string, dat
   )
 }
 
+export function activationEmail(name: string): string {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+  return emailTemplate(
+    'Account Activated',
+    `Hi <strong>${name}</strong>,<br><br>Your QGX account has been <strong>activated</strong>. You can now sign in and access the platform.`,
+    'Sign In', `${siteUrl}/login`
+  )
+}
+
+export function deactivationEmail(name: string): string {
+  return emailTemplate(
+    'Account Deactivated',
+    `Hi <strong>${name}</strong>,<br><br>Your QGX account has been <strong>deactivated</strong> by an administrator. You will not be able to sign in until your account is reactivated.<br><br>If you believe this is an error, please contact your institution administrator.`
+  )
+}
+
+export function userEditedEmail(name: string, changes: string): string {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+  return emailTemplate(
+    'Account Updated',
+    `Hi <strong>${name}</strong>,<br><br>Your QGX account details have been updated by an administrator.<br><br>${changes}<br><br>If you did not expect this change, please contact your administrator.`,
+    'Sign In', `${siteUrl}/login`
+  )
+}
+
+export function testDeletedEmail(teacherName: string, testTitle: string): string {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+  return emailTemplate(
+    'Test Removed',
+    `Hi <strong>${teacherName}</strong>,<br><br>Your test <strong>"${testTitle}"</strong> has been removed from the platform by an administrator.<br><br>If you believe this was done in error, please contact your institution administrator.`,
+    'View Dashboard', `${siteUrl}/dashboard/teacher`
+  )
+}
+
+export function attendanceReportEmail(recipientName: string, studentName: string, subject: string, present: number, total: number, rate: number): string {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+  const color = rate >= 80 ? '#22c55e' : rate >= 60 ? '#f59e0b' : '#ef4444'
+  return emailTemplate(
+    'Attendance Report',
+    `Hi <strong>${recipientName}</strong>,<br><br>Here is the attendance report for <strong>${studentName}</strong> in <strong>${subject}</strong>:<br><br>
+    <div style="background:#111;padding:16px;border:1px solid #222;margin:12px 0;">
+      <div style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Attendance Summary</div>
+      <div style="font-size:28px;font-weight:700;color:${color};font-family:'Courier New',monospace;">${rate}%</div>
+      <div style="font-size:12px;color:#ccc;margin-top:4px;">${present} present out of ${total} sessions</div>
+    </div>
+    ${rate < 80 ? '<br><strong style="color:#f59e0b;">⚠ Attendance is below the recommended 80% threshold.</strong>' : ''}`,
+    'View Full Report', `${siteUrl}/dashboard/parent`
+  )
+}
+
 export function userCredentialsEmail(name: string, email: string, role: string, resetLink: string): string {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
   return emailTemplate(
