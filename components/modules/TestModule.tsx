@@ -78,6 +78,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
   const startTimeRef = useRef<number>(0)
   const isOfflineRef = useRef(false)
   const pendingSubmitRef = useRef(false)
+  const storageWarnedRef = useRef(false)
 
   const attempted = attempts.map(a => a.test_id)
 
@@ -134,7 +135,10 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
     if (!activeTest || testResult) return
     try { localStorage.setItem(`qgx-test-${activeTest.id}`, JSON.stringify(answers)) } catch (e) {
       console.warn('Failed to autosave answers to localStorage:', e)
-      setIsOffline(prev => { if (!prev) toast('△ Storage full — your answers may not be saved locally. Submit soon!', 'error'); return prev })
+      if (!storageWarnedRef.current) {
+        storageWarnedRef.current = true
+        toast('△ Storage full — your answers may not be saved locally. Submit soon!', 'error')
+      }
     }
   }, [answers, activeTest, testResult, toast])
 
@@ -178,7 +182,7 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
     if (!test.questions?.length) {
       const { data: fullTest } = await supabase
         .from('tests').select('*, questions(*)').eq('id', test.id).single()
-      if (!fullTest?.questions?.length) return
+      if (!fullTest?.questions?.length) { toast('This test has no questions yet. Contact your teacher.', 'error'); return }
       testWithQuestions = fullTest as Test
     }
 
@@ -262,9 +266,10 @@ export function StudentTestModule({ profile, tests, attempts, doubleXP, allStude
     try { const saved = localStorage.getItem(`qgx-test-${test.id}`); if (saved) restored = JSON.parse(saved) } catch {}
 
     // Track start time for timer persistence across refreshes
-    const existingStart = localStorage.getItem(`qgx-start-${test.id}`)
+    let existingStart: string | null = null
+    try { existingStart = localStorage.getItem(`qgx-start-${test.id}`) } catch {}
     const startTime = existingStart ? parseInt(existingStart) : Date.now()
-    if (!existingStart) localStorage.setItem(`qgx-start-${test.id}`, String(startTime))
+    if (!existingStart) try { localStorage.setItem(`qgx-start-${test.id}`, String(startTime)) } catch {}
     startTimeRef.current = startTime
     const elapsed = Math.floor((Date.now() - startTime) / 1000)
     const remaining = Math.max(0, test.duration * 60 - elapsed)

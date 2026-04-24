@@ -45,16 +45,14 @@ export async function POST(req: Request) {
   const { data: linkData, error: linkErr } = await adminClient.auth.admin.generateLink({
     type: 'recovery',
     email: targetProfile.email,
-    options: { redirectTo: `${siteOrigin}/auth/callback?next=/reset-password` },
+    options: { redirectTo: `${siteOrigin}/reset-password` },
   })
-  if (linkErr || !linkData?.properties?.action_link) {
+  if (linkErr || !linkData?.properties?.hashed_token) {
     return NextResponse.json({ success: false, error: linkErr?.message || 'Failed to generate reset link' }, { status: 500 })
   }
 
-  const resetLink = linkData.properties.action_link
+  const resetLink = `${siteOrigin}/reset-password?token_hash=${linkData.properties.hashed_token}&type=recovery`
 
-  // Email the reset link to the user (action_link is the direct Supabase link — user clicks it,
-  // Supabase processes the recovery token and redirects through /auth/callback to /reset-password)
   await sendEmail({
     to: { email: targetProfile.email, name: targetProfile.name },
     subject: 'Password Reset — QGX Platform',

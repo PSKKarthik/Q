@@ -14,64 +14,69 @@ export default function ResetPasswordPage() {
   const [checking, setChecking]  = useState(true)
 
   useEffect(() => {
-    // With implicit flow, Supabase redirects with hash fragment:
-    // #access_token=...&type=recovery
-    // The Supabase client auto-detects and processes this.
+    let cancelled = false
 
-    // Check for error in URL hash
-    const hash = window.location.hash
-    if (hash.includes('error')) {
-      const params = new URLSearchParams(hash.replace('#', ''))
-      const desc = params.get('error_description')?.replace(/\+/g, ' ')
-      setError(desc || 'Reset link is invalid or expired.')
-      setChecking(false)
+    const resolve = () => {
+      if (!cancelled) { setReady(true); setChecking(false) }
+    }
+    const fail = (msg: string) => {
+      if (!cancelled) { setError(msg); setChecking(false) }
+    }
+
+    const searchParams = new URLSearchParams(window.location.search)
+    const hashParams = new URLSearchParams(window.location.hash.replace('#', ''))
+
+    // Path 1 — token_hash in query string (our custom email flow)
+    const tokenHash = searchParams.get('token_hash')
+    const type = searchParams.get('type')
+    if (tokenHash && type === 'recovery') {
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' })
+        .then(({ data, error: err }) => {
+          if (err || !data.session) {
+            fail(err?.message || 'Reset link expired or was already used.')
+          } else {
+            window.history.replaceState({}, '', '/reset-password')
+            resolve()
+          }
+        })
       return
     }
 
-    // Listen for PASSWORD_RECOVERY event (fired when hash tokens are processed)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' && session) {
-        setReady(true)
-        setChecking(false)
-      } else if (event === 'SIGNED_IN' && session) {
-        // Fallback: some Supabase versions fire SIGNED_IN instead
-        setReady(true)
-        setChecking(false)
-      } else if (event === 'INITIAL_SESSION' && session) {
-        // Session already existed before listener was registered
-        setReady(true)
-        setChecking(false)
-      }
-    })
-
-    // Fallback: also try exchanging code if present (PKCE path from /auth/callback)
-    const code = new URLSearchParams(window.location.search).get('code')
+    // Path 2 — PKCE code in query string
+    const code = searchParams.get('code')
     if (code) {
-      supabase.auth.exchangeCodeForSession(code)
-        .then(({ data, error: err }) => {
-          if (!err && data.session) {
-            setReady(true)
-            setChecking(false)
-          }
-          window.history.replaceState({}, '', '/reset-password')
-        })
-    }
-
-    // Final fallback timeout
-    const timer = setTimeout(() => {
-      setChecking(prev => {
-        if (prev) {
-          setError('Reset link expired or was already used. Please request a new one.')
-          return false
-        }
-        return prev
+      window.history.replaceState({}, '', '/reset-password')
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error: err }) => {
+        if (err || !data.session) fail('Reset link expired or was already used.')
+        else resolve()
       })
-    }, 12000)
-
-    return () => {
-      subscription.unsubscribe()
-      clearTimeout(timer)
+      return
     }
+
+    // Path 3 — implicit flow: access_token in hash
+    const accessToken = hashParams.get('access_token')
+    const refreshToken = hashParams.get('refresh_token') || ''
+    if (accessToken) {
+      window.history.replaceState({}, '', '/reset-password')
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ data, error: err }) => {
+          if (err || !data.session) fail('Reset link expired or was already used.')
+          else resolve()
+        })
+      return
+    }
+
+    // Path 4 — hash error from Supabase
+    if (hashParams.get('error')) {
+      const desc = hashParams.get('error_description')?.replace(/\+/g, ' ')
+      fail(desc || 'Reset link is invalid or expired.')
+      return
+    }
+
+    // No token found at all
+    fail('No reset token found. Please request a new link.')
+
+    return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

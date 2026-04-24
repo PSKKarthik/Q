@@ -2,7 +2,6 @@
 import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 
 function ForgotPasswordInner() {
   const searchParams = useSearchParams()
@@ -30,11 +29,14 @@ function ForgotPasswordInner() {
     if (!email) { setError('Enter your email'); return }
     setLoading(true); setError('')
 
-    const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+    const res = await fetch('/api/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
     })
+    const data = await res.json()
 
-    if (err) { setError(err.message); setLoading(false); return }
+    if (!data.success) { setError(data.error || 'Something went wrong'); setLoading(false); return }
     setSent(true); setLoading(false)
   }
 

@@ -120,10 +120,10 @@ export async function POST(req: Request) {
 
   // Generate QGX ID atomically via RPC to avoid race conditions
   let qgxId: string
-  const { data: rpcId, error: rpcErr } = await supabase.rpc('generate_qgx_id', { p_role: role })
+  const { data: rpcId, error: rpcErr } = await adminClient.rpc('generate_qgx_id', { p_role: role })
   if (rpcErr || !rpcId) {
     // Fallback if RPC doesn't exist yet
-    const { count: roleCount } = await supabase
+    const { count: roleCount } = await adminClient
       .from('profiles')
       .select('id', { count: 'exact', head: true })
       .eq('role', role)
@@ -169,10 +169,12 @@ export async function POST(req: Request) {
   const { data: resetData } = await adminClient.auth.admin.generateLink({
     type: 'recovery',
     email,
-    options: { redirectTo: `${siteOrigin}/auth/callback?next=/reset-password` },
+    options: { redirectTo: `${siteOrigin}/reset-password` },
   })
 
-  const resetLink = resetData?.properties?.action_link || null
+  const resetLink = resetData?.properties?.hashed_token
+    ? `${siteOrigin}/reset-password?token_hash=${resetData.properties.hashed_token}&type=recovery`
+    : null
 
   // Email credentials to the new user (fire-and-forget)
   if (resetLink) {

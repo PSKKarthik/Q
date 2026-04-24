@@ -131,6 +131,7 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
       const range = getTermRange(termStr)
       let fAttempts = attempts
       let fAttendance = attendance
+      let fSubmissions = submissions
       if (range) {
         fAttempts = attempts.filter(a => {
           const d = new Date(a.submitted_at)
@@ -140,11 +141,15 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
           const d = new Date(a.date)
           return d >= range.qStart && d <= range.qEnd
         })
+        fSubmissions = submissions.filter((s: any) => {
+          const d = new Date(s.submitted_at || s.created_at)
+          return d >= range.qStart && d <= range.qEnd
+        })
       }
-      return { fAttempts, fAttendance }
+      return { fAttempts, fAttendance, fSubmissions }
     }
 
-    const { fAttempts, fAttendance } = filterByTerm(term)
+    const { fAttempts, fAttendance, fSubmissions } = filterByTerm(term)
 
     const testRows = fAttempts.map(a => {
       const t = testsMap.get(a.test_id)
@@ -158,7 +163,7 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
       }
     })
 
-    const assignmentRows = submissions.map((s: any) => ({
+    const assignmentRows = fSubmissions.map((s: any) => ({
       title: s.assignments?.title || 'Assignment',
       score: s.score || 0,
       maxPoints: s.assignments?.max_points || 100,
@@ -443,7 +448,7 @@ export function ReportCardModule({ profile, students, isTeacher }: Props) {
                 <span style={{ fontFamily: 'var(--display)', fontSize: 14, color: report.conduct.color }}>{report.conduct.label.charAt(0)}</span>
               </div>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: report.conduct.color }}>{report.conduct.label}</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: report.conduct.color, whiteSpace: 'nowrap' }}>{report.conduct.label}</div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', marginTop: 2 }}>
                   Based on {report.attendance.rate}% attendance and {report.overallAvg}% academic performance
                 </div>

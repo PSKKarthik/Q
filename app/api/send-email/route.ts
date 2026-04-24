@@ -34,8 +34,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: 'Missing to, subject, or message' }, { status: 400 })
   }
 
-  // Strip HTML tags from message to prevent phishing via mail relay
-  const safeMessage = String(message).replace(/<[^>]*>/g, '')
+  // Strip HTML tags from message for non-privileged users to prevent phishing via mail relay
+  // Privileged users (admin/teacher) need HTML for rich notification emails
+  const safeMessage = isPrivileged ? String(message) : String(message).replace(/<[^>]*>/g, '')
   const html = emailTemplate(template || subject, safeMessage)
 
   // Single recipient — non-privileged users may only send to their own email (e.g. welcome email)

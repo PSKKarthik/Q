@@ -159,7 +159,8 @@ function AdminDashboardContent() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' },
         () => fetchAnnouncements())
       .subscribe()
-    return () => { supabase.removeChannel(ch); subscription.unsubscribe(); if (searchTimer.current) clearTimeout(searchTimer.current) }
+    const timer = searchTimer.current
+    return () => { supabase.removeChannel(ch); subscription.unsubscribe(); if (timer) clearTimeout(timer) }
   }, [fetchAll, fetchAnnouncements, router])
 
   useEffect(() => {
@@ -521,7 +522,6 @@ function AdminDashboardContent() {
     { id: 'activity', label: 'Activity Log', icon: 'clock' },
     { id: 'grades', label: 'Grades', icon: 'chart' },
     { id: 'quests', label: 'Quests', icon: 'star' },
-    { id: 'settings', label: 'Settings', icon: 'gear' },
     { id: 'batch', label: 'Batch Create', icon: 'plus' },
     { id: 'calendar', label: 'Calendar', icon: 'calendar' },
     { id: 'profile', label: 'Profile', icon: 'user' },

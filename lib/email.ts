@@ -1,18 +1,11 @@
 import nodemailer from 'nodemailer'
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
+  service: 'gmail',
   auth: {
-    user: 'a874f0001@smtp-brevo.com',
-    pass: process.env.BREVO_API_KEY,
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
   },
-  pool: true,        // reuse connections
-  maxConnections: 1, // single connection to avoid hammering Brevo
-  rateLimit: true,
-  rateDelta: 1000,   // 1 second between sends
-  maxMessages: 10,   // max 10 per connection before recycling
 } as nodemailer.TransportOptions)
 
 interface EmailRecipient {
@@ -33,10 +26,10 @@ interface SendEmailResult {
 }
 
 export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult> {
-  if (!process.env.BREVO_API_KEY) return { success: false, error: 'Email service not configured' }
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return { success: false, error: 'Email service not configured' }
 
-  const senderName = process.env.BREVO_SENDER_NAME || 'QGX Platform'
-  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'a874f0001@smtp-brevo.com'
+  const senderName = process.env.GMAIL_SENDER_NAME || 'QGX Platform'
+  const senderEmail = process.env.GMAIL_USER
 
   const recipients = Array.isArray(opts.to) ? opts.to : [opts.to]
   const toField = recipients.map(r => r.name ? `"${r.name}" <${r.email}>` : r.email).join(', ')

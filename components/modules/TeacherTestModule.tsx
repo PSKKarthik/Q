@@ -59,6 +59,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
   const [aiFile, setAiFile] = useState<{ name: string; type: 'image' | 'pdf' | 'ppt'; data: string; mimeType: string } | null>(null)
   const aiFileRef = useRef<HTMLInputElement>(null)
   const [creating, setCreating] = useState(false)
+  const [createTestError, setCreateTestError] = useState('')
 
   const myTests = tests.filter(t => t.type === 'test')
   const myQuizzes = tests.filter(t => t.type === 'quiz')
@@ -91,7 +92,12 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
   }
 
   const createTest = async () => {
-    if (!newTest.title?.trim() || creating) return
+    if (creating) return
+    setCreateTestError('')
+    if (!newTest.title?.trim()) { setCreateTestError('Title is required.'); return }
+    if (!newTest.subject?.trim()) { setCreateTestError('Subject is required.'); return }
+    if (newTest.type === 'test' && !newTest.scheduledDate) { setCreateTestError('Date is required for scheduled tests.'); return }
+    if (newTest.type === 'test' && !newTest.scheduledTime) { setCreateTestError('Time is required for scheduled tests.'); return }
     setCreating(true)
     try {
       const prefix = newTest.type === 'quiz' ? 'Q' : 'T'
@@ -283,7 +289,7 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
   return (
     <div className="test-module">
       {/* ── Test Create Modal ── */}
-      <Modal open={testModal} onClose={() => setTestModal(false)} title={newTest.type === 'quiz' ? 'Create Quiz' : 'Create Test'} width={580}>
+      <Modal open={testModal} onClose={() => { setTestModal(false); setCreateTestError('') }} title={newTest.type === 'quiz' ? 'Create Quiz' : 'Create Test'} width={580}>
         <div className="grid-2" style={{ marginBottom: 14 }}>
           <div><label className="label">Type</label>
             <select className="input" value={newTest.type} onChange={e => setNewTest(f => ({ ...f, type: e.target.value as any }))}>
@@ -342,11 +348,14 @@ export function TeacherTestModule({ profile, tests, students, allAttempts, onTes
             </div>
           )}
         </div>
+        {createTestError && (
+          <div style={{ color: 'var(--danger)', fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 12 }}>{createTestError}</div>
+        )}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-primary" onClick={createTest} disabled={creating || !newTest.title}>
+          <button className="btn btn-primary" onClick={createTest} disabled={creating}>
             {creating ? <><span className="spinner" /> Creating...</> : 'Create & Add Questions'}
           </button>
-          <button className="btn" onClick={() => setTestModal(false)}>Cancel</button>
+          <button className="btn" onClick={() => { setTestModal(false); setCreateTestError('') }}>Cancel</button>
         </div>
       </Modal>
 

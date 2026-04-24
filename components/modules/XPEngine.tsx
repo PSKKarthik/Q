@@ -223,7 +223,37 @@ function getHeatColor(count: number): string {
 }
 
 /* ── Types ── */
-type XPTab = 'overview' | 'badges' | 'leaderboard' | 'quests' | 'wrapped'
+type XPTab = 'overview' | 'badges' | 'leaderboard' | 'quests' | 'wrapped' | 'history'
+
+interface XPTransaction {
+  id: string
+  amount: number
+  source_type: string
+  description: string
+  created_at: string
+}
+
+interface DBQuest {
+  id: string
+  title: string
+  description: string
+  type: 'daily' | 'weekly' | 'special'
+  target_type: string
+  target_count: number
+  xp_reward: number
+  active: boolean
+}
+
+interface DBQuestProgress {
+  id: string
+  student_id: string
+  quest_id: string
+  progress: number
+  completed: boolean
+  claimed: boolean
+  completed_at: string
+}
+
 
 interface XPEngineProps {
   profile: Profile
@@ -250,6 +280,12 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
   const [showLevelUp, setShowLevelUp] = useState<{ from: ReturnType<typeof buildTiers>[number]; to: ReturnType<typeof buildTiers>[number] } | null>(null)
   const [dailyLoginClaimed, setDailyLoginClaimed] = useState(false)
   const [claimingLogin, setClaimingLogin] = useState(false)
+  const [history, setHistory] = useState<XPTransaction[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [dbQuests, setDbQuests] = useState<(DBQuest & { progress?: DBQuestProgress })[]>([])
+  const [questsLoading, setQuestsLoading] = useState(false)
+  const [claimingQuest, setClaimingQuest] = useState<string | null>(null)
+
   const prevTierRef = useRef<number>(-1)
   const prevBadgesRef = useRef<string[]>([])
   const [liveDoubleXP, setLiveDoubleXP] = useState(doubleXP)
@@ -292,6 +328,74 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       .maybeSingle()
       .then(({ data }) => setDailyLoginClaimed(!!data))
   }, [profile.id])
+
+  // Fetch XP History
+  useEffect(() => {
+    if (tab !== 'history') return
+    setHistoryLoading(true)
+    supabase
+      .from('xp_transactions')
+      .select('*')
+      .eq('student_id', profile.id)
+      .order('created_at', { ascending: false })
+      .limit(50)
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setHistory(data)
+        } else if (error && error.code === 'PGRST116') {
+          // Table doesn't exist yet - fallback to attempts if needed
+          setHistory([])
+        }
+        setHistoryLoading(false)
+      })
+  }, [tab, profile.id])
+
+  // Fetch Quests
+  useEffect(() => {
+    if (tab !== 'quests') return
+    setQuestsLoading(true)
+    
+    const fetchQuestsData = async () => {
+      const { data: questsData, error: questsErr } = await supabase
+        .from('quests')
+        .select('*')
+        .eq('active', true)
+      
+      const { data: progressData, error: progErr } = await supabase
+        .from('quest_progress')
+        .select('*')
+        .eq('student_id', profile.id)
+      
+      if (!questsErr && questsData) {
+        const merged = questsData.map(q => ({
+          ...q,
+          progress: progressData?.find(p => p.quest_id === q.id)
+        }))
+        setDbQuests(merged)
+      }
+      setQuestsLoading(false)
+    }
+
+    fetchQuestsData()
+  }, [tab, profile.id])
+
+  const claimQuest = async (progressId: string) => {
+    setClaimingQuest(progressId)
+    const { error } = await supabase.rpc('claim_quest_reward', { p_progress_id: progressId })
+    
+    if (!error) {
+      // Refresh quests data immediately for UI feedback
+      const { data: questsData } = await supabase.from('quests').select('*').eq('active', true)
+      const { data: progressData } = await supabase.from('quest_progress').select('*').eq('student_id', profile.id)
+      if (questsData) {
+        setDbQuests(questsData.map(q => ({ ...q, progress: progressData?.find(p => p.quest_id === q.id) })))
+      }
+    } else {
+      console.error('Claim error:', error)
+    }
+    setClaimingQuest(null)
+  }
+
 
   /* ── Computed stats ── */
   const streak = useMemo(() => calcStreak(attempts), [attempts])
@@ -588,10 +692,12 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       <div className="xp-tabs fade-up-1">
         {([
           ['overview',     '◈', 'Overview'],
+          ['history',      '▫', 'History'],
           ['badges',       '◆', 'Badges'],
           ['leaderboard',  '★', 'Leaderboard'],
           ['quests',       '◆', 'Quests'],
           ['wrapped',      '★', 'Wrapped'],
+
         ] as [XPTab, string, string][]).map(([id, icon, label]) => (
           <button key={id} className={`xp-tab ${tab === id ? 'xp-tab-active' : ''}`}
             onClick={() => setTab(id)}>
@@ -705,6 +811,44 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
           </div>
         </div>
       )}
+
+      {/* ═══════ HISTORY TAB ═══════ */}
+      {tab === 'history' && (
+        <div className="fade-up-2">
+          <div className="xp-section">
+            <div className="xp-section-title">XP Transaction History</div>
+            <div className="xp-section-subtitle">Your latest 50 XP gains</div>
+
+            {historyLoading ? (
+              <div className="xp-history-loading">Fetching history...</div>
+            ) : history.length === 0 ? (
+              <div className="xp-history-empty">
+                <Icon name="clock" size={24} />
+                <p>No transactions found yet.</p>
+                <p style={{ fontSize: 10, opacity: 0.5 }}>Note: Run the SQL setup to enable advanced tracking.</p>
+              </div>
+            ) : (
+              <div className="xp-history-list">
+                {history.map(item => (
+                  <div key={item.id} className="xp-history-item">
+                    <div className="xp-history-icon">
+                      {item.source_type === 'test' ? '▫' : item.source_type === 'login' ? '◇' : item.source_type === 'quest' ? '◈' : '▪'}
+                    </div>
+                    <div className="xp-history-info">
+                      <div className="xp-history-desc">{item.description}</div>
+                      <div className="xp-history-meta">
+                        {item.source_type.toUpperCase()} · {new Date(item.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="xp-history-amount">+{item.amount} XP</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
 
       {/* ═══════ BADGES TAB ═══════ */}
       {tab === 'badges' && (
@@ -849,56 +993,65 @@ export function XPEngine({ profile, attempts, allStudents, tests, doubleXP, onPr
       {tab === 'quests' && (
         <div className="fade-up-2">
           <div className="xp-section">
-            <div className="xp-section-title">Daily Quests</div>
-            <div className="xp-section-subtitle">Complete quests for bonus XP — refreshes daily</div>
-            <div className="xp-quest-list">
-              {quests.map(q => {
-                const done = q.check(todayAttempts)
-                return (
-                  <div key={q.id} className={`xp-quest-card ${done ? 'xp-quest-done' : ''}`}>
-                    <div className="xp-quest-icon">{q.icon}</div>
-                    <div className="xp-quest-info">
-                      <div className="xp-quest-name">{q.name}</div>
-                      <div className="xp-quest-desc">{q.desc}</div>
-                    </div>
-                    <div className={`xp-quest-reward ${done ? 'xp-quest-complete' : ''}`}>
-                      {done ? '✓' : `+${q.xpReward} XP`}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+            <div className="xp-section-title">Active Quests</div>
+            <div className="xp-section-subtitle">Complete quests for bonus XP — tracked in real-time</div>
+            
+            {questsLoading ? (
+              <div className="xp-history-loading">Fetching your quests...</div>
+            ) : dbQuests.length === 0 ? (
+              <div className="xp-history-empty">No active quests found.</div>
+            ) : (
+              <div className="xp-quest-list">
+                {dbQuests.sort((a, b) => (a.progress?.claimed ? 1 : 0) - (b.progress?.claimed ? 1 : 0)).map(q => {
+                  const prog = q.progress
+                  const isDone = prog?.completed
+                  const isClaimed = prog?.claimed
+                  const currentVal = prog?.progress || 0
+                  const pct = Math.min(100, (currentVal / q.target_count) * 100)
 
-          {/* Milestone quests (always visible) */}
-          <div className="xp-section">
-            <div className="xp-section-title">Milestone Quests</div>
-            <div className="xp-quest-list">
-              {[
-                { name: 'Reach Scholar Tier', desc: 'Earn 501 XP total', reward: 100, done: (profile.xp || 0) >= 501, icon: '②' },
-                { name: 'Reach Achiever Tier', desc: 'Earn 1,001 XP total', reward: 200, done: (profile.xp || 0) >= 1001, icon: '①' },
-                { name: 'Reach Elite Tier', desc: 'Earn 2,001 XP total', reward: 300, done: (profile.xp || 0) >= 2001, icon: '◆' },
-                { name: 'Reach Legend Tier', desc: 'Earn 3,501 XP total', reward: 500, done: (profile.xp || 0) >= 3501, icon: '◆' },
-                { name: 'Complete 10 Tests', desc: 'Take and complete 10 tests', reward: 150, done: attempts.length >= 10, icon: '▫' },
-                { name: '7-Day Streak', desc: 'Maintain a 7-day activity streak', reward: 200, done: streak.current >= 7, icon: '◈' },
-                { name: 'Earn 10 Badges', desc: 'Collect 10 different badges', reward: 250, done: earnedBadges.length >= 10, icon: '◆' },
-                { name: 'Perfect Score', desc: 'Get 100% on any test', reward: 100, done: stats.perfectTests > 0, icon: '★' },
-              ].map((q, i) => (
-                <div key={i} className={`xp-quest-card ${q.done ? 'xp-quest-done' : ''}`}>
-                  <div className="xp-quest-icon">{q.icon}</div>
-                  <div className="xp-quest-info">
-                    <div className="xp-quest-name">{q.name}</div>
-                    <div className="xp-quest-desc">{q.desc}</div>
-                  </div>
-                  <div className={`xp-quest-reward ${q.done ? 'xp-quest-complete' : ''}`}>
-                    {q.done ? '✓' : `+${q.reward} XP`}
-                  </div>
-                </div>
-              ))}
-            </div>
+                  return (
+                    <div key={q.id} className={`xp-quest-card ${isClaimed ? 'xp-quest-done' : ''}`}>
+                      <div className="xp-quest-icon">
+                        {q.type === 'daily' ? '▫' : q.type === 'weekly' ? '◈' : '◆'}
+                      </div>
+                      <div className="xp-quest-info">
+                        <div className="xp-quest-name">{q.title}</div>
+                        <div className="xp-quest-desc">{q.description}</div>
+                        {!isClaimed && (
+                          <div className="xp-quest-progress-wrap" style={{ marginTop: 8 }}>
+                            <div className="xp-quest-progress-bar">
+                              <div className="xp-quest-progress-fill" style={{ width: `${pct}%`, background: isDone ? 'var(--success)' : 'var(--warn)' }} />
+                            </div>
+                            <div className="xp-quest-progress-text">
+                              {currentVal} / {q.target_count} {q.target_type === 'test' ? 'Tests' : 'XP'}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="xp-quest-action">
+                        {isClaimed ? (
+                          <div className="xp-quest-complete">✓ CLAIMED</div>
+                        ) : isDone ? (
+                          <button 
+                            className="btn btn-xs btn-primary glow-pulse"
+                            disabled={claimingQuest === prog?.id}
+                            onClick={() => prog && claimQuest(prog.id)}
+                          >
+                            {claimingQuest === prog?.id ? '...' : 'CLAIM REWARD'}
+                          </button>
+                        ) : (
+                          <div className="xp-quest-reward">+{q.xp_reward} XP</div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
+
 
       {/* ═══════ WRAPPED TAB ═══════ */}
       {tab === 'wrapped' && (() => {

@@ -33,8 +33,16 @@ self.addEventListener('fetch', (e) => {
   if (request.method !== 'GET' || url.origin !== location.origin) return;
 
   // Skip API, auth, and password-reset routes (always use network)
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) return;
-  if (url.pathname.startsWith('/forgot-password') || url.pathname.startsWith('/reset-password')) return;
+  if (
+    url.pathname.startsWith('/api/') || 
+    url.pathname.startsWith('/auth/') ||
+    url.pathname.startsWith('/forgot-password') || 
+    url.pathname.startsWith('/reset-password') ||
+    url.search.includes('code=') ||
+    url.search.includes('token=')
+  ) {
+    return;
+  }
 
   // Network-first for navigation with offline fallback
   if (request.mode === 'navigate') {
@@ -102,27 +110,3 @@ self.addEventListener('notificationclick', (e) => {
   );
 });
 
-// Background sync for offline actions
-self.addEventListener('sync', (e) => {
-  if (e.tag === 'sync-messages') {
-    e.waitUntil(syncOfflineMessages());
-  }
-});
-
-async function syncOfflineMessages() {
-  try {
-    const cache = await caches.open('qgx-offline-actions');
-    const keys = await cache.keys();
-    for (const req of keys) {
-      const res = await cache.match(req);
-      if (res) {
-        const body = await res.json();
-        await fetch(req, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        await cache.delete(req);
-        await cache.delete(req);
-      }
-    }
-  } catch {
-    // Will retry on next sync
-  }
-}

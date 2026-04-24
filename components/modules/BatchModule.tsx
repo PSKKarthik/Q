@@ -108,13 +108,22 @@ export function AdminBatchModule({ users, onUsersChange }: AdminBatchProps) {
         <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--fg-dim)', marginBottom: 12 }}>
           Upload a CSV file with columns: name, email, role (optional, defaults to student)
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input ref={fileRef} type="file" accept=".csv" onChange={handleFileUpload} style={{ display: 'none' }} />
           <button className="btn btn-primary btn-sm" onClick={() => fileRef.current?.click()}>
             <Icon name="upload" size={11} /> Upload CSV
           </button>
+          <button className="btn btn-sm" onClick={() => {
+            const csv = 'name,email,role\nJane Smith,jane@example.com,student\nJohn Doe,john@example.com,teacher'
+            const blob = new Blob([csv], { type: 'text/csv' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a'); a.href = url; a.download = 'qgx_users_template.csv'; a.click()
+            URL.revokeObjectURL(url)
+          }}>
+            <Icon name="download" size={11} /> Template
+          </button>
           <span style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--fg-dim)' }}>
-            Format: name,email,role
+            Columns: name, email, role (student/teacher/parent)
           </span>
         </div>
       </div>

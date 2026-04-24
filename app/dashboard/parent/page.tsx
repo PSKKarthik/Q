@@ -530,7 +530,7 @@ function ParentDashboardContent() {
               <input className="input" type="date"
                 min={new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)}
                 max={new Date().toISOString().slice(0, 10)}
-                value={excuseForm.date} onChange={e => setExcuseForm(f => ({ ...f, date: e.target.value }))} style={{ width: 180 }} />
+                value={excuseForm.date} onChange={e => setExcuseForm(f => ({ ...f, date: e.target.value }))} style={{ width: 180, colorScheme: 'dark' }} />
                 <input className="input" placeholder="Reason for absence..." value={excuseForm.reason} onChange={e => setExcuseForm(f => ({ ...f, reason: e.target.value }))} style={{ flex: 1 }} />
                 <button className="btn btn-primary btn-sm" onClick={async () => {
                   if (!excuseForm.date || !excuseForm.reason.trim() || !profile) return

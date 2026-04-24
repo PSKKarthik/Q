@@ -9,7 +9,13 @@ export const runtime = 'nodejs'
 /** Validate AI-generated question structure */
 function validateQuestion(q: any, type: string): boolean {
   if (!q || typeof q.text !== 'string' || !q.text.trim()) return false
-  if (typeof q.marks !== 'number' || q.marks < 1 || q.marks > 10) return false
+  // Ensure marks is a number, default to 1 if missing or invalid
+  if (typeof q.marks !== 'number') q.marks = 1
+  if (q.marks < 1) q.marks = 1
+  if (q.marks > 10) q.marks = 10
+  
+  // Ensure id exists
+  if (!q.id) q.id = crypto.randomUUID().slice(0, 8)
   if (type === 'mcq') {
     if (!Array.isArray(q.options) || q.options.length !== 4) return false
     if (typeof q.answer !== 'number' || q.answer < 0 || q.answer > 3) return false
@@ -21,6 +27,9 @@ function validateQuestion(q: any, type: string): boolean {
   } else if (type === 'fib') {
     if (typeof q.answer !== 'string' || !q.answer.trim()) return false
   }
+  
+  // Backfill type if missing
+  if (!q.type) q.type = type
   return true
 }
 
@@ -94,16 +103,17 @@ export async function POST(req: Request) {
         imageMime = file.mimeType || 'image/jpeg'
       } else if (file.type === 'pdf') {
         try {
-          const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default
+          const pdfParse = (await import('pdf-parse')).default
           const buffer = Buffer.from(file.data, 'base64')
           const pdfData = await pdfParse(buffer)
           fileContext = pdfData.text.slice(0, 8000)
-        } catch {
-          return NextResponse.json({ success: false, error: 'Could not read PDF file' }, { status: 400 })
+        } catch (pdfErr) {
+          console.error('PDF Parse Error:', pdfErr)
+          return NextResponse.json({ success: false, error: 'Could not read PDF file structure.' }, { status: 400 })
         }
       } else if (file.type === 'ppt') {
         try {
-          const JSZip = (await import('jszip')).default
+          const { default: JSZip } = await import('jszip')
           const buffer = Buffer.from(file.data, 'base64')
           const zip = await JSZip.loadAsync(buffer)
           let text = ''
@@ -147,7 +157,11 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
           body: JSON.stringify({ model: 'meta-llama/llama-4-scout-17b-16e-instruct', max_tokens: 1500, temperature: 0.7, messages: visionMessages }),
         })
-        if (!res.ok) return NextResponse.json({ success: false, error: 'AI vision service error' }, { status: res.status })
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}))
+          console.error('Groq Vision Error:', errBody)
+          return NextResponse.json({ success: false, error: errBody.error?.message || 'AI vision service error' }, { status: res.status })
+        }
         const data = await res.json()
         return NextResponse.json({ success: true, data: { reply: data.choices?.[0]?.message?.content || 'No response generated.' } })
       } catch {
@@ -226,16 +240,17 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
       teacherImageMime = teacherFile.mimeType || 'image/jpeg'
     } else if (teacherFile.type === 'pdf') {
       try {
-        const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default
+        const pdfParse = (await import('pdf-parse')).default
         const buffer = Buffer.from(teacherFile.data, 'base64')
         const pdfData = await pdfParse(buffer)
         teacherFileContext = pdfData.text.slice(0, 8000)
-      } catch {
-        return NextResponse.json({ success: false, error: 'Could not read PDF file' }, { status: 400 })
+      } catch (pdfErr) {
+        console.error('PDF Parse Error (Teacher):', pdfErr)
+        return NextResponse.json({ success: false, error: 'Could not parse PDF document structure.' }, { status: 400 })
       }
     } else if (teacherFile.type === 'ppt') {
       try {
-        const JSZip = (await import('jszip')).default
+        const { default: JSZip } = await import('jszip')
         const buffer = Buffer.from(teacherFile.data, 'base64')
         const zip = await JSZip.loadAsync(buffer)
         let text = ''
@@ -248,8 +263,9 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
           text += matches.map(m => m.replace(/<\/?a:t>/g, '')).join(' ') + '\n'
         }
         teacherFileContext = text.slice(0, 8000)
-      } catch {
-        return NextResponse.json({ success: false, error: 'Could not read PPT file' }, { status: 400 })
+      } catch (pptErr) {
+        console.error('PPT Parse Error (Teacher):', pptErr)
+        return NextResponse.json({ success: false, error: 'Could not parse PPT document structure.' }, { status: 400 })
       }
     }
   }
@@ -337,11 +353,20 @@ Rules: 1) Be concise and educational. 2) Explain concepts clearly with examples.
       return NextResponse.json({ success: true, data: { questions: [] } })
     }
 
-    const validated = (Array.isArray(parsed) ? parsed : []).filter((q: any) => validateQuestion(q, type))
+    const validated = (Array.isArray(parsed) ? parsed : []).map((q: any) => {
+      validateQuestion(q, type) // will backfill id/marks
+      return q
+    }).filter((q: any) => validateQuestion(q, type))
+
+    if (validated.length === 0 && Array.isArray(parsed) && parsed.length > 0) {
+      console.warn('AI returned questions but none passed validation. Raw:', JSON.stringify(parsed, null, 2))
+    }
+
     return NextResponse.json({ success: true, data: { questions: validated } })
-  } catch {
+  } catch (err) {
+    console.error('AI Generation Route Exception:', err)
     return NextResponse.json(
-      { success: false, error: 'AI generation failed' },
+      { success: false, error: (err as any)?.message || 'AI generation failed' },
       { status: 500 }
     )
   }
